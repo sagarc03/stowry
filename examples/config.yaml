@@ -1,0 +1,11 @@
+auth:
+  region: us-east-1
+  service: s3
+  # WARNING: Example keys only - do not use in production
+  keys:
+    - access_key: FE373CEF5632FDED3081
+      secret_key: 9218d0ddfdb1779169f4b6b3b36df321099e98e9
+
+access:
+  public_read: false
+  public_write: false
