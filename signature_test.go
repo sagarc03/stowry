@@ -1,0 +1,230 @@
+package stowry_test
+
+import (
+	"fmt"
+	"net/http"
+	"net/url"
+	"testing"
+	"time"
+
+	"github.com/sagarc03/stowry"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestSignatureVerifier_Verify(t *testing.T) {
+	lookup := func(accessKey string) (string, bool) {
+		if accessKey == "AKIATEST" {
+			return "testsecret", true
+		}
+		return "", false
+	}
+
+	verifier := stowry.NewSignatureVerifier("us-east-1", "s3", lookup)
+
+	validTime := time.Now().UTC().Add(-30 * time.Minute)
+	validDateStamp := validTime.Format(stowry.DateFormat)
+	validAmzDate := validTime.Format(stowry.DateTimeFormat)
+
+	oldTime := time.Now().Add(-2 * time.Hour)
+	oldDateStamp := oldTime.Format(stowry.DateFormat)
+	oldAmzDate := oldTime.Format(stowry.DateTimeFormat)
+
+	tests := []struct {
+		name      string
+		query     url.Values
+		wantError string
+	}{
+		{
+			name:      "empty query",
+			query:     url.Values{},
+			wantError: "missing required signature parameters",
+		},
+		{
+			name: "missing algorithm",
+			query: url.Values{
+				"X-Amz-Credential":    []string{"AKIATEST/20260112/us-east-1/s3/aws4_request"},
+				"X-Amz-Date":          []string{"20260112T070000Z"},
+				"X-Amz-Expires":       []string{"3600"},
+				"X-Amz-SignedHeaders": []string{"host"},
+				"X-Amz-Signature":     []string{"abc123"},
+			},
+			wantError: "missing required signature parameters",
+		},
+		{
+			name: "invalid algorithm",
+			query: url.Values{
+				"X-Amz-Algorithm":     []string{"AWS4-HMAC-SHA1"},
+				"X-Amz-Credential":    []string{"AKIATEST/20260112/us-east-1/s3/aws4_request"},
+				"X-Amz-Date":          []string{"20260112T070000Z"},
+				"X-Amz-Expires":       []string{"3600"},
+				"X-Amz-SignedHeaders": []string{"host"},
+				"X-Amz-Signature":     []string{"abc123"},
+			},
+			wantError: "invalid algorithm",
+		},
+		{
+			name: "invalid date format",
+			query: url.Values{
+				"X-Amz-Algorithm":     []string{"AWS4-HMAC-SHA256"},
+				"X-Amz-Credential":    []string{"AKIATEST/20260112/us-east-1/s3/aws4_request"},
+				"X-Amz-Date":          []string{"invalid-date"},
+				"X-Amz-Expires":       []string{"3600"},
+				"X-Amz-SignedHeaders": []string{"host"},
+				"X-Amz-Signature":     []string{"abc123"},
+			},
+			wantError: "invalid X-Amz-Date format",
+		},
+		{
+			name: "expires zero",
+			query: url.Values{
+				"X-Amz-Algorithm":     []string{"AWS4-HMAC-SHA256"},
+				"X-Amz-Credential":    []string{"AKIATEST/20260112/us-east-1/s3/aws4_request"},
+				"X-Amz-Date":          []string{"20260112T070000Z"},
+				"X-Amz-Expires":       []string{"0"},
+				"X-Amz-SignedHeaders": []string{"host"},
+				"X-Amz-Signature":     []string{"abc123"},
+			},
+			wantError: "invalid X-Amz-Expires",
+		},
+		{
+			name: "expires too large",
+			query: url.Values{
+				"X-Amz-Algorithm":     []string{"AWS4-HMAC-SHA256"},
+				"X-Amz-Credential":    []string{"AKIATEST/20260112/us-east-1/s3/aws4_request"},
+				"X-Amz-Date":          []string{"20260112T070000Z"},
+				"X-Amz-Expires":       []string{"604801"},
+				"X-Amz-SignedHeaders": []string{"host"},
+				"X-Amz-Signature":     []string{"abc123"},
+			},
+			wantError: "invalid X-Amz-Expires",
+		},
+		{
+			name: "expired signature",
+			query: url.Values{
+				"X-Amz-Algorithm":     []string{"AWS4-HMAC-SHA256"},
+				"X-Amz-Credential":    []string{fmt.Sprintf("AKIATEST/%s/us-east-1/s3/aws4_request", oldDateStamp)},
+				"X-Amz-Date":          []string{oldAmzDate},
+				"X-Amz-Expires":       []string{"3600"},
+				"X-Amz-SignedHeaders": []string{"host"},
+				"X-Amz-Signature":     []string{"abc123"},
+			},
+			wantError: "signature expired",
+		},
+		{
+			name: "invalid credential format",
+			query: url.Values{
+				"X-Amz-Algorithm":     []string{"AWS4-HMAC-SHA256"},
+				"X-Amz-Credential":    []string{"AKIATEST/invalid"},
+				"X-Amz-Date":          []string{validAmzDate},
+				"X-Amz-Expires":       []string{"3600"},
+				"X-Amz-SignedHeaders": []string{"host"},
+				"X-Amz-Signature":     []string{"abc123"},
+			},
+			wantError: "invalid X-Amz-Credential format",
+		},
+		{
+			name: "invalid access key",
+			query: url.Values{
+				"X-Amz-Algorithm":     []string{"AWS4-HMAC-SHA256"},
+				"X-Amz-Credential":    []string{fmt.Sprintf("WRONGKEY/%s/us-east-1/s3/aws4_request", validDateStamp)},
+				"X-Amz-Date":          []string{validAmzDate},
+				"X-Amz-Expires":       []string{"3600"},
+				"X-Amz-SignedHeaders": []string{"host"},
+				"X-Amz-Signature":     []string{"abc123"},
+			},
+			wantError: "invalid access key",
+		},
+		{
+			name: "region mismatch",
+			query: url.Values{
+				"X-Amz-Algorithm":     []string{"AWS4-HMAC-SHA256"},
+				"X-Amz-Credential":    []string{fmt.Sprintf("AKIATEST/%s/us-west-2/s3/aws4_request", validDateStamp)},
+				"X-Amz-Date":          []string{validAmzDate},
+				"X-Amz-Expires":       []string{"3600"},
+				"X-Amz-SignedHeaders": []string{"host"},
+				"X-Amz-Signature":     []string{"abc123"},
+			},
+			wantError: "region mismatch",
+		},
+		{
+			name: "service mismatch",
+			query: url.Values{
+				"X-Amz-Algorithm":     []string{"AWS4-HMAC-SHA256"},
+				"X-Amz-Credential":    []string{fmt.Sprintf("AKIATEST/%s/us-east-1/ec2/aws4_request", validDateStamp)},
+				"X-Amz-Date":          []string{validAmzDate},
+				"X-Amz-Expires":       []string{"3600"},
+				"X-Amz-SignedHeaders": []string{"host"},
+				"X-Amz-Signature":     []string{"abc123"},
+			},
+			wantError: "service mismatch",
+		},
+		{
+			name: "invalid terminator",
+			query: url.Values{
+				"X-Amz-Algorithm":     []string{"AWS4-HMAC-SHA256"},
+				"X-Amz-Credential":    []string{fmt.Sprintf("AKIATEST/%s/us-east-1/s3/wrong", validDateStamp)},
+				"X-Amz-Date":          []string{validAmzDate},
+				"X-Amz-Expires":       []string{"3600"},
+				"X-Amz-SignedHeaders": []string{"host"},
+				"X-Amz-Signature":     []string{"abc123"},
+			},
+			wantError: "invalid credential terminator",
+		},
+		{
+			name: "credential date mismatch",
+			query: url.Values{
+				"X-Amz-Algorithm":     []string{"AWS4-HMAC-SHA256"},
+				"X-Amz-Credential":    []string{"AKIATEST/20260101/us-east-1/s3/aws4_request"},
+				"X-Amz-Date":          []string{validAmzDate},
+				"X-Amz-Expires":       []string{"3600"},
+				"X-Amz-SignedHeaders": []string{"host"},
+				"X-Amz-Signature":     []string{"abc123"},
+			},
+			wantError: "credential date mismatch",
+		},
+		{
+			name: "signature mismatch",
+			query: url.Values{
+				"X-Amz-Algorithm":     []string{"AWS4-HMAC-SHA256"},
+				"X-Amz-Credential":    []string{fmt.Sprintf("AKIATEST/%s/us-east-1/s3/aws4_request", validDateStamp)},
+				"X-Amz-Date":          []string{validAmzDate},
+				"X-Amz-Expires":       []string{"3600"},
+				"X-Amz-SignedHeaders": []string{"host"},
+				"X-Amz-Signature":     []string{"wrongsignature123"},
+			},
+			wantError: "signature mismatch",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			headers := http.Header{}
+			headers.Set("Host", "localhost:5708")
+			err := verifier.Verify("GET", "/test.txt", tt.query, headers)
+
+			if tt.wantError == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantError)
+			}
+		})
+	}
+}
+
+func TestNewSignatureVerifier(t *testing.T) {
+	lookup := func(accessKey string) (string, bool) {
+		return "secret", true
+	}
+
+	verifier := stowry.NewSignatureVerifier("us-west-1", "ec2", lookup)
+
+	assert.NotNil(t, verifier)
+	assert.Equal(t, "us-west-1", verifier.Region)
+	assert.Equal(t, "ec2", verifier.Service)
+	assert.NotNil(t, verifier.AccessKeyLookup)
+
+	secret, found := verifier.AccessKeyLookup("test")
+	assert.True(t, found)
+	assert.Equal(t, "secret", secret)
+}

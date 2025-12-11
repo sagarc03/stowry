@@ -1,0 +1,31 @@
+# Server settings
+server:
+  port: 5708
+  mode: store  # store | static | spa
+
+# Database settings
+database:
+  type: sqlite      # sqlite | postgres
+  dsn: stowry.db    # file path for sqlite, connection string for postgres
+  table: stowry_metadata  # metadata table name
+
+# Storage settings
+storage:
+  path: ./data      # directory for file storage
+
+# Authentication (optional - omit for public access)
+auth:
+  region: us-east-1
+  service: s3
+  keys:
+    - access_key: AKIAIOSFODNN7EXAMPLE
+      secret_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+
+# Access control
+access:
+  public_read: false
+  public_write: false
+
+# Logging
+log:
+  level: info  # debug | info | warn | error

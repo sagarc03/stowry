@@ -1,0 +1,70 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: stowry
+    main: ./cmd/stowry
+    binary: stowry
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+
+archives:
+  - id: default
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+
+dockers:
+  - image_templates:
+      - "ghcr.io/sagarc03/stowry:{{ .Tag }}"
+      - "ghcr.io/sagarc03/stowry:v{{ .Major }}"
+      - "ghcr.io/sagarc03/stowry:v{{ .Major }}.{{ .Minor }}"
+      - "ghcr.io/sagarc03/stowry:latest"
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--build-arg=VERSION={{.Version}}"
+    use: buildx
+    goos: linux
+    goarch: amd64
+
+release:
+  github:
+    owner: sagarc03
+    name: stowry
+  draft: false
+  prerelease: auto

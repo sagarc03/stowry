@@ -1,0 +1,18 @@
+{
+  "name": "stowry-example",
+  "version": "1.0.0",
+  "description": "Example: Using Stowry with AWS SDK for JavaScript",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.700.0",
+    "@aws-sdk/s3-request-presigner": "^3.700.0",
+    "yaml": "^2.7.0"
+  }
+}

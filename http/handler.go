@@ -1,0 +1,204 @@
+package http
+
+import (
+	"context"
+	"errors"
+	"io"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/sagarc03/stowry"
+)
+
+type Service interface {
+	Get(ctx context.Context, path string) (stowry.MetaData, io.ReadSeekCloser, error)
+	Create(ctx context.Context, obj stowry.CreateObject, content io.Reader) (stowry.MetaData, error)
+	Delete(ctx context.Context, path string) error
+	List(ctx context.Context, query stowry.ListQuery) (stowry.ListResult, error)
+}
+
+type HandlerConfig struct {
+	PublicRead  bool
+	PublicWrite bool
+	Region      string
+	Service     string
+	Mode        stowry.ServerMode
+	AccessKeys  map[string]string
+}
+
+type Handler struct {
+	config  HandlerConfig
+	service Service
+}
+
+func NewHandler(config HandlerConfig, service Service) *Handler {
+	return &Handler{
+		config:  config,
+		service: service,
+	}
+}
+
+func (h *Handler) Router() http.Handler {
+	r := chi.NewRouter()
+
+	r.Use(PathValidationMiddleware)
+
+	r.Group(func(r chi.Router) {
+		r.Use(AuthMiddleware(AuthMiddlewareConfig{
+			AuthRequired: !h.config.PublicRead,
+			Region:       h.config.Region,
+			Service:      h.config.Service,
+			AccessKeys:   h.config.AccessKeys,
+		}))
+		r.Get("/", h.handleList)
+		r.Get("/*", h.handleGet)
+	})
+
+	r.Group(func(r chi.Router) {
+		r.Use(AuthMiddleware(AuthMiddlewareConfig{
+			AuthRequired: !h.config.PublicWrite,
+			Region:       h.config.Region,
+			Service:      h.config.Service,
+			AccessKeys:   h.config.AccessKeys,
+		}))
+		r.Put("/*", h.handlePut)
+		r.Delete("/*", h.handleDelete)
+	})
+
+	return r
+}
+
+func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
+	if h.config.Mode != stowry.ModeStore {
+		h.handleGet(w, r)
+		return
+	}
+
+	prefix := r.URL.Query().Get("prefix")
+	limitStr := r.URL.Query().Get("limit")
+	cursor := r.URL.Query().Get("cursor")
+
+	limit := 100
+	if limitStr != "" {
+		if parsed, err := strconv.Atoi(limitStr); err == nil {
+			limit = parsed
+			if limit > 1000 {
+				limit = 1000
+			}
+			if limit < 1 {
+				limit = 1
+			}
+		}
+	}
+
+	query := stowry.ListQuery{
+		PathPrefix: prefix,
+		Limit:      limit,
+		Cursor:     cursor,
+	}
+
+	result, err := h.service.List(r.Context(), query)
+	if err != nil {
+		HandleError(w, err)
+		return
+	}
+
+	_ = WriteJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/")
+
+	if path == "" {
+		if h.config.Mode == stowry.ModeStatic || h.config.Mode == stowry.ModeSPA {
+			path = "index.html"
+		} else {
+			WriteError(w, http.StatusNotFound, "not_found", "Object not found")
+			return
+		}
+	}
+
+	if !stowry.IsValidPath(path) {
+		WriteError(w, http.StatusBadRequest, "invalid_path", "Invalid path")
+		return
+	}
+
+	obj, content, err := h.service.Get(r.Context(), path)
+	if err != nil {
+		if errors.Is(err, stowry.ErrNotFound) {
+			WriteError(w, http.StatusNotFound, "not_found", "Object not found")
+		} else {
+			HandleError(w, err)
+		}
+		return
+	}
+	defer func() { _ = content.Close() }()
+
+	w.Header().Set("ETag", `"`+obj.Etag+`"`)
+	w.Header().Set("Content-Type", obj.ContentType)
+
+	http.ServeContent(w, r, path, obj.UpdatedAt, content)
+}
+
+func (h *Handler) handlePut(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/")
+
+	if path == "" || !stowry.IsValidPath(path) {
+		WriteError(w, http.StatusBadRequest, "invalid_path", "Invalid path")
+		return
+	}
+
+	contentType := r.Header.Get("Content-Type")
+
+	ifMatch := r.Header.Get("If-Match")
+	if ifMatch != "" {
+		existing, content, err := h.service.Get(r.Context(), path)
+		if err != nil && !errors.Is(err, stowry.ErrNotFound) {
+			HandleError(w, err)
+			return
+		}
+		if err == nil {
+			_ = content.Close()
+			if ifMatch != existing.Etag && ifMatch != `"`+existing.Etag+`"` {
+				WriteError(w, http.StatusPreconditionFailed, "precondition_failed", "ETag mismatch")
+				return
+			}
+		}
+	}
+
+	obj := stowry.CreateObject{
+		Path:        path,
+		ContentType: contentType,
+	}
+
+	metaData, err := h.service.Create(r.Context(), obj, r.Body)
+	if err != nil {
+		HandleError(w, err)
+		return
+	}
+
+	_ = WriteJSON(w, http.StatusOK, metaData)
+}
+
+func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/")
+
+	if path == "" || !stowry.IsValidPath(path) {
+		WriteError(w, http.StatusBadRequest, "invalid_path", "Invalid path")
+		return
+	}
+
+	err := h.service.Delete(r.Context(), path)
+	if err != nil {
+		if errors.Is(err, stowry.ErrNotFound) {
+			WriteError(w, http.StatusNotFound, "not_found", "Object not found")
+		} else {
+			HandleError(w, err)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

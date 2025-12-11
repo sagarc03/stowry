@@ -1,0 +1,11 @@
+# Data directory (created when running examples)
+data/
+
+# Python
+python/.venv/
+python/__pycache__/
+python/*.pyc
+
+# JavaScript
+javascript/node_modules/
+javascript/package-lock.json
