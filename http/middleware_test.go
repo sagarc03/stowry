@@ -57,7 +57,7 @@ func TestAuthMiddleware_RequiresAuth_NoSignature(t *testing.T) {
 	wrapped.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusForbidden, rec.Code)
-	assert.Contains(t, rec.Body.String(), "missing required signature parameters")
+	assert.Contains(t, rec.Body.String(), "unauthorized")
 }
 
 func TestAuthMiddleware_RequiresAuth_InvalidSignature(t *testing.T) {
