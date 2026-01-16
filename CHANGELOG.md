@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-01-16
+
+### Added
+
+- **Stowry Native Signing** - Simple, lightweight signing scheme as alternative to AWS Sig V4
+- **Client SDKs** - Official SDKs for generating presigned URLs
+  - [stowry-go](https://github.com/sagarc03/stowry-go) - Go SDK
+  - [stowrypy](https://pypi.org/project/stowrypy/) - Python SDK
+  - [stowryjs](https://www.npmjs.com/package/stowryjs) - JavaScript/TypeScript SDK
+- **SDK Examples** - Examples for both native and AWS signing in Go, Python, and JavaScript
+
+### Changed
+
+- Server now auto-detects signing scheme from query parameters (X-Stowry-Signature vs X-Amz-Signature)
+- Reorganized examples into `aws/` and `stowry/` folders
+
 ## [1.0.0] - 2025-01-15
 
 ### Added
