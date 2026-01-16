@@ -28,6 +28,20 @@ docker run -p 5708:5708 -v ./data:/data ghcr.io/sagarc03/stowry:latest
 
 Server starts at `http://localhost:5708`
 
+## Client SDKs
+
+Generate presigned URLs to interact with Stowry:
+
+| Language | Package | Install |
+|----------|---------|---------|
+| Go | [stowry-go](https://github.com/sagarc03/stowry-go) | `go get github.com/sagarc03/stowry-go` |
+| Python | [stowrypy](https://pypi.org/project/stowrypy/) | `pip install stowrypy` |
+| JavaScript | [stowryjs](https://www.npmjs.com/package/stowryjs) | `npm install stowryjs` |
+
+AWS SDKs (boto3, aws-sdk-go-v2, @aws-sdk/client-s3) also work for generating presigned URLs.
+
+See [examples/](examples/) for usage.
+
 ## Installation
 
 ### Docker

@@ -2,10 +2,10 @@
  * Example: Using Stowry with presigned URLs (JavaScript)
  *
  * Run Stowry first:
- *   stowry serve --config ../config.yaml
+ *   stowry serve --config ../../config.yaml
  *
  * Then run this example:
- *   cd examples/javascript
+ *   cd examples/aws/javascript
  *   npm install
  *   npm start
  *
@@ -23,7 +23,7 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const STOWRY_ENDPOINT = "http://localhost:5708";
-const CONFIG_PATH = "../config.yaml";
+const CONFIG_PATH = "../../config.yaml";
 const BUCKET = "example";
 
 function loadConfig(path) {

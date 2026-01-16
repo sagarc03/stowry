@@ -6,11 +6,11 @@
 //
 // Run Stowry first:
 //
-//	stowry serve --config ../config.yaml
+//	stowry serve --config ../../config.yaml
 //
 // Then run this example:
 //
-//	cd examples/go
+//	cd examples/aws/go
 //	go mod tidy
 //	go run main.go
 package main
@@ -34,7 +34,7 @@ import (
 
 const (
 	stowryEndpoint = "http://localhost:5708"
-	configPath     = "../config.yaml"
+	configPath     = "../../config.yaml"
 	bucket         = "example"
 )
 
