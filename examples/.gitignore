@@ -1,11 +1,14 @@
 # Data directory (created when running examples)
 data/
 
+# Database
+*.db
+
 # Python
-python/.venv/
-python/__pycache__/
-python/*.pyc
+.venv/
+__pycache__/
+*.pyc
 
 # JavaScript
-javascript/node_modules/
-javascript/package-lock.json
+node_modules/
+package-lock.json

@@ -3,10 +3,10 @@
 Example: Using Stowry with presigned URLs (Python)
 
 Run Stowry first:
-    stowry serve --config ../config.yaml
+    stowry serve --config ../../config.yaml
 
 Then run this example:
-    cd examples/python
+    cd examples/aws/python
     python -m venv .venv
     source .venv/bin/activate  # or .venv\\Scripts\\activate on Windows
     pip install -r requirements.txt
@@ -21,7 +21,7 @@ import yaml
 from botocore.config import Config
 
 STOWRY_ENDPOINT = "http://localhost:5708"
-CONFIG_PATH = "../config.yaml"
+CONFIG_PATH = "../../config.yaml"
 BUCKET = "example"
 
 
