@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2025-01-17
+
 ### Added
 
 - **CORS Middleware** - Configurable CORS support for browser-based uploads
@@ -60,5 +62,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Code-based Migrations** - Type-safe Go migrations with dynamic table names
 - **Docker Support** - Minimal scratch-based image (~15MB)
 
+[1.2.0]: https://github.com/sagarc03/stowry/releases/tag/v1.2.0
 [1.1.0]: https://github.com/sagarc03/stowry/releases/tag/v1.1.0
 [1.0.0]: https://github.com/sagarc03/stowry/releases/tag/v1.0.0
