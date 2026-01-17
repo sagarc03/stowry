@@ -1,0 +1,10 @@
+---
+import { SITE_TITLE, SITE_DESCRIPTION } from '../consts';
+
+import { FAQSection } from '@/components/sections/faq';
+import DefaultLayout from '@/layouts/DefaultLayout.astro';
+---
+
+<DefaultLayout title={SITE_TITLE} description={SITE_DESCRIPTION}>
+  <FAQSection client:visible />
+</DefaultLayout>

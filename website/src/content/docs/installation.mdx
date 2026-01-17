@@ -1,0 +1,135 @@
+---
+title: Installation
+description: Install Stowry via binary download, Docker, or build from source.
+---
+
+# Installation
+
+Stowry can be installed in several ways depending on your needs.
+
+## Binary Download
+
+Download pre-built binaries from the [GitHub Releases](https://github.com/sagarc03/stowry/releases) page.
+
+### Linux
+
+```bash
+# amd64
+curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-linux-amd64
+chmod +x stowry-linux-amd64
+sudo mv stowry-linux-amd64 /usr/local/bin/stowry
+
+# arm64
+curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-linux-arm64
+chmod +x stowry-linux-arm64
+sudo mv stowry-linux-arm64 /usr/local/bin/stowry
+```
+
+### macOS
+
+```bash
+# Apple Silicon (M1/M2/M3)
+curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-darwin-arm64
+chmod +x stowry-darwin-arm64
+sudo mv stowry-darwin-arm64 /usr/local/bin/stowry
+
+# Intel
+curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-darwin-amd64
+chmod +x stowry-darwin-amd64
+sudo mv stowry-darwin-amd64 /usr/local/bin/stowry
+```
+
+### Windows
+
+Download `stowry-windows-amd64.exe` from the releases page and add it to your PATH.
+
+## Docker
+
+Pull the official Docker image:
+
+```bash
+docker pull ghcr.io/sagarc03/stowry:latest
+```
+
+Run with Docker:
+
+```bash
+docker run -d \
+  --name stowry \
+  -p 5708:5708 \
+  -v $(pwd)/config.yaml:/app/config.yaml \
+  -v $(pwd)/data:/app/data \
+  ghcr.io/sagarc03/stowry:latest serve
+```
+
+With Docker Compose:
+
+```yaml
+# docker-compose.yml
+services:
+  stowry:
+    image: ghcr.io/sagarc03/stowry:latest
+    ports:
+      - "5708:5708"
+    volumes:
+      - ./config.yaml:/app/config.yaml
+      - ./data:/app/data
+    command: serve
+```
+
+## Build from Source
+
+Requirements:
+- Go 1.23 or later
+- Git
+
+```bash
+# Clone the repository
+git clone https://github.com/sagarc03/stowry.git
+cd stowry
+
+# Build the binary
+go build -o stowry ./cmd/stowry
+
+# Optional: Install to GOPATH/bin
+go install ./cmd/stowry
+```
+
+## Verify Installation
+
+After installation, verify Stowry is working:
+
+```bash
+stowry --help
+```
+
+Expected output:
+
+```
+Stowry - A lightweight object storage server
+
+Usage:
+  stowry [command]
+
+Available Commands:
+  cleanup     Clean up soft-deleted files
+  completion  Generate the autocompletion script for the specified shell
+  help        Help about any command
+  init        Initialize metadata database from storage files
+  serve       Start the HTTP server
+
+Flags:
+      --config string         config file (default "config.yaml")
+      --db-dsn string         database DSN
+      --db-table string       database table name
+      --db-type string        database type (sqlite, postgres)
+  -h, --help                  help for stowry
+      --storage-path string   storage directory path
+
+Use "stowry [command] --help" for more information about a command.
+```
+
+## Next Steps
+
+- [Configuration](configuration) - Configure Stowry for your needs
+- [Getting Started](getting-started) - Quick start guide

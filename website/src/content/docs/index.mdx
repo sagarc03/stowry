@@ -1,0 +1,40 @@
+---
+title: Documentation
+description: Complete documentation for Stowry - self-hosted object storage, simplified.
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+# Stowry Documentation
+
+Stowry is a lightweight object storage server written in Go. Deploy a single binary, configure your metadata backend, and start storing files with secure presigned URL authentication.
+
+## Quick Links
+
+<CardGrid>
+  <Card title="Quick Start" icon="rocket">
+    Get Stowry running in 5 minutes with our [Getting Started guide](getting-started).
+  </Card>
+  <Card title="Installation" icon="setting">
+    Multiple installation options including [Docker and binaries](installation).
+  </Card>
+  <Card title="Configuration" icon="document">
+    Full [configuration reference](configuration) for all settings.
+  </Card>
+  <Card title="API Reference" icon="open-book">
+    Complete [HTTP API documentation](api-reference) for all endpoints.
+  </Card>
+</CardGrid>
+
+## Features
+
+- **Single Binary** - No external dependencies. SQLite embedded or PostgreSQL for production.
+- **Presigned URLs** - Secure file access without exposing credentials.
+- **Three Server Modes** - Store, Static, and SPA modes for different use cases.
+- **Pluggable Backends** - Switch between SQLite and PostgreSQL.
+- **AWS SDK Compatible** - Generate presigned URLs with familiar AWS SDKs.
+
+## Getting Help
+
+- [GitHub Issues](https://github.com/sagarc03/stowry/issues) - Bug reports and feature requests
+- [Examples](examples) - Real-world usage patterns
