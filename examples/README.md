@@ -1,23 +1,28 @@
-# Stowry SDK Examples
+# Stowry Examples
 
 Examples demonstrating how to use Stowry with presigned URLs.
 
-## SDKs
+## SDK Examples
 
-Stowry provides lightweight native SDKs for presigned URL generation:
+Simple examples showing how to use Stowry SDKs for upload, download, and delete operations.
 
-| Language | Package | Install |
-|----------|---------|---------|
-| Go | [stowry-go](https://github.com/sagarc03/stowry-go) | `go get github.com/sagarc03/stowry-go` |
-| Python | [stowrypy](https://pypi.org/project/stowrypy/) | `pip install stowrypy` |
-| JavaScript | [stowryjs](https://www.npmjs.com/package/stowryjs) | `npm install stowryjs` |
+| Example | SDK | Signing |
+|---------|-----|---------|
+| [go-native](./go-native/) | [stowry-go](https://github.com/sagarc03/stowry-go) | Native |
+| [go-aws](./go-aws/) | [aws-sdk-go-v2](https://github.com/aws/aws-sdk-go-v2) | AWS Sig V4 |
+| [python-native](./python-native/) | [stowrypy](https://pypi.org/project/stowrypy/) | Native |
+| [python-aws](./python-aws/) | [boto3](https://boto3.amazonaws.com/) | AWS Sig V4 |
+| [javascript-native](./javascript-native/) | [stowryjs](https://www.npmjs.com/package/stowryjs) | Native |
+| [javascript-aws](./javascript-aws/) | [@aws-sdk/client-s3](https://www.npmjs.com/package/@aws-sdk/client-s3) | AWS Sig V4 |
 
-Stowry also supports AWS Signature V4, so you can use official AWS SDKs (boto3, aws-sdk-go-v2, @aws-sdk/client-s3).
+## Application Examples
 
-## Signing Schemes
+Full-stack applications demonstrating real-world usage patterns.
 
-- **Stowry native signing** - Simple, lightweight (`stowry/` folder)
-- **AWS Signature V4** - Compatible with AWS SDKs (`aws/` folder)
+| Example | Stack | Description |
+|---------|-------|-------------|
+| [app-nextjs](./app-nextjs/) | Next.js + Better Upload | Server components, direct browser uploads |
+| [app-flask-react](./app-flask-react/) | Flask + React SPA | Traditional backend/frontend separation |
 
 ## Prerequisites
 
@@ -36,86 +41,6 @@ docker run --rm -p 5708:5708 \
   ghcr.io/sagarc03/stowry:latest serve --config /config.yaml --db-dsn :memory:
 ```
 
-## Stowry Native Signing
-
-Uses the lightweight Stowry SDKs with native signing scheme.
-
-### Go (stowry-go)
-
-```bash
-cd examples/stowry/go
-go mod tidy
-go run main.go
-```
-
-### Python (stowrypy)
-
-```bash
-cd examples/stowry/python
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python main.py
-```
-
-### JavaScript (stowryjs)
-
-```bash
-cd examples/stowry/javascript
-npm install
-npm start
-```
-
-## AWS Signature V4
-
-Uses official AWS SDKs with Signature V4 authentication.
-
-### Go (aws-sdk-go-v2)
-
-```bash
-cd examples/aws/go
-go mod tidy
-go run main.go
-```
-
-### Python (boto3)
-
-```bash
-cd examples/aws/python
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python main.py
-```
-
-### JavaScript (@aws-sdk/client-s3)
-
-```bash
-cd examples/aws/javascript
-npm install
-npm start
-```
-
-## Expected Output
-
-All examples produce similar output:
-
-```text
-=== Upload ===
-Uploaded: /hello.txt
-
-=== Download ===
-Content: Hello from <SDK>!
-
-=== Presigned URLs ===
-GET URL: http://localhost:5708/...
-PUT URL: http://localhost:5708/...
-DELETE URL: http://localhost:5708/...
-
-=== Delete ===
-Deleted: /hello.txt
-```
-
 ## Configuration
 
 All examples read credentials from `config.yaml`:
@@ -124,7 +49,6 @@ All examples read credentials from `config.yaml`:
 auth:
   region: us-east-1
   service: s3
-  # WARNING: Example keys only - do not use in production
   keys:
     - access_key: <your-access-key>
       secret_key: <your-secret-key>
@@ -140,14 +64,14 @@ openssl rand -hex 10 | tr '[:lower:]' '[:upper:]'
 openssl rand -hex 20
 ```
 
-## URL Formats
+## Signing Schemes
 
-**Stowry native signing:**
+**Stowry native signing** - Lightweight, simpler URL format:
 ```
 http://localhost:5708/path?X-Stowry-Credential=...&X-Stowry-Date=...&X-Stowry-Expires=...&X-Stowry-Signature=...
 ```
 
-**AWS Signature V4:**
+**AWS Signature V4** - Compatible with AWS SDKs:
 ```
 http://localhost:5708/bucket/key?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=...&X-Amz-Date=...&X-Amz-Expires=...&X-Amz-SignedHeaders=...&X-Amz-Signature=...
 ```
@@ -155,5 +79,5 @@ http://localhost:5708/bucket/key?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credenti
 ## Notes
 
 - Stowry native signing doesn't require bucket prefix in path
-- AWS SDK examples require path-style addressing (`UsePathStyle: true`)
+- AWS SDK examples require path-style addressing
 - AWS SDK for Python (boto3) requires `signature_version='s3v4'`
