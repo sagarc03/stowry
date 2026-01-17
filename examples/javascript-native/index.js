@@ -5,10 +5,10 @@
  * signing scheme via the stowryjs SDK.
  *
  * Run Stowry first:
- *   stowry serve --config ../../config.yaml
+ *   stowry serve --config ../config.yaml
  *
  * Then run this example:
- *   cd examples/stowry/javascript
+ *   cd examples/javascript-native
  *   npm install
  *   npm start
  *
@@ -20,7 +20,7 @@ import { parse } from "yaml";
 import { StowryClient } from "stowryjs";
 
 const STOWRY_ENDPOINT = "http://localhost:5708";
-const CONFIG_PATH = "../../config.yaml";
+const CONFIG_PATH = "../config.yaml";
 
 function loadConfig(path) {
   const content = readFileSync(path, "utf8");

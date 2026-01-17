@@ -6,10 +6,10 @@ This example demonstrates using presigned URLs with Stowry's native
 signing scheme via the stowrypy SDK.
 
 Run Stowry first:
-    stowry serve --config ../../config.yaml
+    stowry serve --config ../config.yaml
 
 Then run this example:
-    cd examples/stowry/python
+    cd examples/python-native
     python -m venv .venv
     source .venv/bin/activate  # or .venv\\Scripts\\activate on Windows
     pip install -r requirements.txt
@@ -23,7 +23,7 @@ import yaml
 from stowrypy import StowryClient
 
 STOWRY_ENDPOINT = "http://localhost:5708"
-CONFIG_PATH = "../../config.yaml"
+CONFIG_PATH = "../config.yaml"
 
 
 def load_config(path: str) -> dict:
