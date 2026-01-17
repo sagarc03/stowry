@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Check, Code, Copy } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
-import * as shiki from 'shiki';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -173,6 +172,7 @@ export function Compatibility() {
   useEffect(() => {
     async function highlightCode() {
       try {
+        const shiki = await import('shiki');
         const highlighter = await shiki.createHighlighter({
           themes: ['github-dark-high-contrast', 'github-light-default'],
           langs: [
