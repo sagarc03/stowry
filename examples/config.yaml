@@ -9,3 +9,22 @@ auth:
 access:
   public_read: false
   public_write: false
+
+cors:
+  enabled: true
+  allowed_origins:
+    - "*"
+  allowed_methods:
+    - GET
+    - PUT
+    - DELETE
+    - OPTIONS
+  allowed_headers:
+    - Content-Type
+    - Authorization
+    - X-Amz-Date
+    - X-Amz-Content-Sha256
+  exposed_headers:
+    - ETag
+    - Content-Length
+  max_age: 300
