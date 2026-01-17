@@ -1,0 +1,288 @@
+---
+title: Server Modes
+description: Understanding Store, Static, and SPA server modes in Stowry.
+---
+
+# Server Modes
+
+Stowry supports three server modes that change how requests are handled. Choose the mode that fits your use case.
+
+## Overview
+
+| Mode | Use Case | Path Fallback |
+|------|----------|---------------|
+| `store` | Object storage API | None (404 if not found) |
+| `static` | Static file server | `{path}/index.html` |
+| `spa` | Single-page application | `/index.html` |
+
+## Store Mode (Default)
+
+The default mode for object storage operations.
+
+```yaml
+server:
+  mode: store
+```
+
+### Behavior
+
+- `GET /{path}` - Returns the exact file or 404
+- `GET /` - Returns JSON list of objects
+- Full CRUD operations (PUT, DELETE)
+- No automatic fallbacks
+
+### Use Cases
+
+- Backend file storage for applications
+- User upload handling
+- Asset management systems
+- API-driven file operations
+
+### Example
+
+```bash
+# Start in store mode
+./stowry serve --mode store
+
+# Upload a file
+curl -X PUT -d "content" http://localhost:5708/documents/report.pdf
+
+# Download - returns exact file
+curl http://localhost:5708/documents/report.pdf  # 200 OK
+
+# Missing file - returns 404
+curl http://localhost:5708/documents/missing.pdf  # 404 Not Found
+
+# List objects
+curl http://localhost:5708/  # JSON response
+```
+
+---
+
+## Static Mode
+
+Serves static files with automatic `index.html` resolution.
+
+```yaml
+server:
+  mode: static
+```
+
+### Behavior
+
+- `GET /{path}` - Returns file, or tries `{path}/index.html`
+- `GET /` - Returns `/index.html`
+- Suitable for static websites
+- PUT and DELETE still work for content management
+
+### Fallback Logic
+
+1. Try exact path
+2. If not found and path has no extension, try `{path}/index.html`
+3. Return 404 if neither exists
+
+### Use Cases
+
+- Static website hosting
+- Documentation sites
+- Marketing pages
+- Any site with traditional URL structure
+
+### Example
+
+Given this storage structure:
+```
+data/
+├── index.html
+├── about/
+│   └── index.html
+├── blog/
+│   ├── index.html
+│   └── post-1.html
+└── assets/
+    └── style.css
+```
+
+Request handling:
+```
+GET /              → data/index.html
+GET /about         → data/about/index.html
+GET /about/        → data/about/index.html
+GET /blog          → data/blog/index.html
+GET /blog/post-1.html → data/blog/post-1.html
+GET /assets/style.css → data/assets/style.css
+GET /missing       → 404 (no index.html in missing/)
+```
+
+### Configuration
+
+```yaml
+server:
+  mode: static
+  port: 80
+
+storage:
+  path: /var/www/html
+
+access:
+  public_read: true
+  public_write: false
+```
+
+---
+
+## SPA Mode
+
+Designed for single-page applications with client-side routing.
+
+```yaml
+server:
+  mode: spa
+```
+
+### Behavior
+
+- `GET /{path}` - Returns file if exists, otherwise `/index.html`
+- Enables client-side routing (React Router, Vue Router, etc.)
+- PUT and DELETE still work for content management
+
+### Fallback Logic
+
+1. Try exact path
+2. If not found, return `/index.html`
+3. Client-side JavaScript handles routing
+
+### Use Cases
+
+- React applications
+- Vue.js applications
+- Angular applications
+- Any SPA with client-side routing
+
+### Example
+
+Given this storage structure:
+```
+dist/
+├── index.html
+├── assets/
+│   ├── main.js
+│   └── style.css
+└── favicon.ico
+```
+
+Request handling:
+```
+GET /              → dist/index.html
+GET /dashboard     → dist/index.html (SPA handles route)
+GET /users/123     → dist/index.html (SPA handles route)
+GET /assets/main.js → dist/assets/main.js
+GET /favicon.ico   → dist/favicon.ico
+```
+
+### Configuration
+
+```yaml
+server:
+  mode: spa
+  port: 3000
+
+storage:
+  path: ./dist
+
+access:
+  public_read: true
+  public_write: false
+```
+
+### Client-Side Router Setup
+
+Ensure your SPA handles the current URL on load:
+
+**React Router:**
+```jsx
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/users/:id" element={<UserProfile />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+```
+
+**Vue Router:**
+```javascript
+import { createRouter, createWebHistory } from 'vue-router';
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes: [
+    { path: '/', component: Home },
+    { path: '/dashboard', component: Dashboard },
+    { path: '/users/:id', component: UserProfile },
+  ],
+});
+```
+
+---
+
+## Comparing Modes
+
+### GET Request Behavior
+
+| Request | Store | Static | SPA |
+|---------|-------|--------|-----|
+| `GET /` | List objects (JSON) | `/index.html` | `/index.html` |
+| `GET /about` | Exact file or 404 | `/about/index.html` | `/index.html` |
+| `GET /file.txt` | Exact file or 404 | Exact file or 404 | Exact file or 404 |
+| `GET /missing` | 404 | 404 | `/index.html` |
+
+### When to Use Each
+
+**Use Store when:**
+- Building an API-driven application
+- You need full control over responses
+- Implementing custom 404 handling on the client
+- File paths are dynamic/generated
+
+**Use Static when:**
+- Hosting a traditional static website
+- Each URL corresponds to a specific page
+- You want automatic directory index resolution
+- SEO is important (each route has its own file)
+
+**Use SPA when:**
+- Building a single-page application
+- Using client-side routing
+- All routes should load the same entry point
+- Deep linking should work for all routes
+
+---
+
+## Switching Modes
+
+You can change modes without modifying your stored files:
+
+```bash
+# Development with SPA mode
+./stowry serve --mode spa
+
+# Production static hosting
+./stowry serve --mode static
+
+# API mode for backend
+./stowry serve --mode store
+```
+
+Or via configuration:
+
+```yaml
+server:
+  mode: ${STOWRY_MODE:-store}  # Default to store, override with env var
+```

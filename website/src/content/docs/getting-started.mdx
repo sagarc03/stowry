@@ -1,0 +1,136 @@
+---
+title: Getting Started
+description: Get Stowry running in 5 minutes with this quick start guide.
+---
+
+# Getting Started
+
+This guide will have you running Stowry and storing your first file in 5 minutes.
+
+## Prerequisites
+
+- A terminal/command line
+- `curl` for making HTTP requests (or any HTTP client)
+
+## Step 1: Download Stowry
+
+Download the latest release for your platform:
+
+```bash
+# Linux (amd64)
+curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-linux-amd64
+chmod +x stowry-linux-amd64
+mv stowry-linux-amd64 stowry
+
+# macOS (arm64)
+curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-darwin-arm64
+chmod +x stowry-darwin-arm64
+mv stowry-darwin-arm64 stowry
+```
+
+## Step 2: Create Configuration
+
+Create a `config.yaml` file:
+
+```yaml
+server:
+  port: 5708
+  mode: store
+
+database:
+  type: sqlite
+  dsn: stowry.db
+  table: stowry_metadata
+
+storage:
+  path: ./data
+
+auth:
+  region: us-east-1
+  service: s3
+  keys:
+    - access_key: AKIAIOSFODNN7EXAMPLE
+      secret_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+
+access:
+  public_read: false
+  public_write: false
+
+log:
+  level: info
+```
+
+## Step 3: Start the Server
+
+```bash
+./stowry serve
+```
+
+You should see:
+
+```
+INFO starting server addr=:5708 mode=store
+```
+
+## Step 4: Upload a File
+
+Stowry uses presigned URLs for authentication. For this quick test, enable public write access temporarily by setting `public_write: true` in your config, then restart the server.
+
+Upload a file:
+
+```bash
+curl -X PUT \
+  -H "Content-Type: text/plain" \
+  -d "Hello, Stowry!" \
+  http://localhost:5708/hello.txt
+```
+
+Response:
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "path": "hello.txt",
+  "content_type": "text/plain",
+  "etag": "a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e",
+  "file_size_bytes": 14,
+  "created_at": "2024-01-15T10:30:00Z",
+  "updated_at": "2024-01-15T10:30:00Z"
+}
+```
+
+## Step 5: Download the File
+
+```bash
+curl http://localhost:5708/hello.txt
+```
+
+Output:
+
+```
+Hello, Stowry!
+```
+
+## Step 6: Use Presigned URLs (Production)
+
+For production, disable public access and use presigned URLs. See the [Authentication guide](authentication) for generating presigned URLs with the stowry-go SDK or AWS SDK.
+
+```go
+import stowry "github.com/sagarc03/stowry-go"
+
+client := stowry.NewClient(
+    "http://localhost:5708",
+    "AKIAIOSFODNN7EXAMPLE",
+    "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+)
+
+// Generate a presigned URL valid for 15 minutes
+uploadURL := client.PresignPut("/photos/vacation.jpg", 900)
+```
+
+## Next Steps
+
+- [Installation](installation) - More installation options
+- [Configuration](configuration) - Full configuration reference
+- [Authentication](authentication) - Presigned URL authentication
+- [Server Modes](server-modes) - Store, Static, and SPA modes

@@ -1,0 +1,362 @@
+---
+title: Client SDKs
+description: Official Stowry SDKs for Go, Python, and JavaScript, plus AWS SDK compatibility.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+# Client SDKs
+
+Stowry provides official SDKs for Go, Python, and JavaScript. All SDKs implement Stowry's native signing scheme for generating presigned URLs.
+
+For AWS SDK compatibility, see [Using AWS SDKs](#using-aws-sdks) below.
+
+## Official SDKs
+
+| SDK | Package | Repository |
+|-----|---------|------------|
+| Go | `github.com/sagarc03/stowry-go` | [stowry-go](https://github.com/sagarc03/stowry-go) |
+| Python | `stowrypy` | [stowrypy](https://github.com/sagarc03/stowrypy) |
+| JavaScript | `stowryjs` | [stowryjs](https://github.com/sagarc03/stowryjs) |
+
+---
+
+## Installation
+
+<Tabs>
+  <TabItem label="Go">
+    ```bash
+    go get github.com/sagarc03/stowry-go
+    ```
+  </TabItem>
+  <TabItem label="Python">
+    ```bash
+    pip install stowrypy
+    ```
+  </TabItem>
+  <TabItem label="JavaScript">
+    ```bash
+    npm install stowryjs
+    ```
+  </TabItem>
+</Tabs>
+
+---
+
+## Quick Start
+
+<Tabs>
+  <TabItem label="Go">
+    ```go
+    package main
+
+    import (
+        "bytes"
+        "fmt"
+        "io"
+        "net/http"
+        "time"
+
+        stowry "github.com/sagarc03/stowry-go"
+    )
+
+    func main() {
+        client := stowry.NewClient(
+            "http://localhost:5708",
+            "YOUR_ACCESS_KEY",
+            "YOUR_SECRET_KEY",
+        )
+
+        httpClient := &http.Client{Timeout: 30 * time.Second}
+
+        // Upload
+        putURL := client.PresignPut("/hello.txt", 900)
+        req, _ := http.NewRequest("PUT", putURL, bytes.NewReader([]byte("Hello!")))
+        req.Header.Set("Content-Type", "text/plain")
+        httpClient.Do(req)
+
+        // Download
+        getURL := client.PresignGet("/hello.txt", 900)
+        resp, _ := httpClient.Get(getURL)
+        defer resp.Body.Close()
+        content, _ := io.ReadAll(resp.Body)
+        fmt.Println(string(content))
+
+        // Delete
+        deleteURL := client.PresignDelete("/hello.txt", 300)
+        req, _ = http.NewRequest("DELETE", deleteURL, nil)
+        httpClient.Do(req)
+    }
+    ```
+  </TabItem>
+  <TabItem label="Python">
+    ```python
+    import requests
+    from stowrypy import StowryClient
+
+    client = StowryClient(
+        endpoint="http://localhost:5708",
+        access_key="YOUR_ACCESS_KEY",
+        secret_key="YOUR_SECRET_KEY",
+    )
+
+    # Upload
+    put_url = client.presign_put("/hello.txt", expires=900)
+    requests.put(put_url, data=b"Hello!", headers={"Content-Type": "text/plain"})
+
+    # Download
+    get_url = client.presign_get("/hello.txt", expires=900)
+    response = requests.get(get_url)
+    print(response.text)
+
+    # Delete
+    delete_url = client.presign_delete("/hello.txt", expires=300)
+    requests.delete(delete_url)
+    ```
+  </TabItem>
+  <TabItem label="JavaScript">
+    ```javascript
+    import { StowryClient } from 'stowryjs';
+
+    const client = new StowryClient({
+      endpoint: 'http://localhost:5708',
+      accessKey: 'YOUR_ACCESS_KEY',
+      secretKey: 'YOUR_SECRET_KEY',
+    });
+
+    // Upload
+    const putUrl = await client.presignPut('/hello.txt', 900);
+    await fetch(putUrl, {
+      method: 'PUT',
+      body: 'Hello!',
+      headers: { 'Content-Type': 'text/plain' },
+    });
+
+    // Download
+    const getUrl = await client.presignGet('/hello.txt', 900);
+    const response = await fetch(getUrl);
+    console.log(await response.text());
+
+    // Delete
+    const deleteUrl = await client.presignDelete('/hello.txt', 300);
+    await fetch(deleteUrl, { method: 'DELETE' });
+    ```
+  </TabItem>
+</Tabs>
+
+---
+
+## API Reference
+
+All SDKs share the same API design:
+
+### Constructor
+
+| Language | Constructor |
+|----------|-------------|
+| Go | `stowry.NewClient(endpoint, accessKey, secretKey)` |
+| Python | `StowryClient(endpoint, access_key, secret_key)` |
+| JavaScript | `new StowryClient({ endpoint, accessKey, secretKey })` |
+
+### Methods
+
+| Method | Parameters | Returns | Description |
+|--------|------------|---------|-------------|
+| `PresignGet` / `presign_get` / `presignGet` | `path`, `expires` | URL string | Generate download URL |
+| `PresignPut` / `presign_put` / `presignPut` | `path`, `expires` | URL string | Generate upload URL |
+| `PresignDelete` / `presign_delete` / `presignDelete` | `path`, `expires` | URL string | Generate delete URL |
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `path` | string | - | Object path (must start with `/`) |
+| `expires` | int | 900 | URL validity in seconds (max: 604800 / 7 days) |
+
+---
+
+## Using AWS SDKs
+
+Stowry also supports AWS Signature V4, so you can use AWS SDKs to generate presigned URLs.
+
+<Tabs>
+  <TabItem label="Go (AWS SDK v2)">
+    ```go
+    import (
+        "context"
+        "time"
+
+        "github.com/aws/aws-sdk-go-v2/aws"
+        "github.com/aws/aws-sdk-go-v2/config"
+        "github.com/aws/aws-sdk-go-v2/credentials"
+        "github.com/aws/aws-sdk-go-v2/service/s3"
+    )
+
+    func createPresignClient() (*s3.PresignClient, error) {
+        cfg, err := config.LoadDefaultConfig(context.Background(),
+            config.WithRegion("us-east-1"),
+            config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+                "YOUR_ACCESS_KEY",
+                "YOUR_SECRET_KEY",
+                "",
+            )),
+        )
+        if err != nil {
+            return nil, err
+        }
+
+        client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+            o.BaseEndpoint = aws.String("http://localhost:5708")
+            o.UsePathStyle = true  // Required
+        })
+
+        return s3.NewPresignClient(client), nil
+    }
+
+    // Usage
+    client, _ := createPresignClient()
+    resp, _ := client.PresignGetObject(context.Background(),
+        &s3.GetObjectInput{
+            Bucket: aws.String("bucket"),
+            Key:    aws.String("hello.txt"),
+        },
+        s3.WithPresignExpires(15*time.Minute),
+    )
+    fmt.Println(resp.URL)
+    ```
+  </TabItem>
+  <TabItem label="Python (Boto3)">
+    ```python
+    import boto3
+    from botocore.config import Config
+
+    s3 = boto3.client(
+        's3',
+        endpoint_url='http://localhost:5708',
+        aws_access_key_id='YOUR_ACCESS_KEY',
+        aws_secret_access_key='YOUR_SECRET_KEY',
+        region_name='us-east-1',
+        config=Config(s3={'addressing_style': 'path'})  # Required
+    )
+
+    # Generate presigned URL
+    url = s3.generate_presigned_url(
+        'get_object',
+        Params={'Bucket': 'bucket', 'Key': 'hello.txt'},
+        ExpiresIn=900
+    )
+    ```
+  </TabItem>
+  <TabItem label="JavaScript (AWS SDK v3)">
+    ```javascript
+    import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+    import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+
+    const client = new S3Client({
+      endpoint: 'http://localhost:5708',
+      region: 'us-east-1',
+      credentials: {
+        accessKeyId: 'YOUR_ACCESS_KEY',
+        secretAccessKey: 'YOUR_SECRET_KEY',
+      },
+      forcePathStyle: true,  // Required
+    });
+
+    const url = await getSignedUrl(
+      client,
+      new GetObjectCommand({ Bucket: 'bucket', Key: 'hello.txt' }),
+      { expiresIn: 900 }
+    );
+    ```
+  </TabItem>
+</Tabs>
+
+---
+
+## Native vs AWS SDK
+
+| Feature | Native SDK | AWS SDK |
+|---------|------------|---------|
+| Setup complexity | Simple | More configuration |
+| Dependencies | Minimal | AWS SDK packages |
+| Signing scheme | Stowry native | AWS Signature V4 |
+| Async (JS) | Yes | Yes |
+| Browser support | Yes (stowryjs) | Yes |
+
+**When to use Native SDKs:**
+- New projects
+- Minimal dependencies preferred
+- Simple integration
+
+**When to use AWS SDKs:**
+- Existing AWS SDK usage in codebase
+- Team familiarity with AWS patterns
+- Multi-cloud compatibility needs
+
+---
+
+## Browser Usage
+
+Both `stowryjs` and AWS SDK v3 work in browsers. Generate presigned URLs server-side for security:
+
+```javascript
+// Server (Node.js/Bun/Deno)
+import { StowryClient } from 'stowryjs';
+
+const client = new StowryClient({
+  endpoint: process.env.STOWRY_ENDPOINT,
+  accessKey: process.env.STOWRY_ACCESS_KEY,
+  secretKey: process.env.STOWRY_SECRET_KEY,
+});
+
+app.get('/api/upload-url', async (req, res) => {
+  const { filename } = req.query;
+  const url = await client.presignPut(`/uploads/${filename}`, 300);
+  res.json({ url });
+});
+
+// Client (Browser)
+async function uploadFile(file) {
+  const { url } = await fetch(`/api/upload-url?filename=${file.name}`)
+    .then(r => r.json());
+
+  await fetch(url, {
+    method: 'PUT',
+    body: file,
+    headers: { 'Content-Type': file.type },
+  });
+}
+```
+
+---
+
+## Platform Support
+
+### stowry-go
+- Go 1.21+
+
+### stowrypy
+- Python 3.8+
+- No external dependencies (uses stdlib only)
+
+### stowryjs
+- Node.js 18+
+- Modern browsers (Chrome, Firefox, Safari, Edge)
+- Deno and Bun compatible
+- Uses Web Crypto API (browser) or Node.js crypto
+
+---
+
+## Resources
+
+### Go
+- [pkg.go.dev/github.com/sagarc03/stowry-go](https://pkg.go.dev/github.com/sagarc03/stowry-go)
+- [GitHub: stowry-go](https://github.com/sagarc03/stowry-go)
+
+### Python
+- [PyPI: stowrypy](https://pypi.org/project/stowrypy/)
+- [GitHub: stowrypy](https://github.com/sagarc03/stowrypy)
+
+### JavaScript
+- [npm: stowryjs](https://www.npmjs.com/package/stowryjs)
+- [GitHub: stowryjs](https://github.com/sagarc03/stowryjs)
