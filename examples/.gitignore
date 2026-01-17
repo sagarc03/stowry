@@ -9,6 +9,28 @@ data/
 __pycache__/
 *.pyc
 
-# JavaScript
+# JavaScript / Node
 node_modules/
 package-lock.json
+
+# Next.js
+.next/
+out/
+
+# Build output
+dist/
+build/
+
+# Environment files with secrets
+.env.local
+.env
+
+# Go
+go.sum
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
