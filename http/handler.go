@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 	"github.com/sagarc03/stowry"
 )
 
@@ -19,6 +20,16 @@ type Service interface {
 	List(ctx context.Context, query stowry.ListQuery) (stowry.ListResult, error)
 }
 
+type CORSConfig struct {
+	Enabled          bool
+	AllowedOrigins   []string
+	AllowedMethods   []string
+	AllowedHeaders   []string
+	ExposedHeaders   []string
+	AllowCredentials bool
+	MaxAge           int
+}
+
 type HandlerConfig struct {
 	PublicRead  bool
 	PublicWrite bool
@@ -26,6 +37,7 @@ type HandlerConfig struct {
 	Service     string
 	Mode        stowry.ServerMode
 	AccessKeys  map[string]string
+	CORS        CORSConfig
 }
 
 type Handler struct {
@@ -33,15 +45,26 @@ type Handler struct {
 	service Service
 }
 
-func NewHandler(config HandlerConfig, service Service) *Handler {
+func NewHandler(config *HandlerConfig, service Service) *Handler {
 	return &Handler{
-		config:  config,
+		config:  *config,
 		service: service,
 	}
 }
 
 func (h *Handler) Router() http.Handler {
 	r := chi.NewRouter()
+
+	if h.config.CORS.Enabled {
+		r.Use(cors.Handler(cors.Options{
+			AllowedOrigins:   h.config.CORS.AllowedOrigins,
+			AllowedMethods:   h.config.CORS.AllowedMethods,
+			AllowedHeaders:   h.config.CORS.AllowedHeaders,
+			ExposedHeaders:   h.config.CORS.ExposedHeaders,
+			AllowCredentials: h.config.CORS.AllowCredentials,
+			MaxAge:           h.config.CORS.MaxAge,
+		}))
+	}
 
 	r.Use(PathValidationMiddleware)
 

@@ -83,9 +83,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 		Service:     viper.GetString("auth.service"),
 		Mode:        mode,
 		AccessKeys:  getAccessKeys(),
+		CORS:        getCORSConfig(),
 	}
 
-	handler := stowryhttp.NewHandler(handlerConfig, service)
+	handler := stowryhttp.NewHandler(&handlerConfig, service)
 
 	port := viper.GetInt("server.port")
 	addr := fmt.Sprintf(":%d", port)
@@ -240,4 +241,16 @@ func getAccessKeys() map[string]string {
 	}
 
 	return keys
+}
+
+func getCORSConfig() stowryhttp.CORSConfig {
+	return stowryhttp.CORSConfig{
+		Enabled:          viper.GetBool("cors.enabled"),
+		AllowedOrigins:   viper.GetStringSlice("cors.allowed_origins"),
+		AllowedMethods:   viper.GetStringSlice("cors.allowed_methods"),
+		AllowedHeaders:   viper.GetStringSlice("cors.allowed_headers"),
+		ExposedHeaders:   viper.GetStringSlice("cors.exposed_headers"),
+		AllowCredentials: viper.GetBool("cors.allow_credentials"),
+		MaxAge:           viper.GetInt("cors.max_age"),
+	}
 }
