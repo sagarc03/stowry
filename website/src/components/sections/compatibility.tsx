@@ -174,7 +174,7 @@ export function Compatibility() {
       try {
         const shiki = await import('shiki');
         const highlighter = await shiki.createHighlighter({
-          themes: ['github-dark-high-contrast', 'github-light-default'],
+          themes: ['github-dark', 'github-light'],
           langs: [
             'typescript',
             'javascript',
@@ -191,7 +191,7 @@ export function Compatibility() {
             framework.code,
             {
               lang: framework.lang,
-              theme: 'github-light-default',
+              theme: 'github-light',
             },
           );
 
@@ -199,7 +199,7 @@ export function Compatibility() {
             framework.code,
             {
               lang: framework.lang,
-              theme: 'github-dark-high-contrast',
+              theme: 'github-dark',
             },
           );
         }
@@ -265,7 +265,7 @@ export function Compatibility() {
             {isLoading ? (
               <Card className="relative overflow-hidden !p-0">
                 <CardContent className="!p-0">
-                  <div className="flex h-92 items-center justify-center">
+                  <div className="flex items-center justify-center py-8">
                     <div className="text-muted-foreground">Loading...</div>
                   </div>
                 </CardContent>
@@ -284,7 +284,7 @@ export function Compatibility() {
                             __html:
                               currentHighlightedCode[framework.name] || '',
                           }}
-                          className="h-89 overflow-x-auto overflow-y-auto text-sm [&_pre]:m-0 [&_pre]:h-89 [&_pre]:bg-transparent [&_pre]:p-4 [&_pre]:whitespace-pre-wrap"
+                          className="overflow-x-auto text-sm [&_pre]:m-0 [&_pre]:bg-transparent [&_pre]:p-4"
                         />
                         <CopyButton
                           text={framework.code}
