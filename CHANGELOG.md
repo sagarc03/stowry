@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **keybackend Package** - Pluggable key backends for secret key retrieval
+  - `SecretStore` interface in root package with `Lookup(accessKey) (secretKey, error)` method
+  - `MapSecretStore` implementation for in-memory key storage
+- **RequestVerifier Interface** - Abstraction for HTTP request authentication in `http` package
+- **StowrySignatureVerifier** - Native Stowry signature verification using stowry-go
+
+### Changed
+
+- Updated to stowry-go v1.1.0
+- `AuthMiddleware` now receives `RequestVerifier` directly instead of config struct
+  - Pass `nil` for public access (no authentication required)
+- `HandlerConfig` simplified with `ReadVerifier` and `WriteVerifier` fields
+  - Removes `PublicRead`, `PublicWrite`, `Region`, `Service`, `Store` fields
+  - Caller creates and passes verifiers for better flexibility
+- Unified `SignatureVerifier` auto-detects signing scheme and delegates to appropriate verifier
+
 ## [1.2.0] - 2025-01-17
 
 ### Added
