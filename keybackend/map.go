@@ -1,12 +1,6 @@
 // Package keybackend provides SecretStore implementations for key retrieval.
 package keybackend
 
-import (
-	"fmt"
-
-	"github.com/sagarc03/stowry"
-)
-
 // MapSecretStore retrieves keys from an in-memory map.
 // Suitable for configuration file-based key storage.
 type MapSecretStore struct {
@@ -22,7 +16,7 @@ func NewMapSecretStore(keys map[string]string) *MapSecretStore {
 func (s *MapSecretStore) Lookup(accessKey string) (string, error) {
 	secretKey, found := s.keys[accessKey]
 	if !found {
-		return "", fmt.Errorf("access key not found: %w", stowry.ErrUnauthorized)
+		return "", ErrKeyNotFound
 	}
 	return secretKey, nil
 }
