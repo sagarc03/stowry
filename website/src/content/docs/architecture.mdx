@@ -12,7 +12,7 @@ This document describes Stowry's technical architecture and design decisions.
 Stowry follows a clean architecture with clear separation between:
 
 - **Core domain logic** (root package)
-- **Infrastructure adapters** (postgres, sqlite, filesystem, keybackend, http packages)
+- **Infrastructure adapters** (database, filesystem, keybackend, http packages)
 - **CLI application** (cmd/stowry)
 
 ```
@@ -113,26 +113,38 @@ const (
 
 ## Database Backends
 
-### SQLite (sqlite/)
+The `database` package provides a unified interface for connecting to metadata backends.
+
+### Unified Connection
+
+```go
+import "github.com/sagarc03/stowry/database"
+
+cfg := database.Config{
+    Type:  "sqlite",  // or "postgres"
+    DSN:   "stowry.db",
+    Table: "stowry_metadata",
+}
+
+repo, cleanup, err := database.Connect(ctx, cfg)
+if err != nil {
+    log.Fatal(err)
+}
+defer cleanup()
+```
+
+### SQLite (database/sqlite/)
 
 - Uses `modernc.org/sqlite` (pure Go implementation)
 - Single-file database, no external process
 - Code-based migrations
 - Ideal for development and small deployments
 
-```go
-repo, err := sqlite.NewRepo(db, tables)
-```
-
-### PostgreSQL (postgres/)
+### PostgreSQL (database/postgres/)
 
 - Uses `pgx/v5` with connection pooling
 - Code-based migrations
 - Suitable for production and high concurrency
-
-```go
-repo, err := postgres.NewRepo(pool, tables)
-```
 
 ### Schema
 
@@ -158,12 +170,12 @@ CREATE INDEX idx_updated_at_path ON stowry_metadata(updated_at, path);
 
 ### Migrations
 
-Migrations are code-based, not SQL files:
+Migrations are code-based, not SQL files. They run automatically when using `database.Connect()`:
 
 ```go
-// Run automatically on startup
-err := sqlite.Migrate(ctx, db, tables)
-err := postgres.Migrate(ctx, pool, tables)
+// Migrations run automatically via Connect()
+repo, cleanup, err := database.Connect(ctx, cfg)
+// Schema is migrated and validated automatically
 ```
 
 ## File Storage (filesystem/)
