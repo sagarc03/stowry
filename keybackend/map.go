@@ -2,7 +2,9 @@
 package keybackend
 
 // MapSecretStore retrieves keys from an in-memory map.
-// Suitable for configuration file-based key storage.
+// Suitable for configuration file-based key storage. It is safe for concurrent
+// use provided that the underlying map is not modified after initialization, as
+// MapSecretStore only performs read operations on the map.
 type MapSecretStore struct {
 	keys map[string]string
 }
