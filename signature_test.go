@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/sagarc03/stowry"
+	stowrysign "github.com/sagarc03/stowry-go"
 	"github.com/sagarc03/stowry/keybackend"
 	"github.com/stretchr/testify/assert"
 )
@@ -236,5 +237,175 @@ func TestNewSignatureVerifier(t *testing.T) {
 	})
 
 	verifier := stowry.NewSignatureVerifier("us-west-1", "ec2", store)
+	assert.NotNil(t, verifier)
+}
+
+func TestStowrySignatureVerifier_Verify(t *testing.T) {
+	const (
+		accessKey = "STOWRYTEST"
+		secretKey = "testsecret123"
+	)
+
+	store := keybackend.NewMapSecretStore(map[string]string{
+		accessKey: secretKey,
+	})
+
+	verifier := stowry.NewStowrySignatureVerifier(store)
+
+	validTimestamp := time.Now().Unix()
+	validExpires := int64(900)
+	validSignature := stowrysign.Sign(secretKey, "GET", "/test.txt", validTimestamp, validExpires)
+
+	expiredTimestamp := time.Now().Add(-2 * time.Hour).Unix()
+	expiredSignature := stowrysign.Sign(secretKey, "GET", "/test.txt", expiredTimestamp, validExpires)
+
+	tests := []struct {
+		name      string
+		query     url.Values
+		wantError string
+	}{
+		{
+			name:      "empty query",
+			query:     url.Values{},
+			wantError: "missing required signature parameters",
+		},
+		{
+			name: "missing credential",
+			query: url.Values{
+				"X-Stowry-Date":      []string{fmt.Sprintf("%d", validTimestamp)},
+				"X-Stowry-Expires":   []string{fmt.Sprintf("%d", validExpires)},
+				"X-Stowry-Signature": []string{validSignature},
+			},
+			wantError: "missing required signature parameters",
+		},
+		{
+			name: "missing date",
+			query: url.Values{
+				"X-Stowry-Credential": []string{accessKey},
+				"X-Stowry-Expires":    []string{fmt.Sprintf("%d", validExpires)},
+				"X-Stowry-Signature":  []string{validSignature},
+			},
+			wantError: "missing required signature parameters",
+		},
+		{
+			name: "missing expires",
+			query: url.Values{
+				"X-Stowry-Credential": []string{accessKey},
+				"X-Stowry-Date":       []string{fmt.Sprintf("%d", validTimestamp)},
+				"X-Stowry-Signature":  []string{validSignature},
+			},
+			wantError: "missing required signature parameters",
+		},
+		{
+			name: "missing signature",
+			query: url.Values{
+				"X-Stowry-Credential": []string{accessKey},
+				"X-Stowry-Date":       []string{fmt.Sprintf("%d", validTimestamp)},
+				"X-Stowry-Expires":    []string{fmt.Sprintf("%d", validExpires)},
+			},
+			wantError: "missing required signature parameters",
+		},
+		{
+			name: "expires zero",
+			query: url.Values{
+				"X-Stowry-Credential": []string{accessKey},
+				"X-Stowry-Date":       []string{fmt.Sprintf("%d", validTimestamp)},
+				"X-Stowry-Expires":    []string{"0"},
+				"X-Stowry-Signature":  []string{validSignature},
+			},
+			wantError: "invalid expires",
+		},
+		{
+			name: "expires negative",
+			query: url.Values{
+				"X-Stowry-Credential": []string{accessKey},
+				"X-Stowry-Date":       []string{fmt.Sprintf("%d", validTimestamp)},
+				"X-Stowry-Expires":    []string{"-1"},
+				"X-Stowry-Signature":  []string{validSignature},
+			},
+			wantError: "invalid expires",
+		},
+		{
+			name: "expires too large",
+			query: url.Values{
+				"X-Stowry-Credential": []string{accessKey},
+				"X-Stowry-Date":       []string{fmt.Sprintf("%d", validTimestamp)},
+				"X-Stowry-Expires":    []string{"604801"},
+				"X-Stowry-Signature":  []string{validSignature},
+			},
+			wantError: "invalid expires",
+		},
+		{
+			name: "expired signature",
+			query: url.Values{
+				"X-Stowry-Credential": []string{accessKey},
+				"X-Stowry-Date":       []string{fmt.Sprintf("%d", expiredTimestamp)},
+				"X-Stowry-Expires":    []string{fmt.Sprintf("%d", validExpires)},
+				"X-Stowry-Signature":  []string{expiredSignature},
+			},
+			wantError: "signature expired",
+		},
+		{
+			name: "access key not found",
+			query: url.Values{
+				"X-Stowry-Credential": []string{"WRONGKEY"},
+				"X-Stowry-Date":       []string{fmt.Sprintf("%d", validTimestamp)},
+				"X-Stowry-Expires":    []string{fmt.Sprintf("%d", validExpires)},
+				"X-Stowry-Signature":  []string{validSignature},
+			},
+			wantError: "access key not found",
+		},
+		{
+			name: "signature mismatch",
+			query: url.Values{
+				"X-Stowry-Credential": []string{accessKey},
+				"X-Stowry-Date":       []string{fmt.Sprintf("%d", validTimestamp)},
+				"X-Stowry-Expires":    []string{fmt.Sprintf("%d", validExpires)},
+				"X-Stowry-Signature":  []string{"wrongsignature123"},
+			},
+			wantError: "signature mismatch",
+		},
+		{
+			name: "valid signature",
+			query: url.Values{
+				"X-Stowry-Credential": []string{accessKey},
+				"X-Stowry-Date":       []string{fmt.Sprintf("%d", validTimestamp)},
+				"X-Stowry-Expires":    []string{fmt.Sprintf("%d", validExpires)},
+				"X-Stowry-Signature":  []string{validSignature},
+			},
+			wantError: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reqURL := &url.URL{
+				Path:     "/test.txt",
+				RawQuery: tt.query.Encode(),
+			}
+			req := &http.Request{
+				Method: "GET",
+				URL:    reqURL,
+				Host:   "localhost:5708",
+				Header: http.Header{},
+			}
+			err := verifier.Verify(req)
+
+			if tt.wantError == "" {
+				assert.NoError(t, err)
+			} else {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantError)
+			}
+		})
+	}
+}
+
+func TestNewStowrySignatureVerifier(t *testing.T) {
+	store := keybackend.NewMapSecretStore(map[string]string{
+		"test": "secret",
+	})
+
+	verifier := stowry.NewStowrySignatureVerifier(store)
 	assert.NotNil(t, verifier)
 }
