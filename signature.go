@@ -20,17 +20,17 @@ const (
 	DateTimeFormat     = "20060102T150405Z"
 	DateFormat         = "20060102"
 
-	// AWS Signature V4 header names
-	AWSAlgorithmHeader     = "X-Amz-Algorithm"
-	AWSCredentialHeader    = "X-Amz-Credential" //nolint:gosec // This is a header name, not a credential
-	AWSDateHeader          = "X-Amz-Date"
-	AWSExpiresHeader       = "X-Amz-Expires"
-	AWSSignedHeadersHeader = "X-Amz-SignedHeaders"
-	AWSSignatureHeader     = "X-Amz-Signature"
+	// AWS Signature V4 query parameter names
+	AWSAlgorithmParam     = "X-Amz-Algorithm"
+	AWSCredentialParam    = "X-Amz-Credential" //nolint:gosec // This is a param name, not a credential
+	AWSDateParam          = "X-Amz-Date"
+	AWSExpiresParam       = "X-Amz-Expires"
+	AWSSignedHeadersParam = "X-Amz-SignedHeaders"
+	AWSSignatureParam     = "X-Amz-Signature"
 
-	// Native signature header
-	// TODO: Replace with stowrysign.SignatureHeader when stowry-go exports it
-	NativeSignatureHeader = "X-Stowry-Signature"
+	// Native signature query parameter
+	// TODO: Replace with stowrysign.SignatureParam when stowry-go exports it
+	NativeSignatureParam = "X-Stowry-Signature"
 )
 
 // SignatureVerifier verifies signed requests using either AWS Signature V4 or native Stowry signing.
@@ -63,11 +63,11 @@ func NewSignatureVerifier(region, service string, lookup func(string) (string, b
 func (v *SignatureVerifier) Verify(r *http.Request) error {
 	query := r.URL.Query()
 
-	if _, ok := query[NativeSignatureHeader]; ok {
+	if _, ok := query[NativeSignatureParam]; ok {
 		return v.nativeVerifier.Verify(r.Method, r.URL.Path, query)
 	}
 
-	if _, ok := query[AWSSignatureHeader]; ok {
+	if _, ok := query[AWSSignatureParam]; ok {
 		return v.awsVerifier.Verify(r)
 	}
 
@@ -149,12 +149,12 @@ type signatureParams struct {
 }
 
 func (v *AWSSignatureVerifier) extractParams(query url.Values) (*signatureParams, error) {
-	amzAlgorithm := query.Get(AWSAlgorithmHeader)
-	amzCredential := query.Get(AWSCredentialHeader)
-	amzDate := query.Get(AWSDateHeader)
-	amzExpires := query.Get(AWSExpiresHeader)
-	amzSignedHeaders := query.Get(AWSSignedHeadersHeader)
-	amzSignature := query.Get(AWSSignatureHeader)
+	amzAlgorithm := query.Get(AWSAlgorithmParam)
+	amzCredential := query.Get(AWSCredentialParam)
+	amzDate := query.Get(AWSDateParam)
+	amzExpires := query.Get(AWSExpiresParam)
+	amzSignedHeaders := query.Get(AWSSignedHeadersParam)
+	amzSignature := query.Get(AWSSignatureParam)
 
 	if amzAlgorithm == "" || amzCredential == "" || amzDate == "" ||
 		amzExpires == "" || amzSignedHeaders == "" || amzSignature == "" {
@@ -274,7 +274,7 @@ func buildCanonicalHeaders(headers http.Header, signedHeaders string) string {
 func buildCanonicalQueryString(query url.Values) string {
 	params := url.Values{}
 	for k, v := range query {
-		if k != AWSSignatureHeader {
+		if k != AWSSignatureParam {
 			params[k] = v
 		}
 	}
