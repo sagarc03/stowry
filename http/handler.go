@@ -31,13 +31,10 @@ type CORSConfig struct {
 }
 
 type HandlerConfig struct {
-	PublicRead  bool
-	PublicWrite bool
-	Region      string
-	Service     string
-	Mode        stowry.ServerMode
-	Store       stowry.SecretStore
-	CORS        CORSConfig
+	Mode          stowry.ServerMode
+	ReadVerifier  RequestVerifier
+	WriteVerifier RequestVerifier
+	CORS          CORSConfig
 }
 
 type Handler struct {
@@ -69,23 +66,13 @@ func (h *Handler) Router() http.Handler {
 	r.Use(PathValidationMiddleware)
 
 	r.Group(func(r chi.Router) {
-		r.Use(AuthMiddleware(AuthMiddlewareConfig{
-			AuthRequired: !h.config.PublicRead,
-			Region:       h.config.Region,
-			Service:      h.config.Service,
-			Store:        h.config.Store,
-		}))
+		r.Use(AuthMiddleware(h.config.ReadVerifier))
 		r.Get("/", h.handleList)
 		r.Get("/*", h.handleGet)
 	})
 
 	r.Group(func(r chi.Router) {
-		r.Use(AuthMiddleware(AuthMiddlewareConfig{
-			AuthRequired: !h.config.PublicWrite,
-			Region:       h.config.Region,
-			Service:      h.config.Service,
-			Store:        h.config.Store,
-		}))
+		r.Use(AuthMiddleware(h.config.WriteVerifier))
 		r.Put("/*", h.handlePut)
 		r.Delete("/*", h.handleDelete)
 	})
