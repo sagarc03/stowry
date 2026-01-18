@@ -12,7 +12,7 @@ This document describes Stowry's technical architecture and design decisions.
 Stowry follows a clean architecture with clear separation between:
 
 - **Core domain logic** (root package)
-- **Infrastructure adapters** (postgres, sqlite, filesystem, http packages)
+- **Infrastructure adapters** (postgres, sqlite, filesystem, keybackend, http packages)
 - **CLI application** (cmd/stowry)
 
 ```
@@ -204,6 +204,31 @@ storage := filesystem.NewFileStorage(root)
 
 MIME types are detected from file extensions using Go's `mime` package.
 
+## Key Backend (keybackend/)
+
+The `keybackend` package provides pluggable secret key storage for signature verification.
+
+### SecretStore Interface
+
+```go
+// SecretStore provides access key lookup for signature verification.
+type SecretStore interface {
+    Lookup(accessKey string) (secretKey string, err error)
+}
+```
+
+### MapSecretStore
+
+In-memory implementation suitable for configuration file-based key storage:
+
+```go
+store := keybackend.NewMapSecretStore(map[string]string{
+    "AKIAIOSFODNN7EXAMPLE": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+})
+
+verifier := stowry.NewSignatureVerifier("us-east-1", "s3", store)
+```
+
 ## HTTP Layer (http/)
 
 ### Router
@@ -273,12 +298,17 @@ stowry cleanup
 ### Sentinel Errors
 
 ```go
+// errors.go (root package)
 var (
     ErrNotFound     = errors.New("not found")
-    ErrInternal     = errors.New("internal error")
     ErrInvalidInput = errors.New("invalid input")
-    ErrUnauthorized = errors.New("unauthorized")
 )
+
+// http/errors.go
+var ErrUnauthorized = errors.New("unauthorized")
+
+// keybackend/errors.go
+var ErrKeyNotFound = errors.New("access key not found")
 ```
 
 ### Error Wrapping
@@ -335,7 +365,7 @@ type ListResult struct {
 
 1. Default values
 2. Config file (config.yaml)
-3. Environment variables (STOWRY_*)
+3. Environment variables (STOWRY\_\*)
 4. Command-line flags
 
 ### Architecture Separation
@@ -402,14 +432,3 @@ Stowry intentionally doesn't implement the full S3 API:
 1. **Security** - Credentials never exposed to clients
 2. **Scalability** - No session state on server
 3. **Compatibility** - Works with AWS SDK presigning
-
-### Why Code-Based Migrations?
-
-1. **Simplicity** - No separate migration files
-2. **Reliability** - Migrations bundled with binary
-3. **Testability** - Easy to test migration logic
-
-### Why Two Metadata Backends?
-
-1. **SQLite** - Zero-config, perfect for dev/small deployments
-2. **PostgreSQL** - Production-ready, handles concurrency

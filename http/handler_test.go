@@ -53,7 +53,7 @@ func (m *MockService) List(ctx context.Context, query stowry.ListQuery) (stowry.
 }
 
 func TestHandler_HandleList_StoreMode(t *testing.T) {
-	config := &stowryhttp.HandlerConfig{PublicRead: true, Mode: stowry.ModeStore}
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
 	service := new(MockService)
 	handler := stowryhttp.NewHandler(config, service)
 
@@ -95,7 +95,7 @@ func TestHandler_HandleList_StoreMode(t *testing.T) {
 }
 
 func TestHandler_HandleList_DefaultLimit(t *testing.T) {
-	config := &stowryhttp.HandlerConfig{PublicRead: true, Mode: stowry.ModeStore}
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
 	service := new(MockService)
 	handler := stowryhttp.NewHandler(config, service)
 
@@ -113,7 +113,7 @@ func TestHandler_HandleList_DefaultLimit(t *testing.T) {
 }
 
 func TestHandler_HandleList_MaxLimit(t *testing.T) {
-	config := &stowryhttp.HandlerConfig{PublicRead: true, Mode: stowry.ModeStore}
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
 	service := new(MockService)
 	handler := stowryhttp.NewHandler(config, service)
 
@@ -131,7 +131,7 @@ func TestHandler_HandleList_MaxLimit(t *testing.T) {
 }
 
 func TestHandler_HandleGet_Success(t *testing.T) {
-	config := &stowryhttp.HandlerConfig{PublicRead: true, Mode: stowry.ModeStore}
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
 	service := new(MockService)
 	handler := stowryhttp.NewHandler(config, service)
 
@@ -167,7 +167,7 @@ func TestHandler_HandleGet_Success(t *testing.T) {
 }
 
 func TestHandler_HandleGet_NotFound(t *testing.T) {
-	config := &stowryhttp.HandlerConfig{PublicRead: true, Mode: stowry.ModeStore}
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
 	service := new(MockService)
 	handler := stowryhttp.NewHandler(config, service)
 
@@ -189,7 +189,7 @@ func TestHandler_HandleGet_NotFound(t *testing.T) {
 }
 
 func TestHandler_HandleGet_InvalidPath(t *testing.T) {
-	config := &stowryhttp.HandlerConfig{PublicRead: true, Mode: stowry.ModeStore}
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
 	service := new(MockService)
 	handler := stowryhttp.NewHandler(config, service)
 
@@ -207,7 +207,7 @@ func TestHandler_HandleGet_InvalidPath(t *testing.T) {
 }
 
 func TestHandler_HandleGet_IfNoneMatch_Match(t *testing.T) {
-	config := &stowryhttp.HandlerConfig{PublicRead: true, Mode: stowry.ModeStore}
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
 	service := new(MockService)
 	handler := stowryhttp.NewHandler(config, service)
 
@@ -240,7 +240,7 @@ func TestHandler_HandleGet_IfNoneMatch_Match(t *testing.T) {
 }
 
 func TestHandler_HandlePut_Success(t *testing.T) {
-	config := &stowryhttp.HandlerConfig{PublicWrite: true, Mode: stowry.ModeStore}
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
 	service := new(MockService)
 	handler := stowryhttp.NewHandler(config, service)
 
@@ -277,7 +277,7 @@ func TestHandler_HandlePut_Success(t *testing.T) {
 }
 
 func TestHandler_HandlePut_InvalidPath(t *testing.T) {
-	config := &stowryhttp.HandlerConfig{PublicWrite: true, Mode: stowry.ModeStore}
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
 	service := new(MockService)
 	handler := stowryhttp.NewHandler(config, service)
 
@@ -293,7 +293,7 @@ func TestHandler_HandlePut_InvalidPath(t *testing.T) {
 }
 
 func TestHandler_HandlePut_EmptyPath(t *testing.T) {
-	config := &stowryhttp.HandlerConfig{PublicWrite: true, Mode: stowry.ModeStore}
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
 	service := new(MockService)
 	handler := stowryhttp.NewHandler(config, service)
 
@@ -308,7 +308,7 @@ func TestHandler_HandlePut_EmptyPath(t *testing.T) {
 }
 
 func TestHandler_HandleDelete_Success(t *testing.T) {
-	config := &stowryhttp.HandlerConfig{PublicWrite: true, Mode: stowry.ModeStore}
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
 	service := new(MockService)
 	handler := stowryhttp.NewHandler(config, service)
 
@@ -326,7 +326,7 @@ func TestHandler_HandleDelete_Success(t *testing.T) {
 }
 
 func TestHandler_HandleDelete_NotFound(t *testing.T) {
-	config := &stowryhttp.HandlerConfig{PublicWrite: true, Mode: stowry.ModeStore}
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
 	service := new(MockService)
 	handler := stowryhttp.NewHandler(config, service)
 
@@ -344,7 +344,7 @@ func TestHandler_HandleDelete_NotFound(t *testing.T) {
 }
 
 func TestHandler_HandleDelete_InvalidPath(t *testing.T) {
-	config := &stowryhttp.HandlerConfig{PublicWrite: true, Mode: stowry.ModeStore}
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
 	service := new(MockService)
 	handler := stowryhttp.NewHandler(config, service)
 
@@ -360,9 +360,8 @@ func TestHandler_HandleDelete_InvalidPath(t *testing.T) {
 
 func TestHandler_CORS_Disabled(t *testing.T) {
 	config := &stowryhttp.HandlerConfig{
-		PublicRead: true,
-		Mode:       stowry.ModeStore,
-		CORS:       stowryhttp.CORSConfig{Enabled: false},
+		Mode: stowry.ModeStore,
+		CORS: stowryhttp.CORSConfig{Enabled: false},
 	}
 	service := new(MockService)
 	handler := stowryhttp.NewHandler(config, service)
@@ -381,9 +380,7 @@ func TestHandler_CORS_Disabled(t *testing.T) {
 
 func TestHandler_CORS_Enabled_Preflight(t *testing.T) {
 	config := &stowryhttp.HandlerConfig{
-		PublicRead:  true,
-		PublicWrite: true,
-		Mode:        stowry.ModeStore,
+		Mode: stowry.ModeStore,
 		CORS: stowryhttp.CORSConfig{
 			Enabled:        true,
 			AllowedOrigins: []string{"*"},
@@ -411,8 +408,7 @@ func TestHandler_CORS_Enabled_Preflight(t *testing.T) {
 
 func TestHandler_CORS_Enabled_ActualRequest(t *testing.T) {
 	config := &stowryhttp.HandlerConfig{
-		PublicRead: true,
-		Mode:       stowry.ModeStore,
+		Mode: stowry.ModeStore,
 		CORS: stowryhttp.CORSConfig{
 			Enabled:        true,
 			AllowedOrigins: []string{"http://localhost:3000"},

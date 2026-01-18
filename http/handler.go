@@ -31,13 +31,10 @@ type CORSConfig struct {
 }
 
 type HandlerConfig struct {
-	PublicRead  bool
-	PublicWrite bool
-	Region      string
-	Service     string
-	Mode        stowry.ServerMode
-	AccessKeys  map[string]string
-	CORS        CORSConfig
+	Mode          stowry.ServerMode
+	ReadVerifier  RequestVerifier
+	WriteVerifier RequestVerifier
+	CORS          CORSConfig
 }
 
 type Handler struct {
@@ -69,23 +66,13 @@ func (h *Handler) Router() http.Handler {
 	r.Use(PathValidationMiddleware)
 
 	r.Group(func(r chi.Router) {
-		r.Use(AuthMiddleware(AuthMiddlewareConfig{
-			AuthRequired: !h.config.PublicRead,
-			Region:       h.config.Region,
-			Service:      h.config.Service,
-			AccessKeys:   h.config.AccessKeys,
-		}))
+		r.Use(AuthMiddleware(h.config.ReadVerifier))
 		r.Get("/", h.handleList)
 		r.Get("/*", h.handleGet)
 	})
 
 	r.Group(func(r chi.Router) {
-		r.Use(AuthMiddleware(AuthMiddlewareConfig{
-			AuthRequired: !h.config.PublicWrite,
-			Region:       h.config.Region,
-			Service:      h.config.Service,
-			AccessKeys:   h.config.AccessKeys,
-		}))
+		r.Use(AuthMiddleware(h.config.WriteVerifier))
 		r.Put("/*", h.handlePut)
 		r.Delete("/*", h.handleDelete)
 	})
@@ -106,13 +93,7 @@ func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
 	limit := 100
 	if limitStr != "" {
 		if parsed, err := strconv.Atoi(limitStr); err == nil {
-			limit = parsed
-			if limit > 1000 {
-				limit = 1000
-			}
-			if limit < 1 {
-				limit = 1
-			}
+			limit = max(1, min(1000, parsed))
 		}
 	}
 

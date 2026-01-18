@@ -41,7 +41,7 @@ func HandleError(w http.ResponseWriter, err error) {
 		return
 	}
 
-	if errors.Is(err, stowry.ErrUnauthorized) {
+	if errors.Is(err, ErrUnauthorized) {
 		WriteError(w, http.StatusForbidden, "unauthorized", err.Error())
 		return
 	}
@@ -51,7 +51,7 @@ func HandleError(w http.ResponseWriter, err error) {
 }
 
 // WriteJSON writes a JSON response
-func WriteJSON(w http.ResponseWriter, code int, data interface{}) error {
+func WriteJSON(w http.ResponseWriter, code int, data any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	return json.NewEncoder(w).Encode(data)
