@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -11,18 +10,14 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/sagarc03/stowry"
-	"github.com/sagarc03/stowry/database/postgres"
-	"github.com/sagarc03/stowry/database/sqlite"
+	"github.com/sagarc03/stowry/database"
 	"github.com/sagarc03/stowry/filesystem"
 	stowryhttp "github.com/sagarc03/stowry/http"
 	"github.com/sagarc03/stowry/keybackend"
-
-	_ "modernc.org/sqlite"
 )
 
 var serveCmd = &cobra.Command{
@@ -46,11 +41,19 @@ func runServe(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
 
-	repo, closeDB, err := initDB(ctx)
+	dbCfg := database.Config{
+		Type:  viper.GetString("database.type"),
+		DSN:   viper.GetString("database.dsn"),
+		Table: viper.GetString("database.table"),
+	}
+
+	repo, closeDB, err := database.Connect(ctx, dbCfg)
 	if err != nil {
-		return fmt.Errorf("init db: %w", err)
+		return fmt.Errorf("connect database: %w", err)
 	}
 	defer closeDB()
+
+	slog.Info("connected to database", "type", dbCfg.Type)
 
 	storagePath := viper.GetString("storage.path")
 	err = os.MkdirAll(storagePath, 0o750)
@@ -143,97 +146,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
-}
-
-func initDB(ctx context.Context) (stowry.MetaDataRepo, func(), error) {
-	dbType := viper.GetString("database.type")
-	dsn := viper.GetString("database.dsn")
-	tableName := viper.GetString("database.table")
-
-	tables := stowry.Tables{MetaData: tableName}
-
-	switch dbType {
-	case "sqlite":
-		return initSQLite(ctx, dsn, tables)
-	case "postgres":
-		return initPostgres(ctx, dsn, tables)
-	default:
-		return nil, nil, fmt.Errorf("unsupported database type: %s", dbType)
-	}
-}
-
-func initSQLite(ctx context.Context, dsn string, tables stowry.Tables) (stowry.MetaDataRepo, func(), error) {
-	db, err := sql.Open("sqlite", dsn)
-	if err != nil {
-		return nil, nil, fmt.Errorf("open sqlite: %w", err)
-	}
-
-	err = db.PingContext(ctx)
-	if err != nil {
-		_ = db.Close()
-		return nil, nil, fmt.Errorf("ping sqlite: %w", err)
-	}
-
-	err = sqlite.Migrate(ctx, db, tables)
-	if err != nil {
-		_ = db.Close()
-		return nil, nil, fmt.Errorf("migrate sqlite: %w", err)
-	}
-
-	err = sqlite.ValidateSchema(ctx, db, tables)
-	if err != nil {
-		_ = db.Close()
-		return nil, nil, fmt.Errorf("validate sqlite schema: %w", err)
-	}
-
-	repo, err := sqlite.NewRepo(db, tables)
-	if err != nil {
-		_ = db.Close()
-		return nil, nil, fmt.Errorf("create sqlite repo: %w", err)
-	}
-
-	cleanup := func() {
-		if closeErr := db.Close(); closeErr != nil {
-			slog.Warn("error closing sqlite", "err", closeErr)
-		}
-	}
-
-	slog.Info("connected to sqlite", "dsn", dsn)
-	return repo, cleanup, nil
-}
-
-func initPostgres(ctx context.Context, dsn string, tables stowry.Tables) (stowry.MetaDataRepo, func(), error) {
-	pool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		return nil, nil, fmt.Errorf("connect postgres: %w", err)
-	}
-
-	err = pool.Ping(ctx)
-	if err != nil {
-		pool.Close()
-		return nil, nil, fmt.Errorf("ping postgres: %w", err)
-	}
-
-	err = postgres.Migrate(ctx, pool, tables)
-	if err != nil {
-		pool.Close()
-		return nil, nil, fmt.Errorf("migrate postgres: %w", err)
-	}
-
-	err = postgres.ValidateSchema(ctx, pool, tables)
-	if err != nil {
-		pool.Close()
-		return nil, nil, fmt.Errorf("validate postgres schema: %w", err)
-	}
-
-	repo, err := postgres.NewRepo(pool, tables)
-	if err != nil {
-		pool.Close()
-		return nil, nil, fmt.Errorf("create postgres repo: %w", err)
-	}
-
-	slog.Info("connected to postgres")
-	return repo, pool.Close, nil
 }
 
 func getAccessKeys() map[string]string {
