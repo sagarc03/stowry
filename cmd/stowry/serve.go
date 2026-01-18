@@ -16,11 +16,11 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/sagarc03/stowry"
+	"github.com/sagarc03/stowry/database/postgres"
+	"github.com/sagarc03/stowry/database/sqlite"
 	"github.com/sagarc03/stowry/filesystem"
 	stowryhttp "github.com/sagarc03/stowry/http"
 	"github.com/sagarc03/stowry/keybackend"
-	"github.com/sagarc03/stowry/postgres"
-	"github.com/sagarc03/stowry/sqlite"
 
 	_ "modernc.org/sqlite"
 )

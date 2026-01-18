@@ -9,7 +9,7 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/sagarc03/stowry/sqlite"
+	"github.com/sagarc03/stowry/database/sqlite"
 	"github.com/stretchr/testify/assert"
 	_ "modernc.org/sqlite"
 )
