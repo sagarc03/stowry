@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/sagarc03/stowry"
+	"github.com/sagarc03/stowry/database"
 	"github.com/sagarc03/stowry/filesystem"
 )
 
@@ -30,9 +31,15 @@ func init() {
 func runInit(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
-	repo, closeDB, err := initDB(ctx)
+	dbCfg := database.Config{
+		Type:  viper.GetString("database.type"),
+		DSN:   viper.GetString("database.dsn"),
+		Table: viper.GetString("database.table"),
+	}
+
+	repo, closeDB, err := database.Connect(ctx, dbCfg)
 	if err != nil {
-		return fmt.Errorf("init db: %w", err)
+		return fmt.Errorf("connect database: %w", err)
 	}
 	defer closeDB()
 
