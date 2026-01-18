@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	stowryhttp "github.com/sagarc03/stowry/http"
+	"github.com/sagarc03/stowry/keybackend"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -21,7 +22,7 @@ func TestAuthMiddleware_PublicAccess(t *testing.T) {
 		AuthRequired: false,
 		Region:       "us-east-1",
 		Service:      "s3",
-		AccessKeys:   nil,
+		Store:        nil,
 	}
 	wrapped := stowryhttp.AuthMiddleware(cfg)(handler)
 
@@ -41,13 +42,14 @@ func TestAuthMiddleware_RequiresAuth_NoSignature(t *testing.T) {
 	})
 
 	// Wrap with auth middleware (requires auth)
+	store := keybackend.NewMapSecretStore(map[string]string{
+		"AKIATEST": "testsecret",
+	})
 	cfg := stowryhttp.AuthMiddlewareConfig{
 		AuthRequired: true,
 		Region:       "us-east-1",
 		Service:      "s3",
-		AccessKeys: map[string]string{
-			"AKIATEST": "testsecret",
-		},
+		Store:        store,
 	}
 	wrapped := stowryhttp.AuthMiddleware(cfg)(handler)
 
@@ -67,13 +69,14 @@ func TestAuthMiddleware_RequiresAuth_InvalidSignature(t *testing.T) {
 	})
 
 	// Wrap with auth middleware (requires auth)
+	store := keybackend.NewMapSecretStore(map[string]string{
+		"AKIATEST": "testsecret",
+	})
 	cfg := stowryhttp.AuthMiddlewareConfig{
 		AuthRequired: true,
 		Region:       "us-east-1",
 		Service:      "s3",
-		AccessKeys: map[string]string{
-			"AKIATEST": "testsecret",
-		},
+		Store:        store,
 	}
 	wrapped := stowryhttp.AuthMiddleware(cfg)(handler)
 

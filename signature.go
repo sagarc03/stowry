@@ -29,6 +29,14 @@ const (
 	AWSSignatureParam     = "X-Amz-Signature"
 )
 
+// SecretStore provides access key lookup for signature verification.
+// Implementations can retrieve keys from various sources (local files, Vault, SSM, etc.).
+type SecretStore interface {
+	// Lookup retrieves the secret key for the given access key.
+	// Returns the secret key if found, or an error if not found or lookup fails.
+	Lookup(accessKey string) (secretKey string, err error)
+}
+
 // SignatureVerifier verifies signed requests using either AWS Signature V4 or native Stowry signing.
 // It automatically detects the signing scheme from the request query parameters.
 type SignatureVerifier struct {
@@ -42,11 +50,11 @@ type SignatureVerifier struct {
 // Parameters:
 //   - region: AWS region (e.g., "us-east-1")
 //   - service: AWS service name (e.g., "s3")
-//   - lookup: Function to retrieve secret key by access key. Returns (secretKey, true) if found, ("", false) if not.
-func NewSignatureVerifier(region, service string, lookup func(string) (string, bool)) *SignatureVerifier {
+//   - store: Secret store for retrieving secret keys by access key
+func NewSignatureVerifier(region, service string, store SecretStore) *SignatureVerifier {
 	return &SignatureVerifier{
-		stowryVerifier: NewStowrySignatureVerifier(lookup),
-		awsVerifier:    NewAWSSignatureVerifier(region, service, lookup),
+		stowryVerifier: NewStowrySignatureVerifier(store),
+		awsVerifier:    NewAWSSignatureVerifier(region, service, store),
 	}
 }
 
@@ -72,16 +80,16 @@ func (v *SignatureVerifier) Verify(r *http.Request) error {
 
 // StowrySignatureVerifier verifies Stowry native presigned URLs.
 type StowrySignatureVerifier struct {
-	AccessKeyLookup func(accessKey string) (secretKey string, found bool)
+	store SecretStore
 }
 
 // NewStowrySignatureVerifier creates a new Stowry signature verifier.
 //
 // Parameters:
-//   - lookup: Function to retrieve secret key by access key. Returns (secretKey, true) if found, ("", false) if not.
-func NewStowrySignatureVerifier(lookup func(string) (string, bool)) *StowrySignatureVerifier {
+//   - store: Secret store for retrieving secret keys by access key
+func NewStowrySignatureVerifier(store SecretStore) *StowrySignatureVerifier {
 	return &StowrySignatureVerifier{
-		AccessKeyLookup: lookup,
+		store: store,
 	}
 }
 
@@ -110,9 +118,9 @@ func (v *StowrySignatureVerifier) Verify(r *http.Request) error {
 		return fmt.Errorf("signature expired: %w", ErrUnauthorized)
 	}
 
-	secretKey, found := v.AccessKeyLookup(credential)
-	if !found {
-		return fmt.Errorf("invalid credential: %w", ErrUnauthorized)
+	secretKey, err := v.store.Lookup(credential)
+	if err != nil {
+		return fmt.Errorf("failed to lookup access key: %w: %w", err, ErrUnauthorized)
 	}
 
 	expectedSignature := stowrysign.Sign(secretKey, r.Method, r.URL.Path, timestamp, expires)
@@ -126,9 +134,9 @@ func (v *StowrySignatureVerifier) Verify(r *http.Request) error {
 
 // AWSSignatureVerifier verifies AWS Signature V4 presigned URLs.
 type AWSSignatureVerifier struct {
-	Region          string
-	Service         string
-	AccessKeyLookup func(accessKey string) (secretKey string, found bool)
+	Region  string
+	Service string
+	store   SecretStore
 }
 
 // NewAWSSignatureVerifier creates a new AWS signature verifier.
@@ -136,12 +144,12 @@ type AWSSignatureVerifier struct {
 // Parameters:
 //   - region: AWS region (e.g., "us-east-1")
 //   - service: AWS service name (e.g., "s3")
-//   - lookup: Function to retrieve secret key by access key. Returns (secretKey, true) if found, ("", false) if not.
-func NewAWSSignatureVerifier(region, service string, lookup func(string) (string, bool)) *AWSSignatureVerifier {
+//   - store: Secret store for retrieving secret keys by access key
+func NewAWSSignatureVerifier(region, service string, store SecretStore) *AWSSignatureVerifier {
 	return &AWSSignatureVerifier{
-		Region:          region,
-		Service:         service,
-		AccessKeyLookup: lookup,
+		Region:  region,
+		Service: service,
+		store:   store,
 	}
 }
 
@@ -157,13 +165,13 @@ func (v *AWSSignatureVerifier) Verify(r *http.Request) error {
 		return err
 	}
 
-	if err := v.validateParams(params); err != nil {
-		return err
+	if validateErr := v.validateParams(params); validateErr != nil {
+		return validateErr
 	}
 
-	secretKey, found := v.AccessKeyLookup(params.accessKey)
-	if !found {
-		return fmt.Errorf("invalid access key: %w", ErrUnauthorized)
+	secretKey, err := v.store.Lookup(params.accessKey)
+	if err != nil {
+		return fmt.Errorf("failed to lookup access key: %w: %w", err, ErrUnauthorized)
 	}
 
 	expectedSignature := calculateSignature(

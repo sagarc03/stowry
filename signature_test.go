@@ -8,18 +8,16 @@ import (
 	"time"
 
 	"github.com/sagarc03/stowry"
+	"github.com/sagarc03/stowry/keybackend"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestAWSSignatureVerifier_Verify(t *testing.T) {
-	lookup := func(accessKey string) (string, bool) {
-		if accessKey == "AKIATEST" {
-			return "testsecret", true
-		}
-		return "", false
-	}
+	store := keybackend.NewMapSecretStore(map[string]string{
+		"AKIATEST": "testsecret",
+	})
 
-	verifier := stowry.NewAWSSignatureVerifier("us-east-1", "s3", lookup)
+	verifier := stowry.NewAWSSignatureVerifier("us-east-1", "s3", store)
 
 	validTime := time.Now().UTC().Add(-30 * time.Minute)
 	validDateStamp := validTime.Format(stowry.DateFormat)
@@ -132,7 +130,7 @@ func TestAWSSignatureVerifier_Verify(t *testing.T) {
 				"X-Amz-SignedHeaders": []string{"host"},
 				"X-Amz-Signature":     []string{"abc123"},
 			},
-			wantError: "invalid access key",
+			wantError: "access key not found",
 		},
 		{
 			name: "region mismatch",
@@ -221,27 +219,22 @@ func TestAWSSignatureVerifier_Verify(t *testing.T) {
 }
 
 func TestNewAWSSignatureVerifier(t *testing.T) {
-	lookup := func(accessKey string) (string, bool) {
-		return "secret", true
-	}
+	store := keybackend.NewMapSecretStore(map[string]string{
+		"test": "secret",
+	})
 
-	verifier := stowry.NewAWSSignatureVerifier("us-west-1", "ec2", lookup)
+	verifier := stowry.NewAWSSignatureVerifier("us-west-1", "ec2", store)
 
 	assert.NotNil(t, verifier)
 	assert.Equal(t, "us-west-1", verifier.Region)
 	assert.Equal(t, "ec2", verifier.Service)
-	assert.NotNil(t, verifier.AccessKeyLookup)
-
-	secret, found := verifier.AccessKeyLookup("test")
-	assert.True(t, found)
-	assert.Equal(t, "secret", secret)
 }
 
 func TestNewSignatureVerifier(t *testing.T) {
-	lookup := func(accessKey string) (string, bool) {
-		return "secret", true
-	}
+	store := keybackend.NewMapSecretStore(map[string]string{
+		"test": "secret",
+	})
 
-	verifier := stowry.NewSignatureVerifier("us-west-1", "ec2", lookup)
+	verifier := stowry.NewSignatureVerifier("us-west-1", "ec2", store)
 	assert.NotNil(t, verifier)
 }

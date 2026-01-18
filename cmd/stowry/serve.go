@@ -18,6 +18,7 @@ import (
 	"github.com/sagarc03/stowry"
 	"github.com/sagarc03/stowry/filesystem"
 	stowryhttp "github.com/sagarc03/stowry/http"
+	"github.com/sagarc03/stowry/keybackend"
 	"github.com/sagarc03/stowry/postgres"
 	"github.com/sagarc03/stowry/sqlite"
 
@@ -82,7 +83,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		Region:      viper.GetString("auth.region"),
 		Service:     viper.GetString("auth.service"),
 		Mode:        mode,
-		AccessKeys:  getAccessKeys(),
+		Store:       keybackend.NewMapSecretStore(getAccessKeys()),
 		CORS:        getCORSConfig(),
 	}
 

@@ -36,7 +36,7 @@ type HandlerConfig struct {
 	Region      string
 	Service     string
 	Mode        stowry.ServerMode
-	AccessKeys  map[string]string
+	Store       stowry.SecretStore
 	CORS        CORSConfig
 }
 
@@ -73,7 +73,7 @@ func (h *Handler) Router() http.Handler {
 			AuthRequired: !h.config.PublicRead,
 			Region:       h.config.Region,
 			Service:      h.config.Service,
-			AccessKeys:   h.config.AccessKeys,
+			Store:        h.config.Store,
 		}))
 		r.Get("/", h.handleList)
 		r.Get("/*", h.handleGet)
@@ -84,7 +84,7 @@ func (h *Handler) Router() http.Handler {
 			AuthRequired: !h.config.PublicWrite,
 			Region:       h.config.Region,
 			Service:      h.config.Service,
-			AccessKeys:   h.config.AccessKeys,
+			Store:        h.config.Store,
 		}))
 		r.Put("/*", h.handlePut)
 		r.Delete("/*", h.handleDelete)
