@@ -7,23 +7,21 @@ import (
 	"github.com/sagarc03/stowry"
 )
 
-type AuthMiddlewareConfig struct {
-	AuthRequired bool
-	Region       string
-	Service      string
-	Store        stowry.SecretStore
+// RequestVerifier verifies HTTP requests for authentication.
+// Implementations should return nil if the request is valid,
+// or an error (typically ErrUnauthorized) if verification fails.
+type RequestVerifier interface {
+	Verify(r *http.Request) error
 }
 
 // AuthMiddleware creates middleware that enforces signature authentication.
-// Supports both Stowry native signing and AWS Signature V4.
-func AuthMiddleware(cfg AuthMiddlewareConfig) func(http.Handler) http.Handler {
-	if !cfg.AuthRequired {
+// If verifier is nil, requests pass through without authentication.
+func AuthMiddleware(verifier RequestVerifier) func(http.Handler) http.Handler {
+	if verifier == nil {
 		return func(next http.Handler) http.Handler {
 			return next
 		}
 	}
-
-	verifier := stowry.NewSignatureVerifier(cfg.Region, cfg.Service, cfg.Store)
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

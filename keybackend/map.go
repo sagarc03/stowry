@@ -1,3 +1,4 @@
+// Package keybackend provides SecretStore implementations for key retrieval.
 package keybackend
 
 import (

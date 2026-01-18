@@ -77,14 +77,26 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("create service: %w", err)
 	}
 
+	store := keybackend.NewMapSecretStore(getAccessKeys())
+	verifier := stowry.NewSignatureVerifier(
+		viper.GetString("auth.region"),
+		viper.GetString("auth.service"),
+		store,
+	)
+
+	var readVerifier, writeVerifier stowryhttp.RequestVerifier
+	if !viper.GetBool("access.public_read") {
+		readVerifier = verifier
+	}
+	if !viper.GetBool("access.public_write") {
+		writeVerifier = verifier
+	}
+
 	handlerConfig := stowryhttp.HandlerConfig{
-		PublicRead:  viper.GetBool("access.public_read"),
-		PublicWrite: viper.GetBool("access.public_write"),
-		Region:      viper.GetString("auth.region"),
-		Service:     viper.GetString("auth.service"),
-		Mode:        mode,
-		Store:       keybackend.NewMapSecretStore(getAccessKeys()),
-		CORS:        getCORSConfig(),
+		Mode:          mode,
+		ReadVerifier:  readVerifier,
+		WriteVerifier: writeVerifier,
+		CORS:          getCORSConfig(),
 	}
 
 	handler := stowryhttp.NewHandler(&handlerConfig, service)
