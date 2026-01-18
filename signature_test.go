@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSignatureVerifier_Verify(t *testing.T) {
+func TestAWSSignatureVerifier_Verify(t *testing.T) {
 	lookup := func(accessKey string) (string, bool) {
 		if accessKey == "AKIATEST" {
 			return "testsecret", true
@@ -19,7 +19,7 @@ func TestSignatureVerifier_Verify(t *testing.T) {
 		return "", false
 	}
 
-	verifier := stowry.NewSignatureVerifier("us-east-1", "s3", lookup)
+	verifier := stowry.NewAWSSignatureVerifier("us-east-1", "s3", lookup)
 
 	validTime := time.Now().UTC().Add(-30 * time.Minute)
 	validDateStamp := validTime.Format(stowry.DateFormat)
@@ -198,9 +198,17 @@ func TestSignatureVerifier_Verify(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			headers := http.Header{}
-			headers.Set("Host", "localhost:5708")
-			err := verifier.Verify("GET", "/test.txt", tt.query, headers)
+			reqURL := &url.URL{
+				Path:     "/test.txt",
+				RawQuery: tt.query.Encode(),
+			}
+			req := &http.Request{
+				Method: "GET",
+				URL:    reqURL,
+				Host:   "localhost:5708",
+				Header: http.Header{},
+			}
+			err := verifier.Verify(req)
 
 			if tt.wantError == "" {
 				assert.NoError(t, err)
@@ -212,12 +220,12 @@ func TestSignatureVerifier_Verify(t *testing.T) {
 	}
 }
 
-func TestNewSignatureVerifier(t *testing.T) {
+func TestNewAWSSignatureVerifier(t *testing.T) {
 	lookup := func(accessKey string) (string, bool) {
 		return "secret", true
 	}
 
-	verifier := stowry.NewSignatureVerifier("us-west-1", "ec2", lookup)
+	verifier := stowry.NewAWSSignatureVerifier("us-west-1", "ec2", lookup)
 
 	assert.NotNil(t, verifier)
 	assert.Equal(t, "us-west-1", verifier.Region)
@@ -227,4 +235,13 @@ func TestNewSignatureVerifier(t *testing.T) {
 	secret, found := verifier.AccessKeyLookup("test")
 	assert.True(t, found)
 	assert.Equal(t, "secret", secret)
+}
+
+func TestNewSignatureVerifier(t *testing.T) {
+	lookup := func(accessKey string) (string, bool) {
+		return "secret", true
+	}
+
+	verifier := stowry.NewSignatureVerifier("us-west-1", "ec2", lookup)
+	assert.NotNil(t, verifier)
 }

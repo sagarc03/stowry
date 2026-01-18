@@ -106,13 +106,7 @@ func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
 	limit := 100
 	if limitStr != "" {
 		if parsed, err := strconv.Atoi(limitStr); err == nil {
-			limit = parsed
-			if limit > 1000 {
-				limit = 1000
-			}
-			if limit < 1 {
-				limit = 1
-			}
+			limit = max(1, min(1000, parsed))
 		}
 	}
 
