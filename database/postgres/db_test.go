@@ -14,7 +14,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/sagarc03/stowry/postgres"
+	"github.com/sagarc03/stowry/database/postgres"
 	"github.com/stretchr/testify/assert"
 )
 
