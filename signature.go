@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -63,7 +64,7 @@ func NewSignatureVerifier(region, service string, store SecretStore) *SignatureV
 //   - X-Stowry-Signature: Uses native Stowry verification
 //   - X-Amz-Signature: Uses AWS Signature V4 verification
 //
-// Returns ErrUnauthorized if no valid signature is present or verification fails.
+// Returns an error if no supported signature is present or verification fails.
 func (v *SignatureVerifier) Verify(r *http.Request) error {
 	query := r.URL.Query()
 
@@ -75,7 +76,7 @@ func (v *SignatureVerifier) Verify(r *http.Request) error {
 		return v.awsVerifier.Verify(r)
 	}
 
-	return ErrUnauthorized
+	return errors.New("no supported signature found")
 }
 
 // StowrySignatureVerifier verifies Stowry native presigned URLs.
@@ -104,29 +105,29 @@ func (v *StowrySignatureVerifier) Verify(r *http.Request) error {
 	signature := query.Get(stowrysign.StowrySignatureParam)
 
 	if credential == "" || dateStr == "" || expiresStr == "" || signature == "" {
-		return fmt.Errorf("missing required signature parameters: %w", ErrUnauthorized)
+		return errors.New("missing required signature parameters")
 	}
 
 	timestamp := parseInt64(dateStr)
 	expires := parseInt64(expiresStr)
 
 	if expires <= 0 || expires > stowrysign.MaxExpires {
-		return fmt.Errorf("invalid expires: must be between 1 and %d: %w", stowrysign.MaxExpires, ErrUnauthorized)
+		return fmt.Errorf("invalid expires: must be between 1 and %d", stowrysign.MaxExpires)
 	}
 
 	if time.Now().Unix() > timestamp+expires {
-		return fmt.Errorf("signature expired: %w", ErrUnauthorized)
+		return errors.New("signature expired")
 	}
 
 	secretKey, err := v.store.Lookup(credential)
 	if err != nil {
-		return fmt.Errorf("failed to lookup access key: %w: %w", err, ErrUnauthorized)
+		return fmt.Errorf("failed to lookup access key: %w", err)
 	}
 
 	expectedSignature := stowrysign.Sign(secretKey, r.Method, r.URL.Path, timestamp, expires)
 
 	if !hmac.Equal([]byte(expectedSignature), []byte(signature)) {
-		return fmt.Errorf("signature mismatch: %w", ErrUnauthorized)
+		return errors.New("signature mismatch")
 	}
 
 	return nil
@@ -171,7 +172,7 @@ func (v *AWSSignatureVerifier) Verify(r *http.Request) error {
 
 	secretKey, err := v.store.Lookup(params.accessKey)
 	if err != nil {
-		return fmt.Errorf("failed to lookup access key: %w: %w", err, ErrUnauthorized)
+		return fmt.Errorf("failed to lookup access key: %w", err)
 	}
 
 	expectedSignature := calculateSignature(
@@ -188,7 +189,7 @@ func (v *AWSSignatureVerifier) Verify(r *http.Request) error {
 	)
 
 	if !hmac.Equal([]byte(expectedSignature), []byte(params.signature)) {
-		return fmt.Errorf("signature mismatch: %w", ErrUnauthorized)
+		return errors.New("signature mismatch")
 	}
 
 	return nil
@@ -216,26 +217,26 @@ func (v *AWSSignatureVerifier) extractParams(query url.Values) (*signatureParams
 
 	if amzAlgorithm == "" || amzCredential == "" || amzDate == "" ||
 		amzExpires == "" || amzSignedHeaders == "" || amzSignature == "" {
-		return nil, fmt.Errorf("missing required signature parameters: %w", ErrUnauthorized)
+		return nil, errors.New("missing required signature parameters")
 	}
 
 	requestTime, err := time.Parse(DateTimeFormat, amzDate)
 	if err != nil {
-		return nil, fmt.Errorf("invalid X-Amz-Date format: %w", ErrUnauthorized)
+		return nil, errors.New("invalid X-Amz-Date format")
 	}
 
 	expires := parseInt64(amzExpires)
 	if expires <= 0 || expires > MaxExpiresSeconds {
-		return nil, fmt.Errorf("invalid X-Amz-Expires: must be between 1 and %d: %w", MaxExpiresSeconds, ErrUnauthorized)
+		return nil, fmt.Errorf("invalid X-Amz-Expires: must be between 1 and %d", MaxExpiresSeconds)
 	}
 
 	credParts := strings.Split(amzCredential, "/")
 	if len(credParts) != 5 {
-		return nil, fmt.Errorf("invalid X-Amz-Credential format: %w", ErrUnauthorized)
+		return nil, errors.New("invalid X-Amz-Credential format")
 	}
 
 	if credParts[4] != "aws4_request" {
-		return nil, fmt.Errorf("invalid credential terminator: expected aws4_request: %w", ErrUnauthorized)
+		return nil, errors.New("invalid credential terminator: expected aws4_request")
 	}
 
 	return &signatureParams{
@@ -253,24 +254,24 @@ func (v *AWSSignatureVerifier) extractParams(query url.Values) (*signatureParams
 
 func (v *AWSSignatureVerifier) validateParams(params *signatureParams) error {
 	if params.algorithm != SignatureAlgorithm {
-		return fmt.Errorf("invalid algorithm: expected %s, got %s: %w", SignatureAlgorithm, params.algorithm, ErrUnauthorized)
+		return fmt.Errorf("invalid algorithm: expected %s, got %s", SignatureAlgorithm, params.algorithm)
 	}
 
 	if time.Now().After(params.requestTime.Add(time.Duration(params.expires) * time.Second)) {
-		return fmt.Errorf("signature expired: %w", ErrUnauthorized)
+		return errors.New("signature expired")
 	}
 
 	expectedDate := params.requestTime.Format(DateFormat)
 	if params.dateStamp != expectedDate {
-		return fmt.Errorf("credential date mismatch: %w", ErrUnauthorized)
+		return errors.New("credential date mismatch")
 	}
 
 	if params.region != v.Region {
-		return fmt.Errorf("region mismatch: expected %s, got %s: %w", v.Region, params.region, ErrUnauthorized)
+		return fmt.Errorf("region mismatch: expected %s, got %s", v.Region, params.region)
 	}
 
 	if params.service != v.Service {
-		return fmt.Errorf("service mismatch: expected %s, got %s: %w", v.Service, params.service, ErrUnauthorized)
+		return fmt.Errorf("service mismatch: expected %s, got %s", v.Service, params.service)
 	}
 
 	return nil
