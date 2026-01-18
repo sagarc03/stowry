@@ -26,7 +26,8 @@ func AuthMiddleware(verifier RequestVerifier) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if err := verifier.Verify(r); err != nil {
-				HandleError(w, err)
+				// TODO: log error
+				HandleError(w, ErrUnauthorized)
 				return
 			}
 

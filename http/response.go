@@ -41,7 +41,7 @@ func HandleError(w http.ResponseWriter, err error) {
 		return
 	}
 
-	if errors.Is(err, stowry.ErrUnauthorized) {
+	if errors.Is(err, ErrUnauthorized) {
 		WriteError(w, http.StatusForbidden, "unauthorized", err.Error())
 		return
 	}
