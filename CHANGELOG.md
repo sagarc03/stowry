@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AuthMiddleware` now receives `RequestVerifier` directly instead of config struct
   - Pass `nil` for public access (no authentication required)
 - `HandlerConfig` simplified with `ReadVerifier` and `WriteVerifier` fields
-  - Removes `PublicRead`, `PublicWrite`, `Region`, `Service`, `Store` fields
+  - Removes `PublicRead`, `PublicWrite`, `Region`, `Service`, `AccessKeys` fields
   - Caller creates and passes verifiers for better flexibility
 - Unified `SignatureVerifier` auto-detects signing scheme and delegates to appropriate verifier
 
