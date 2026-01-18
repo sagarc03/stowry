@@ -409,3 +409,123 @@ func TestNewStowrySignatureVerifier(t *testing.T) {
 	verifier := stowry.NewStowrySignatureVerifier(store)
 	assert.NotNil(t, verifier)
 }
+
+func TestSignatureVerifier_Verify(t *testing.T) {
+	const (
+		accessKey = "TESTKEY"
+		secretKey = "testsecret123"
+	)
+
+	store := keybackend.NewMapSecretStore(map[string]string{
+		accessKey: secretKey,
+	})
+
+	verifier := stowry.NewSignatureVerifier("us-east-1", "s3", store)
+
+	// Generate valid Stowry signature
+	stowryTimestamp := time.Now().Unix()
+	stowryExpires := int64(900)
+	stowrySignature := stowrysign.Sign(secretKey, "GET", "/test.txt", stowryTimestamp, stowryExpires)
+
+	// Generate valid AWS signature parameters (will fail signature check but tests delegation)
+	awsTime := time.Now().UTC()
+	awsDateStamp := awsTime.Format(stowry.DateFormat)
+	awsAmzDate := awsTime.Format(stowry.DateTimeFormat)
+
+	t.Run("delegates to StowrySignatureVerifier when X-Stowry-Signature present", func(t *testing.T) {
+		query := url.Values{
+			"X-Stowry-Credential": []string{accessKey},
+			"X-Stowry-Date":       []string{fmt.Sprintf("%d", stowryTimestamp)},
+			"X-Stowry-Expires":    []string{fmt.Sprintf("%d", stowryExpires)},
+			"X-Stowry-Signature":  []string{stowrySignature},
+		}
+		req := &http.Request{
+			Method: "GET",
+			URL:    &url.URL{Path: "/test.txt", RawQuery: query.Encode()},
+			Host:   "localhost:5708",
+			Header: http.Header{},
+		}
+
+		err := verifier.Verify(req)
+		assert.NoError(t, err)
+	})
+
+	t.Run("delegates to AWSSignatureVerifier when X-Amz-Signature present", func(t *testing.T) {
+		query := url.Values{
+			"X-Amz-Algorithm":     []string{"AWS4-HMAC-SHA256"},
+			"X-Amz-Credential":    []string{fmt.Sprintf("%s/%s/us-east-1/s3/aws4_request", accessKey, awsDateStamp)},
+			"X-Amz-Date":          []string{awsAmzDate},
+			"X-Amz-Expires":       []string{"3600"},
+			"X-Amz-SignedHeaders": []string{"host"},
+			"X-Amz-Signature":     []string{"invalidsignature"},
+		}
+		req := &http.Request{
+			Method: "GET",
+			URL:    &url.URL{Path: "/test.txt", RawQuery: query.Encode()},
+			Host:   "localhost:5708",
+			Header: http.Header{},
+		}
+
+		err := verifier.Verify(req)
+		// Should get signature mismatch (not "no supported signature"), proving delegation
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "signature mismatch")
+	})
+
+	t.Run("returns error when no signature present", func(t *testing.T) {
+		query := url.Values{
+			"some-other-param": []string{"value"},
+		}
+		req := &http.Request{
+			Method: "GET",
+			URL:    &url.URL{Path: "/test.txt", RawQuery: query.Encode()},
+			Host:   "localhost:5708",
+			Header: http.Header{},
+		}
+
+		err := verifier.Verify(req)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no supported signature found")
+	})
+
+	t.Run("returns error for empty query", func(t *testing.T) {
+		req := &http.Request{
+			Method: "GET",
+			URL:    &url.URL{Path: "/test.txt"},
+			Host:   "localhost:5708",
+			Header: http.Header{},
+		}
+
+		err := verifier.Verify(req)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "no supported signature found")
+	})
+
+	t.Run("prefers Stowry signature when both present", func(t *testing.T) {
+		// When both signatures are present, Stowry should be checked first
+		query := url.Values{
+			// Stowry params (valid)
+			"X-Stowry-Credential": []string{accessKey},
+			"X-Stowry-Date":       []string{fmt.Sprintf("%d", stowryTimestamp)},
+			"X-Stowry-Expires":    []string{fmt.Sprintf("%d", stowryExpires)},
+			"X-Stowry-Signature":  []string{stowrySignature},
+			// AWS params (would fail if checked)
+			"X-Amz-Algorithm":     []string{"AWS4-HMAC-SHA256"},
+			"X-Amz-Credential":    []string{fmt.Sprintf("%s/%s/us-east-1/s3/aws4_request", accessKey, awsDateStamp)},
+			"X-Amz-Date":          []string{awsAmzDate},
+			"X-Amz-Expires":       []string{"3600"},
+			"X-Amz-SignedHeaders": []string{"host"},
+			"X-Amz-Signature":     []string{"invalidsignature"},
+		}
+		req := &http.Request{
+			Method: "GET",
+			URL:    &url.URL{Path: "/test.txt", RawQuery: query.Encode()},
+			Host:   "localhost:5708",
+			Header: http.Header{},
+		}
+
+		// Should succeed because Stowry signature is valid and checked first
+		err := verifier.Verify(req)
+		assert.NoError(t, err)
+	})
+}
