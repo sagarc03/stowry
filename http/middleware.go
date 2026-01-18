@@ -11,12 +11,11 @@ type AuthMiddlewareConfig struct {
 	AuthRequired bool
 	Region       string
 	Service      string
-	AccessKeys   map[string]string
+	Store        stowry.SecretStore
 }
 
 // AuthMiddleware creates middleware that enforces signature authentication.
 // Supports both Stowry native signing and AWS Signature V4.
-// Pass nil for accessKeys to disable authentication (public access).
 func AuthMiddleware(cfg AuthMiddlewareConfig) func(http.Handler) http.Handler {
 	if !cfg.AuthRequired {
 		return func(next http.Handler) http.Handler {
@@ -24,12 +23,7 @@ func AuthMiddleware(cfg AuthMiddlewareConfig) func(http.Handler) http.Handler {
 		}
 	}
 
-	lookup := func(accessKey string) (string, bool) {
-		secretKey, found := cfg.AccessKeys[accessKey]
-		return secretKey, found
-	}
-
-	verifier := stowry.NewSignatureVerifier(cfg.Region, cfg.Service, lookup)
+	verifier := stowry.NewSignatureVerifier(cfg.Region, cfg.Service, cfg.Store)
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
