@@ -27,16 +27,12 @@ const (
 	AWSExpiresParam       = "X-Amz-Expires"
 	AWSSignedHeadersParam = "X-Amz-SignedHeaders"
 	AWSSignatureParam     = "X-Amz-Signature"
-
-	// Native signature query parameter
-	// TODO: Replace with stowrysign.SignatureParam when stowry-go exports it
-	NativeSignatureParam = "X-Stowry-Signature"
 )
 
 // SignatureVerifier verifies signed requests using either AWS Signature V4 or native Stowry signing.
 // It automatically detects the signing scheme from the request query parameters.
 type SignatureVerifier struct {
-	nativeVerifier *stowrysign.Verifier
+	stowryVerifier *StowrySignatureVerifier
 	awsVerifier    *AWSSignatureVerifier
 }
 
@@ -49,7 +45,7 @@ type SignatureVerifier struct {
 //   - lookup: Function to retrieve secret key by access key. Returns (secretKey, true) if found, ("", false) if not.
 func NewSignatureVerifier(region, service string, lookup func(string) (string, bool)) *SignatureVerifier {
 	return &SignatureVerifier{
-		nativeVerifier: stowrysign.NewVerifier(lookup),
+		stowryVerifier: NewStowrySignatureVerifier(lookup),
 		awsVerifier:    NewAWSSignatureVerifier(region, service, lookup),
 	}
 }
@@ -63,8 +59,8 @@ func NewSignatureVerifier(region, service string, lookup func(string) (string, b
 func (v *SignatureVerifier) Verify(r *http.Request) error {
 	query := r.URL.Query()
 
-	if _, ok := query[NativeSignatureParam]; ok {
-		return v.nativeVerifier.Verify(r.Method, r.URL.Path, query)
+	if _, ok := query[stowrysign.StowrySignatureParam]; ok {
+		return v.stowryVerifier.Verify(r)
 	}
 
 	if _, ok := query[AWSSignatureParam]; ok {
@@ -72,6 +68,60 @@ func (v *SignatureVerifier) Verify(r *http.Request) error {
 	}
 
 	return ErrUnauthorized
+}
+
+// StowrySignatureVerifier verifies Stowry native presigned URLs.
+type StowrySignatureVerifier struct {
+	AccessKeyLookup func(accessKey string) (secretKey string, found bool)
+}
+
+// NewStowrySignatureVerifier creates a new Stowry signature verifier.
+//
+// Parameters:
+//   - lookup: Function to retrieve secret key by access key. Returns (secretKey, true) if found, ("", false) if not.
+func NewStowrySignatureVerifier(lookup func(string) (string, bool)) *StowrySignatureVerifier {
+	return &StowrySignatureVerifier{
+		AccessKeyLookup: lookup,
+	}
+}
+
+// Verify verifies a Stowry native presigned URL from an HTTP request.
+// Returns an error if verification fails, nil if signature is valid.
+func (v *StowrySignatureVerifier) Verify(r *http.Request) error {
+	query := r.URL.Query()
+
+	credential := query.Get(stowrysign.StowryCredentialParam)
+	dateStr := query.Get(stowrysign.StowryDateParam)
+	expiresStr := query.Get(stowrysign.StowryExpiresParam)
+	signature := query.Get(stowrysign.StowrySignatureParam)
+
+	if credential == "" || dateStr == "" || expiresStr == "" || signature == "" {
+		return fmt.Errorf("missing required signature parameters: %w", ErrUnauthorized)
+	}
+
+	timestamp := parseInt64(dateStr)
+	expires := parseInt64(expiresStr)
+
+	if expires <= 0 || expires > stowrysign.MaxExpires {
+		return fmt.Errorf("invalid expires: must be between 1 and %d: %w", stowrysign.MaxExpires, ErrUnauthorized)
+	}
+
+	if time.Now().Unix() > timestamp+expires {
+		return fmt.Errorf("signature expired: %w", ErrUnauthorized)
+	}
+
+	secretKey, found := v.AccessKeyLookup(credential)
+	if !found {
+		return fmt.Errorf("invalid credential: %w", ErrUnauthorized)
+	}
+
+	expectedSignature := stowrysign.Sign(secretKey, r.Method, r.URL.Path, timestamp, expires)
+
+	if !hmac.Equal([]byte(expectedSignature), []byte(signature)) {
+		return fmt.Errorf("signature mismatch: %w", ErrUnauthorized)
+	}
+
+	return nil
 }
 
 // AWSSignatureVerifier verifies AWS Signature V4 presigned URLs.
@@ -143,7 +193,7 @@ type signatureParams struct {
 	region        string
 	service       string
 	requestTime   time.Time
-	expires       int
+	expires       int64
 	signedHeaders string
 	signature     string
 }
@@ -166,7 +216,7 @@ func (v *AWSSignatureVerifier) extractParams(query url.Values) (*signatureParams
 		return nil, fmt.Errorf("invalid X-Amz-Date format: %w", ErrUnauthorized)
 	}
 
-	expires := parseInt(amzExpires)
+	expires := parseInt64(amzExpires)
 	if expires <= 0 || expires > MaxExpiresSeconds {
 		return nil, fmt.Errorf("invalid X-Amz-Expires: must be between 1 and %d: %w", MaxExpiresSeconds, ErrUnauthorized)
 	}
@@ -311,8 +361,8 @@ func sha256Hash(data string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-func parseInt(s string) int {
-	var n int
+func parseInt64(s string) int64 {
+	var n int64
 	_, err := fmt.Sscanf(s, "%d", &n)
 	if err != nil {
 		return 0
