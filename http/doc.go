@@ -1,17 +1,18 @@
 // Package http provides HTTP server functionality for Stowry object storage.
 //
-// This package implements a RESTful API for object storage with AWS Signature V4
-// authentication, supporting both public and authenticated access modes.
+// This package implements a RESTful API for object storage with signature-based
+// authentication, supporting both AWS Signature V4 and Stowry native signing.
 //
 // # Features
 //
 //   - AWS Signature V4 authentication (HMAC-SHA256)
-//   - Multiple access key support
-//   - Public/private read and write modes
+//   - Stowry native signing (lightweight alternative)
+//   - Pluggable key backends via SecretStore interface
 //   - ETag-based conditional requests
 //   - Three server modes: Store (API), Static (static website), SPA (single page app)
 //   - Path traversal protection
 //   - JSON error responses
+//   - Configurable CORS support
 //
 // # Server Modes
 //
@@ -24,36 +25,31 @@
 //
 // # Authentication
 //
-// The package uses AWS Signature V4 authentication for request verification.
-// Authentication is handled by the AuthMiddleware with a simple configuration:
+// The package uses RequestVerifier interface for authentication. Pass a verifier
+// to AuthMiddleware, or nil for public access:
 //
-//	authCfg := http.AuthMiddlewareConfig{
-//	    AuthRequired: true,
-//	    Region:       "us-east-1",
-//	    Service:      "s3",
-//	    AccessKeys: map[string]string{
-//	        "AKIAIOSFODNN7EXAMPLE": "wJalrXUt...",
-//	    },
-//	}
-//	router.Use(http.AuthMiddleware(authCfg))
+//	// Create a secret store and verifier
+//	store := keybackend.NewMapSecretStore(map[string]string{
+//	    "AKIAIOSFODNN7EXAMPLE": "wJalrXUt...",
+//	})
+//	verifier := stowry.NewSignatureVerifier("us-east-1", "s3", store)
 //
-// For public access, set AuthRequired to false or pass nil for AccessKeys.
+//	// Apply middleware (nil = public access)
+//	router.Use(http.AuthMiddleware(verifier))
 //
 // # Usage
 //
 // Create a handler with HandlerConfig:
 //
+//	store := keybackend.NewMapSecretStore(accessKeys)
+//	verifier := stowry.NewSignatureVerifier("us-east-1", "s3", store)
+//
 //	handlerCfg := http.HandlerConfig{
-//	    PublicRead:  false,
-//	    PublicWrite: false,
-//	    Mode:        stowry.ModeStore,
-//	    Region:      "us-east-1",
-//	    Service:     "s3",
-//	    AccessKeys: map[string]string{
-//	        "AKIAIOSFODNN7EXAMPLE": "wJalrXUt...",
-//	    },
+//	    Mode:          stowry.ModeStore,
+//	    ReadVerifier:  verifier,  // nil for public read
+//	    WriteVerifier: verifier,  // nil for public write
 //	}
-//	handler := http.NewHandler(handlerCfg, service)
+//	handler := http.NewHandler(&handlerCfg, service)
 //	router := handler.Router()
 //	http.ListenAndServe(":8080", router)
 //
@@ -64,15 +60,10 @@
 //
 // The package provides two middleware functions:
 //
-// AuthMiddleware - AWS Signature V4 verification:
+// AuthMiddleware - Signature verification (AWS V4 or Stowry native):
 //
-//	cfg := http.AuthMiddlewareConfig{
-//	    AuthRequired: true,
-//	    Region:       "us-east-1",
-//	    Service:      "s3",
-//	    AccessKeys:   accessKeys,
-//	}
-//	router.Use(http.AuthMiddleware(cfg))
+//	router.Use(http.AuthMiddleware(verifier))  // authenticated
+//	router.Use(http.AuthMiddleware(nil))       // public access
 //
 // PathValidationMiddleware - Path traversal protection:
 //
