@@ -92,11 +92,21 @@ func runServe(cmd *cobra.Command, args []string) error {
 		writeVerifier = verifier
 	}
 
+	corsConfig := stowryhttp.CORSConfig{
+		Enabled:          viper.GetBool("cors.enabled"),
+		AllowedOrigins:   viper.GetStringSlice("cors.allowed_origins"),
+		AllowedMethods:   viper.GetStringSlice("cors.allowed_methods"),
+		AllowedHeaders:   viper.GetStringSlice("cors.allowed_headers"),
+		ExposedHeaders:   viper.GetStringSlice("cors.exposed_headers"),
+		AllowCredentials: viper.GetBool("cors.allow_credentials"),
+		MaxAge:           viper.GetInt("cors.max_age"),
+	}
+
 	handlerConfig := stowryhttp.HandlerConfig{
 		Mode:          mode,
 		ReadVerifier:  readVerifier,
 		WriteVerifier: writeVerifier,
-		CORS:          getCORSConfig(),
+		CORS:          corsConfig,
 	}
 
 	handler := stowryhttp.NewHandler(&handlerConfig, service)
@@ -254,16 +264,4 @@ func getAccessKeys() map[string]string {
 	}
 
 	return keys
-}
-
-func getCORSConfig() stowryhttp.CORSConfig {
-	return stowryhttp.CORSConfig{
-		Enabled:          viper.GetBool("cors.enabled"),
-		AllowedOrigins:   viper.GetStringSlice("cors.allowed_origins"),
-		AllowedMethods:   viper.GetStringSlice("cors.allowed_methods"),
-		AllowedHeaders:   viper.GetStringSlice("cors.allowed_headers"),
-		ExposedHeaders:   viper.GetStringSlice("cors.exposed_headers"),
-		AllowCredentials: viper.GetBool("cors.allow_credentials"),
-		MaxAge:           viper.GetInt("cors.max_age"),
-	}
 }
