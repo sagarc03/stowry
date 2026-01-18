@@ -32,6 +32,6 @@
 //	// Get an object
 //	obj, err := service.Get(ctx, "path/to/file.txt")
 //
-// See the http package for REST API implementation and the postgres/sqlite
-// packages for metadata backend implementations.
+// See the http package for REST API implementation and the database/postgres
+// and database/sqlite packages for metadata backend implementations.
 package stowry
