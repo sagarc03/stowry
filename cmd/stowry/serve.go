@@ -18,6 +18,7 @@ import (
 	"github.com/sagarc03/stowry"
 	"github.com/sagarc03/stowry/filesystem"
 	stowryhttp "github.com/sagarc03/stowry/http"
+	"github.com/sagarc03/stowry/keybackend"
 	"github.com/sagarc03/stowry/postgres"
 	"github.com/sagarc03/stowry/sqlite"
 
@@ -76,14 +77,36 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("create service: %w", err)
 	}
 
+	store := keybackend.NewMapSecretStore(getAccessKeys())
+	verifier := stowry.NewSignatureVerifier(
+		viper.GetString("auth.region"),
+		viper.GetString("auth.service"),
+		store,
+	)
+
+	var readVerifier, writeVerifier stowryhttp.RequestVerifier
+	if !viper.GetBool("access.public_read") {
+		readVerifier = verifier
+	}
+	if !viper.GetBool("access.public_write") {
+		writeVerifier = verifier
+	}
+
+	corsConfig := stowryhttp.CORSConfig{
+		Enabled:          viper.GetBool("cors.enabled"),
+		AllowedOrigins:   viper.GetStringSlice("cors.allowed_origins"),
+		AllowedMethods:   viper.GetStringSlice("cors.allowed_methods"),
+		AllowedHeaders:   viper.GetStringSlice("cors.allowed_headers"),
+		ExposedHeaders:   viper.GetStringSlice("cors.exposed_headers"),
+		AllowCredentials: viper.GetBool("cors.allow_credentials"),
+		MaxAge:           viper.GetInt("cors.max_age"),
+	}
+
 	handlerConfig := stowryhttp.HandlerConfig{
-		PublicRead:  viper.GetBool("access.public_read"),
-		PublicWrite: viper.GetBool("access.public_write"),
-		Region:      viper.GetString("auth.region"),
-		Service:     viper.GetString("auth.service"),
-		Mode:        mode,
-		AccessKeys:  getAccessKeys(),
-		CORS:        getCORSConfig(),
+		Mode:          mode,
+		ReadVerifier:  readVerifier,
+		WriteVerifier: writeVerifier,
+		CORS:          corsConfig,
 	}
 
 	handler := stowryhttp.NewHandler(&handlerConfig, service)
@@ -241,16 +264,4 @@ func getAccessKeys() map[string]string {
 	}
 
 	return keys
-}
-
-func getCORSConfig() stowryhttp.CORSConfig {
-	return stowryhttp.CORSConfig{
-		Enabled:          viper.GetBool("cors.enabled"),
-		AllowedOrigins:   viper.GetStringSlice("cors.allowed_origins"),
-		AllowedMethods:   viper.GetStringSlice("cors.allowed_methods"),
-		AllowedHeaders:   viper.GetStringSlice("cors.allowed_headers"),
-		ExposedHeaders:   viper.GetStringSlice("cors.exposed_headers"),
-		AllowCredentials: viper.GetBool("cors.allow_credentials"),
-		MaxAge:           viper.GetInt("cors.max_age"),
-	}
 }
