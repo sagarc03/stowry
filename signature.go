@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	stowrysign "github.com/sagarc03/stowry-go"
 )
 
 const (
@@ -17,16 +19,29 @@ const (
 	MaxExpiresSeconds  = 604800 // 7 days
 	DateTimeFormat     = "20060102T150405Z"
 	DateFormat         = "20060102"
+
+	// AWS Signature V4 header names
+	AWSAlgorithmHeader     = "X-Amz-Algorithm"
+	AWSCredentialHeader    = "X-Amz-Credential" //nolint:gosec // This is a header name, not a credential
+	AWSDateHeader          = "X-Amz-Date"
+	AWSExpiresHeader       = "X-Amz-Expires"
+	AWSSignedHeadersHeader = "X-Amz-SignedHeaders"
+	AWSSignatureHeader     = "X-Amz-Signature"
+
+	// Native signature header
+	// TODO: Replace with stowrysign.SignatureHeader when stowry-go exports it
+	NativeSignatureHeader = "X-Stowry-Signature"
 )
 
-// SignatureVerifier verifies AWS Signature V4 presigned URLs.
+// SignatureVerifier verifies signed requests using either AWS Signature V4 or native Stowry signing.
+// It automatically detects the signing scheme from the request query parameters.
 type SignatureVerifier struct {
-	Region          string
-	Service         string
-	AccessKeyLookup func(accessKey string) (secretKey string, found bool)
+	nativeVerifier *stowrysign.Verifier
+	awsVerifier    *AWSSignatureVerifier
 }
 
-// NewSignatureVerifier creates a new signature verifier.
+// NewSignatureVerifier creates a new unified signature verifier that supports both
+// AWS Signature V4 and native Stowry signing schemes.
 //
 // Parameters:
 //   - region: AWS region (e.g., "us-east-1")
@@ -34,52 +49,59 @@ type SignatureVerifier struct {
 //   - lookup: Function to retrieve secret key by access key. Returns (secretKey, true) if found, ("", false) if not.
 func NewSignatureVerifier(region, service string, lookup func(string) (string, bool)) *SignatureVerifier {
 	return &SignatureVerifier{
+		nativeVerifier: stowrysign.NewVerifier(lookup),
+		awsVerifier:    NewAWSSignatureVerifier(region, service, lookup),
+	}
+}
+
+// Verify verifies a signed HTTP request using the appropriate signing scheme.
+// It detects the scheme from query parameters:
+//   - X-Stowry-Signature: Uses native Stowry verification
+//   - X-Amz-Signature: Uses AWS Signature V4 verification
+//
+// Returns ErrUnauthorized if no valid signature is present or verification fails.
+func (v *SignatureVerifier) Verify(r *http.Request) error {
+	query := r.URL.Query()
+
+	if _, ok := query[NativeSignatureHeader]; ok {
+		return v.nativeVerifier.Verify(r.Method, r.URL.Path, query)
+	}
+
+	if _, ok := query[AWSSignatureHeader]; ok {
+		return v.awsVerifier.Verify(r)
+	}
+
+	return ErrUnauthorized
+}
+
+// AWSSignatureVerifier verifies AWS Signature V4 presigned URLs.
+type AWSSignatureVerifier struct {
+	Region          string
+	Service         string
+	AccessKeyLookup func(accessKey string) (secretKey string, found bool)
+}
+
+// NewAWSSignatureVerifier creates a new AWS signature verifier.
+//
+// Parameters:
+//   - region: AWS region (e.g., "us-east-1")
+//   - service: AWS service name (e.g., "s3")
+//   - lookup: Function to retrieve secret key by access key. Returns (secretKey, true) if found, ("", false) if not.
+func NewAWSSignatureVerifier(region, service string, lookup func(string) (string, bool)) *AWSSignatureVerifier {
+	return &AWSSignatureVerifier{
 		Region:          region,
 		Service:         service,
 		AccessKeyLookup: lookup,
 	}
 }
 
-// Verify verifies an AWS Signature V4 presigned URL.
-//
-// This function implements AWS Signature Version 4 verification for presigned URLs,
-// compatible with S3's authentication scheme. It validates all required query parameters,
-// checks signature expiration, and verifies the HMAC-SHA256 signature.
-//
-// Required query parameters:
-//   - X-Amz-Algorithm: Must be "AWS4-HMAC-SHA256"
-//   - X-Amz-Credential: Format "access_key/date/region/service/aws4_request"
-//   - X-Amz-Date: ISO8601 timestamp (YYYYMMDDTHHMMSSZ)
-//   - X-Amz-Expires: Validity duration in seconds (1-604800)
-//   - X-Amz-SignedHeaders: Semicolon-separated list of signed headers
-//   - X-Amz-Signature: Hex-encoded HMAC-SHA256 signature
-//
-// The function performs the following validations:
-//  1. Presence of all required parameters
-//  2. Correct algorithm (AWS4-HMAC-SHA256)
-//  3. Valid timestamp format
-//  4. Expiration within allowed range (1 second to 7 days)
-//  5. Request not expired (current time before timestamp + expires)
-//  6. Credential format and component matching (date, region, service)
-//  7. Access key exists (via lookup function)
-//  8. Signature matches calculated signature
-//
-// Parameters:
-//   - method: HTTP method (GET, PUT, DELETE, etc.)
-//   - path: Request path
-//   - query: URL query parameters including signature parameters
-//   - headers: HTTP headers from the request (used for signed header verification)
-//
+// Verify verifies an AWS Signature V4 presigned URL from an HTTP request.
 // Returns an error if verification fails, nil if signature is valid.
-//
-// Example:
-//
-//	verifier := stowry.NewSignatureVerifier("us-east-1", "s3", lookupFunc)
-//	err := verifier.Verify("GET", "/file.txt", r.URL.Query(), r.Header)
-//	if err != nil {
-//	    // Invalid signature
-//	}
-func (v *SignatureVerifier) Verify(method, path string, query url.Values, headers http.Header) error {
+func (v *AWSSignatureVerifier) Verify(r *http.Request) error {
+	query := r.URL.Query()
+	headers := r.Header.Clone()
+	headers.Set("Host", r.Host)
+
 	params, err := v.extractParams(query)
 	if err != nil {
 		return err
@@ -96,8 +118,8 @@ func (v *SignatureVerifier) Verify(method, path string, query url.Values, header
 
 	expectedSignature := calculateSignature(
 		secretKey,
-		method,
-		path,
+		r.Method,
+		r.URL.Path,
 		query,
 		headers,
 		params.requestTime,
@@ -126,13 +148,13 @@ type signatureParams struct {
 	signature     string
 }
 
-func (v *SignatureVerifier) extractParams(query url.Values) (*signatureParams, error) {
-	amzAlgorithm := query.Get("X-Amz-Algorithm")
-	amzCredential := query.Get("X-Amz-Credential")
-	amzDate := query.Get("X-Amz-Date")
-	amzExpires := query.Get("X-Amz-Expires")
-	amzSignedHeaders := query.Get("X-Amz-SignedHeaders")
-	amzSignature := query.Get("X-Amz-Signature")
+func (v *AWSSignatureVerifier) extractParams(query url.Values) (*signatureParams, error) {
+	amzAlgorithm := query.Get(AWSAlgorithmHeader)
+	amzCredential := query.Get(AWSCredentialHeader)
+	amzDate := query.Get(AWSDateHeader)
+	amzExpires := query.Get(AWSExpiresHeader)
+	amzSignedHeaders := query.Get(AWSSignedHeadersHeader)
+	amzSignature := query.Get(AWSSignatureHeader)
 
 	if amzAlgorithm == "" || amzCredential == "" || amzDate == "" ||
 		amzExpires == "" || amzSignedHeaders == "" || amzSignature == "" {
@@ -171,7 +193,7 @@ func (v *SignatureVerifier) extractParams(query url.Values) (*signatureParams, e
 	}, nil
 }
 
-func (v *SignatureVerifier) validateParams(params *signatureParams) error {
+func (v *AWSSignatureVerifier) validateParams(params *signatureParams) error {
 	if params.algorithm != SignatureAlgorithm {
 		return fmt.Errorf("invalid algorithm: expected %s, got %s: %w", SignatureAlgorithm, params.algorithm, ErrUnauthorized)
 	}
@@ -252,7 +274,7 @@ func buildCanonicalHeaders(headers http.Header, signedHeaders string) string {
 func buildCanonicalQueryString(query url.Values) string {
 	params := url.Values{}
 	for k, v := range query {
-		if k != "X-Amz-Signature" {
+		if k != AWSSignatureHeader {
 			params[k] = v
 		}
 	}
