@@ -1,4 +1,4 @@
-package sqlite_test
+package postgres_test
 
 import (
 	"context"
@@ -7,38 +7,37 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/sagarc03/stowry"
-	"github.com/sagarc03/stowry/sqlite"
+	"github.com/sagarc03/stowry/database/postgres"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewRepo(t *testing.T) {
-	db, cleanup := getTestDatabase(t)
-	defer cleanup()
+	pool := getSharedTestDatabase(t)
 
 	t.Run("success - valid table name", func(t *testing.T) {
-		tables := sqlite.Tables{MetaData: "metadata_valid"}
-		repo, err := sqlite.NewRepo(db, tables)
+		tables := postgres.Tables{MetaData: "metadata_valid"}
+		repo, err := postgres.NewRepo(pool, tables)
 		assert.NoError(t, err)
 		assert.NotNil(t, repo)
 	})
 
 	t.Run("error - empty table name", func(t *testing.T) {
-		tables := sqlite.Tables{MetaData: ""}
-		repo, err := sqlite.NewRepo(db, tables)
+		tables := postgres.Tables{MetaData: ""}
+		repo, err := postgres.NewRepo(pool, tables)
 		assert.Error(t, err, "expected error for empty table name")
 		assert.Nil(t, repo, "expected nil repo for invalid table name")
 	})
 
 	t.Run("error - invalid table name with uppercase", func(t *testing.T) {
-		tables := sqlite.Tables{MetaData: "MetaData"}
-		repo, err := sqlite.NewRepo(db, tables)
+		tables := postgres.Tables{MetaData: "MetaData"}
+		repo, err := postgres.NewRepo(pool, tables)
 		assert.Error(t, err, "expected error for table name with uppercase")
 		assert.Nil(t, repo, "expected nil repo for invalid table name")
 	})
 
 	t.Run("error - invalid table name with special chars", func(t *testing.T) {
-		tables := sqlite.Tables{MetaData: "meta-data"}
-		repo, err := sqlite.NewRepo(db, tables)
+		tables := postgres.Tables{MetaData: "meta-data"}
+		repo, err := postgres.NewRepo(pool, tables)
 		assert.Error(t, err, "expected error for table name with special chars")
 		assert.Nil(t, repo, "expected nil repo for invalid table name")
 	})
@@ -49,8 +48,8 @@ func TestNewRepo(t *testing.T) {
 			longName.WriteString("a")
 		}
 
-		tables := sqlite.Tables{MetaData: longName.String()}
-		repo, err := sqlite.NewRepo(db, tables)
+		tables := postgres.Tables{MetaData: longName.String()}
+		repo, err := postgres.NewRepo(pool, tables)
 		assert.Error(t, err, "expected error for table name > 63 chars")
 		assert.Nil(t, repo, "expected nil repo for invalid table name")
 	})
