@@ -261,21 +261,31 @@ const NavBarAction = ({
 }) => {
   return (
     <div className="bordered-div-padding flex items-center justify-between border lg:border-none lg:!p-0">
-      <a
-        href={EXTERNAL_LINKS.GITHUB}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center"
-      >
-        <Button
-          variant="ghost"
-          className="gap-2 font-medium lg:text-base"
-          size="sm"
+      <div className="flex items-center gap-2">
+        <a
+          href={EXTERNAL_LINKS.GITHUB + '/releases/latest'}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded border px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
-          <FaGithub className="size-5" />
-          <span>Star</span>
-        </Button>
-      </a>
+          {import.meta.env.PUBLIC_STOWRY_VERSION || 'dev'}
+        </a>
+        <a
+          href={EXTERNAL_LINKS.GITHUB}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center"
+        >
+          <Button
+            variant="ghost"
+            className="gap-2 font-medium lg:text-base"
+            size="sm"
+          >
+            <FaGithub className="size-5" />
+            <span>Star</span>
+          </Button>
+        </a>
+      </div>
 
       <div className="flex flex-1 items-center gap-2">
         <div className="flex flex-1 items-center justify-center">
