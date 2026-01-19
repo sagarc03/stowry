@@ -2,17 +2,32 @@ package database
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/sagarc03/stowry"
 	"github.com/sagarc03/stowry/database/postgres"
 	"github.com/sagarc03/stowry/database/sqlite"
-
-	_ "modernc.org/sqlite" // SQLite driver
 )
+
+// Database provides methods for managing the database connection and schema.
+type Database interface {
+	// Ping verifies the database connection is alive.
+	Ping(ctx context.Context) error
+
+	// Migrate runs database migrations to create required tables.
+	// This is a convenience method - in production, users may run migrations separately.
+	Migrate(ctx context.Context) error
+
+	// Validate checks that the database schema matches expected structure.
+	// Returns an error if required tables or columns are missing or have wrong types.
+	Validate(ctx context.Context) error
+
+	// GetRepo returns the MetaDataRepo for database operations.
+	GetRepo() stowry.MetaDataRepo
+
+	// Close closes the database connection.
+	Close() error
+}
 
 // Config holds the configuration for connecting to a metadata backend.
 type Config struct {
@@ -20,86 +35,20 @@ type Config struct {
 	Type string
 	// DSN is the data source name (connection string)
 	DSN string
-	// Table is the name of the metadata table
-	Table string
+	// Tables defines the table names for the database
+	Tables stowry.Tables
 }
 
-// Connect establishes a connection to the configured database backend,
-// runs migrations, validates the schema, and returns a MetaDataRepo.
-// The returned cleanup function should be called to close the connection.
-func Connect(ctx context.Context, cfg Config) (stowry.MetaDataRepo, func(), error) {
-	tables := stowry.Tables{MetaData: cfg.Table}
-
+// Connect establishes a connection to the configured database backend.
+// Tables should be validated before calling Connect.
+// Call Migrate() for convenience migrations or Validate() to verify schema.
+func Connect(ctx context.Context, cfg Config) (Database, error) {
 	switch cfg.Type {
 	case "sqlite":
-		return connectSQLite(ctx, cfg.DSN, tables)
+		return sqlite.Connect(ctx, cfg.DSN, cfg.Tables)
 	case "postgres":
-		return connectPostgres(ctx, cfg.DSN, tables)
+		return postgres.Connect(ctx, cfg.DSN, cfg.Tables)
 	default:
-		return nil, nil, fmt.Errorf("unsupported database type: %s", cfg.Type)
+		return nil, fmt.Errorf("unsupported database type: %s", cfg.Type)
 	}
-}
-
-func connectSQLite(ctx context.Context, dsn string, tables stowry.Tables) (stowry.MetaDataRepo, func(), error) {
-	db, err := sql.Open("sqlite", dsn)
-	if err != nil {
-		return nil, nil, fmt.Errorf("open sqlite: %w", err)
-	}
-
-	if err = db.PingContext(ctx); err != nil {
-		_ = db.Close()
-		return nil, nil, fmt.Errorf("ping sqlite: %w", err)
-	}
-
-	if err = sqlite.Migrate(ctx, db, tables); err != nil {
-		_ = db.Close()
-		return nil, nil, fmt.Errorf("migrate sqlite: %w", err)
-	}
-
-	if err = sqlite.ValidateSchema(ctx, db, tables); err != nil {
-		_ = db.Close()
-		return nil, nil, fmt.Errorf("validate sqlite schema: %w", err)
-	}
-
-	repo, err := sqlite.NewRepo(db, tables)
-	if err != nil {
-		_ = db.Close()
-		return nil, nil, fmt.Errorf("create sqlite repo: %w", err)
-	}
-
-	cleanup := func() {
-		_ = db.Close()
-	}
-
-	return repo, cleanup, nil
-}
-
-func connectPostgres(ctx context.Context, dsn string, tables stowry.Tables) (stowry.MetaDataRepo, func(), error) {
-	pool, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		return nil, nil, fmt.Errorf("connect postgres: %w", err)
-	}
-
-	if err = pool.Ping(ctx); err != nil {
-		pool.Close()
-		return nil, nil, fmt.Errorf("ping postgres: %w", err)
-	}
-
-	if err = postgres.Migrate(ctx, pool, tables); err != nil {
-		pool.Close()
-		return nil, nil, fmt.Errorf("migrate postgres: %w", err)
-	}
-
-	if err = postgres.ValidateSchema(ctx, pool, tables); err != nil {
-		pool.Close()
-		return nil, nil, fmt.Errorf("validate postgres schema: %w", err)
-	}
-
-	repo, err := postgres.NewRepo(pool, tables)
-	if err != nil {
-		pool.Close()
-		return nil, nil, fmt.Errorf("create postgres repo: %w", err)
-	}
-
-	return repo, pool.Close, nil
 }

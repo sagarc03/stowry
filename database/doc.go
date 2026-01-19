@@ -11,22 +11,23 @@
 // # Usage
 //
 //	cfg := database.Config{
-//	    Type:  "sqlite",
-//	    DSN:   "stowry.db",
-//	    Table: "stowry_metadata",
+//	    Type:   "sqlite",
+//	    DSN:    "stowry.db",
+//	    Tables: stowry.Tables{MetaData: "stowry_metadata"},
 //	}
 //
-//	repo, cleanup, err := database.Connect(ctx, cfg)
+//	db, err := database.Connect(ctx, cfg)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
-//	defer cleanup()
+//	defer db.Close()
 //
-// The Connect function automatically:
-//   - Opens the database connection
-//   - Runs schema migrations
-//   - Validates the schema
-//   - Returns a ready-to-use MetaDataRepo
+//	// Run migrations or validate schema
+//	if err := db.Migrate(ctx); err != nil {
+//	    log.Fatal(err)
+//	}
+//
+//	repo := db.GetRepo()
 //
 // # Subpackages
 //
