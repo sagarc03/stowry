@@ -673,6 +673,68 @@ func TestStowryService_Get(t *testing.T) {
 		storage.AssertExpectations(t)
 		repo.AssertNotCalled(t, "Get", mock.Anything, "index.html")
 	})
+
+	t.Run("error - empty path returns not found in store mode", func(t *testing.T) {
+		service, repo, storage := NewStowryServiceWithMode(t, stowry.ModeStore)
+		ctx := context.Background()
+
+		_, _, err := service.Get(ctx, "")
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, stowry.ErrNotFound)
+
+		repo.AssertNotCalled(t, "Get")
+		storage.AssertNotCalled(t, "Get")
+	})
+
+	t.Run("success - empty path serves index.html in static mode", func(t *testing.T) {
+		service, repo, storage := NewStowryServiceWithMode(t, stowry.ModeStatic)
+		ctx := context.Background()
+
+		indexMetadata := stowry.MetaData{
+			Path:          "index.html",
+			ContentType:   "text/html",
+			FileSizeBytes: 100,
+			Etag:          "xyz789",
+		}
+
+		mockFile := &mockReadSeekCloser{content: []byte("<html></html>")}
+
+		repo.On("Get", ctx, "index.html").Return(indexMetadata, nil)
+		storage.On("Get", ctx, "index.html").Return(mockFile, nil)
+
+		metadata, file, err := service.Get(ctx, "")
+		assert.NoError(t, err)
+		assert.Equal(t, "index.html", metadata.Path)
+		assert.Same(t, mockFile, file)
+
+		repo.AssertExpectations(t)
+		storage.AssertExpectations(t)
+	})
+
+	t.Run("success - empty path serves index.html in spa mode", func(t *testing.T) {
+		service, repo, storage := NewStowryServiceWithMode(t, stowry.ModeSPA)
+		ctx := context.Background()
+
+		indexMetadata := stowry.MetaData{
+			Path:          "index.html",
+			ContentType:   "text/html",
+			FileSizeBytes: 100,
+			Etag:          "xyz789",
+		}
+
+		mockFile := &mockReadSeekCloser{content: []byte("<html></html>")}
+
+		repo.On("Get", ctx, "index.html").Return(indexMetadata, nil)
+		storage.On("Get", ctx, "index.html").Return(mockFile, nil)
+
+		metadata, file, err := service.Get(ctx, "")
+		assert.NoError(t, err)
+		assert.Equal(t, "index.html", metadata.Path)
+		assert.Same(t, mockFile, file)
+
+		repo.AssertExpectations(t)
+		storage.AssertExpectations(t)
+	})
 }
 
 type mockReadSeekCloser struct {
