@@ -29,6 +29,7 @@ database:
   type: sqlite            # Database type: sqlite, postgres (default: sqlite)
   dsn: stowry.db         # Connection string or file path
   table: stowry_metadata  # Metadata table name (default: stowry_metadata)
+  auto_migrate: true      # Automatically create/update tables on startup (default: false)
 
 # Storage configuration
 storage:
@@ -68,6 +69,68 @@ log:
 | `type` | string | sqlite | Database type (`sqlite`, `postgres`) |
 | `dsn` | string | stowry.db | Connection string |
 | `table` | string | stowry_metadata | Metadata table name |
+| `auto_migrate` | bool | false | Automatically create/update database schema on startup |
+
+**Migration Options:**
+
+1. **Auto-migrate (recommended for development):** Set `auto_migrate: true` in config
+2. **CLI migration:** Run `stowry init` before starting the server
+3. **Manual SQL:** Execute the schema SQL below directly in your database
+
+#### PostgreSQL Schema
+
+```sql
+-- Table name can be anything - just ensure it matches database.table in your config
+CREATE TABLE IF NOT EXISTS stowry_metadata (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    path TEXT NOT NULL UNIQUE,
+    content_type TEXT NOT NULL,
+    etag TEXT NOT NULL,
+    file_size_bytes BIGINT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ,
+    cleaned_up_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_stowry_metadata_deleted_at
+ON stowry_metadata (deleted_at)
+WHERE (deleted_at IS NOT NULL);
+
+CREATE INDEX IF NOT EXISTS idx_stowry_metadata_pending_cleanup
+ON stowry_metadata (deleted_at, cleaned_up_at)
+WHERE (deleted_at IS NOT NULL AND cleaned_up_at IS NULL);
+
+CREATE INDEX IF NOT EXISTS idx_stowry_metadata_active_list
+ON stowry_metadata (created_at, path)
+WHERE (deleted_at IS NULL);
+```
+
+#### SQLite Schema
+
+```sql
+-- Table name can be anything - just ensure it matches database.table in your config
+CREATE TABLE IF NOT EXISTS stowry_metadata (
+    id TEXT NOT NULL PRIMARY KEY,
+    path TEXT NOT NULL UNIQUE,
+    content_type TEXT NOT NULL,
+    etag TEXT NOT NULL,
+    file_size_bytes INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    deleted_at TEXT,
+    cleaned_up_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_stowry_metadata_deleted_at
+ON stowry_metadata (deleted_at);
+
+CREATE INDEX IF NOT EXISTS idx_stowry_metadata_pending_cleanup
+ON stowry_metadata (deleted_at, cleaned_up_at);
+
+CREATE INDEX IF NOT EXISTS idx_stowry_metadata_active_list
+ON stowry_metadata (created_at, path);
+```
 
 **SQLite DSN Examples:**
 ```yaml
@@ -144,6 +207,7 @@ All configuration options can be set via environment variables using the `STOWRY
 | `database.type` | `STOWRY_DATABASE_TYPE` |
 | `database.dsn` | `STOWRY_DATABASE_DSN` |
 | `database.table` | `STOWRY_DATABASE_TABLE` |
+| `database.auto_migrate` | `STOWRY_DATABASE_AUTO_MIGRATE` |
 | `storage.path` | `STOWRY_STORAGE_PATH` |
 | `auth.region` | `STOWRY_AUTH_REGION` |
 | `access.public_read` | `STOWRY_ACCESS_PUBLIC_READ` |
@@ -189,6 +253,7 @@ server:
 database:
   type: sqlite
   dsn: dev.db
+  auto_migrate: true
 
 storage:
   path: ./uploads
@@ -212,6 +277,7 @@ database:
   type: postgres
   dsn: postgres://stowry:${DB_PASSWORD}@db.example.com:5432/stowry?sslmode=require
   table: stowry_metadata
+  auto_migrate: true  # Or run 'stowry init' manually before first start
 
 storage:
   path: /var/lib/stowry/data
@@ -241,6 +307,7 @@ server:
 database:
   type: sqlite
   dsn: metadata.db
+  auto_migrate: true
 
 storage:
   path: /var/www/html
@@ -260,6 +327,7 @@ server:
 database:
   type: sqlite
   dsn: app.db
+  auto_migrate: true
 
 storage:
   path: ./dist

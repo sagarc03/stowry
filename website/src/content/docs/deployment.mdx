@@ -63,6 +63,7 @@ services:
     environment:
       - STOWRY_DATABASE_TYPE=postgres
       - STOWRY_DATABASE_DSN=postgres://stowry:password@postgres:5432/stowry?sslmode=disable
+      - STOWRY_DATABASE_AUTO_MIGRATE=true
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - stowry-data:/app/data
@@ -124,6 +125,7 @@ database:
   type: sqlite
   dsn: /var/lib/stowry/stowry.db
   table: stowry_metadata
+  auto_migrate: true
 
 storage:
   path: /var/lib/stowry/data
@@ -255,6 +257,7 @@ data:
       type: sqlite
       dsn: /data/stowry.db
       table: stowry_metadata
+      auto_migrate: true
     storage:
       path: /data/files
     auth:
