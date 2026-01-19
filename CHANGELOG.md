@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `MapSecretStore` implementation for in-memory key storage
 - **RequestVerifier Interface** - Abstraction for HTTP request authentication in `http` package
 - **StowrySignatureVerifier** - Native Stowry signature verification using stowry-go
+- **Unified Database Package** - New `database.Connect()` function that handles both PostgreSQL and SQLite
+  - `Database` struct with `Ping()`, `Migrate()`, `Validate()`, and `GetRepo()` methods
+  - Supports dynamic table names via `Tables` configuration
 
 ### Changed
 
@@ -24,6 +27,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removes `PublicRead`, `PublicWrite`, `Region`, `Service`, `AccessKeys` fields
   - Caller creates and passes verifiers for better flexibility
 - Unified `SignatureVerifier` auto-detects signing scheme and delegates to appropriate verifier
+- **Database Package Reorganization** - Moved `postgres` and `sqlite` packages under `database/`
+  - Import paths changed from `github.com/sagarc03/stowry/postgres` to `github.com/sagarc03/stowry/database/postgres`
+- `database.Config.Table` changed to `database.Config.Tables` for multiple table configurations
+- Moved mode-related business logic (index.html fallback) from HTTP handlers to service layer
+- Removed redundant `PathValidationMiddleware` (path validation now handled directly in handlers)
+- Moved `ErrUnauthorized` from root package to `http` package
+- Signature verification now returns descriptive errors instead of generic `ErrUnauthorized`
+- Moved `ErrKeyNotFound` to separate `keybackend/errors.go` file
+
+### Fixed
+
+- Added JSON tags to `MetaData` and `ListResult` types for proper snake_case API responses
 
 ## [1.2.0] - 2025-01-17
 
