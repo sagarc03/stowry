@@ -1,10 +1,8 @@
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "website/**"
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -26,6 +24,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "version=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=$(git describe --tags --abbrev=0 2>/dev/null || echo 'dev')" >> $GITHUB_OUTPUT
+          fi
+
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
@@ -38,6 +45,8 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          PUBLIC_STOWRY_VERSION: ${{ steps.version.outputs.version }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

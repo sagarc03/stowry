@@ -16,10 +16,14 @@ export function Hero() {
           <div className="max-w-4xl space-y-6 md:space-y-8 lg:space-y-12">
             {/* Version Badge */}
             <a
-              href="/getting-started"
+              href={EXTERNAL_LINKS.GITHUB + '/releases/latest'}
+              target="_blank"
+              rel="noopener noreferrer"
               className="relative inline-flex items-center overflow-hidden rounded-sm border px-4 py-2 text-sm"
             >
-              <span className="text-muted-foreground">Get started in 5 minutes</span>
+              <span className="text-muted-foreground">
+                {import.meta.env.PUBLIC_STOWRY_VERSION || 'dev'}
+              </span>
               <ArrowRight className="ml-2 size-4" />
             </a>
             <h1 className="font-weight-display text-2xl leading-snug tracking-tighter md:text-3xl lg:text-5xl">
