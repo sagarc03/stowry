@@ -2,69 +2,210 @@ package sqlite_test
 
 import (
 	"context"
-	"strings"
+	"database/sql"
+	"os"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/sagarc03/stowry"
 	"github.com/sagarc03/stowry/database/sqlite"
 	"github.com/stretchr/testify/assert"
+
+	_ "modernc.org/sqlite"
 )
 
-func TestNewRepo(t *testing.T) {
-	db, cleanup := getTestDatabase(t)
-	defer cleanup()
-
-	t.Run("success - valid table name", func(t *testing.T) {
-		tables := stowry.Tables{MetaData: "metadata_valid"}
-		repo, err := sqlite.NewRepo(db, tables)
-		assert.NoError(t, err)
-		assert.NotNil(t, repo)
-	})
-
-	t.Run("error - empty table name", func(t *testing.T) {
-		tables := stowry.Tables{MetaData: ""}
-		repo, err := sqlite.NewRepo(db, tables)
-		assert.Error(t, err, "expected error for empty table name")
-		assert.Nil(t, repo, "expected nil repo for invalid table name")
-	})
-
-	t.Run("error - invalid table name with uppercase", func(t *testing.T) {
-		tables := stowry.Tables{MetaData: "MetaData"}
-		repo, err := sqlite.NewRepo(db, tables)
-		assert.Error(t, err, "expected error for table name with uppercase")
-		assert.Nil(t, repo, "expected nil repo for invalid table name")
-	})
-
-	t.Run("error - invalid table name with special chars", func(t *testing.T) {
-		tables := stowry.Tables{MetaData: "meta-data"}
-		repo, err := sqlite.NewRepo(db, tables)
-		assert.Error(t, err, "expected error for table name with special chars")
-		assert.Nil(t, repo, "expected nil repo for invalid table name")
-	})
-
-	t.Run("error - table name too long", func(t *testing.T) {
-		var longName strings.Builder
-		for range 64 {
-			longName.WriteString("a")
-		}
-
-		tables := stowry.Tables{MetaData: longName.String()}
-		repo, err := sqlite.NewRepo(db, tables)
-		assert.Error(t, err, "expected error for table name > 63 chars")
-		assert.Nil(t, repo, "expected nil repo for invalid table name")
-	})
-}
-
-func TestRepo_Ping(t *testing.T) {
-	repo, cleanup := setupTestRepo(t)
-	defer cleanup()
-
+func TestConnect(t *testing.T) {
 	ctx := context.Background()
 
-	err := repo.Ping(ctx)
+	tables := stowry.Tables{MetaData: "metadata"}
+	db, err := sqlite.Connect(ctx, ":memory:", tables)
+	assert.NoError(t, err)
+	assert.NotNil(t, db)
+	defer func() { _ = db.Close() }()
+
+	// Verify connection is actually usable
+	err = db.Ping(ctx)
+	assert.NoError(t, err, "ping should succeed after connect")
+}
+
+func TestDatabase_Ping(t *testing.T) {
+	ctx := context.Background()
+	tables := stowry.Tables{MetaData: "metadata"}
+
+	db, err := sqlite.Connect(ctx, ":memory:", tables)
+	assert.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	err = db.Ping(ctx)
 	assert.NoError(t, err, "ping should succeed with valid connection")
 }
+
+func TestDatabase_Migrate(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("success - creates tables", func(t *testing.T) {
+		tables := stowry.Tables{MetaData: "metadata"}
+		db, err := sqlite.Connect(ctx, ":memory:", tables)
+		assert.NoError(t, err)
+		defer func() { _ = db.Close() }()
+
+		err = db.Migrate(ctx)
+		assert.NoError(t, err, "migrate should succeed")
+
+		// Verify table exists by trying to use the repo
+		repo := db.GetRepo()
+		_, err = repo.List(ctx, stowry.ListQuery{Limit: 1})
+		assert.NoError(t, err, "repo should work after migration")
+	})
+
+	t.Run("idempotent - can run multiple times", func(t *testing.T) {
+		tables := stowry.Tables{MetaData: "metadata"}
+		db, err := sqlite.Connect(ctx, ":memory:", tables)
+		assert.NoError(t, err)
+		defer func() { _ = db.Close() }()
+
+		err = db.Migrate(ctx)
+		assert.NoError(t, err, "first migrate should succeed")
+
+		err = db.Migrate(ctx)
+		assert.NoError(t, err, "second migrate should succeed")
+	})
+}
+
+func TestDatabase_Validate(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("success - valid schema after migrate", func(t *testing.T) {
+		tables := stowry.Tables{MetaData: "metadata"}
+		db, err := sqlite.Connect(ctx, ":memory:", tables)
+		assert.NoError(t, err)
+		defer func() { _ = db.Close() }()
+
+		err = db.Migrate(ctx)
+		assert.NoError(t, err)
+
+		err = db.Validate(ctx)
+		assert.NoError(t, err, "validate should succeed after migrate")
+	})
+
+	t.Run("error - table does not exist", func(t *testing.T) {
+		tables := stowry.Tables{MetaData: "metadata"}
+		db, err := sqlite.Connect(ctx, ":memory:", tables)
+		assert.NoError(t, err)
+		defer func() { _ = db.Close() }()
+
+		// Don't migrate - table won't exist
+		err = db.Validate(ctx)
+		assert.Error(t, err)
+	})
+
+	t.Run("error - missing columns", func(t *testing.T) {
+		tmpFile, err := os.CreateTemp("", "test-*.db")
+		assert.NoError(t, err)
+		tmpPath := tmpFile.Name()
+		tmpFile.Close()
+		defer os.Remove(tmpPath)
+
+		// Create table with missing columns using raw sql
+		rawDB, err := sql.Open("sqlite", tmpPath)
+		assert.NoError(t, err)
+		_, err = rawDB.ExecContext(ctx, `CREATE TABLE metadata (
+			id TEXT PRIMARY KEY,
+			path TEXT NOT NULL
+		)`)
+		assert.NoError(t, err)
+		rawDB.Close()
+
+		// Connect and validate - should fail due to missing columns
+		tables := stowry.Tables{MetaData: "metadata"}
+		db, err := sqlite.Connect(ctx, tmpPath, tables)
+		assert.NoError(t, err)
+		defer func() { _ = db.Close() }()
+
+		err = db.Validate(ctx)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "missing columns")
+	})
+
+	t.Run("error - wrong column type", func(t *testing.T) {
+		tmpFile, err := os.CreateTemp("", "test-*.db")
+		assert.NoError(t, err)
+		tmpPath := tmpFile.Name()
+		tmpFile.Close()
+		defer os.Remove(tmpPath)
+
+		// Create table with wrong column type (file_size_bytes as TEXT instead of INTEGER)
+		rawDB, err := sql.Open("sqlite", tmpPath)
+		assert.NoError(t, err)
+		_, err = rawDB.ExecContext(ctx, `CREATE TABLE metadata (
+			id TEXT PRIMARY KEY NOT NULL,
+			path TEXT NOT NULL,
+			content_type TEXT NOT NULL,
+			etag TEXT NOT NULL,
+			file_size_bytes TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			deleted_at TEXT,
+			cleaned_up_at TEXT
+		)`)
+		assert.NoError(t, err)
+		rawDB.Close()
+
+		// Connect and validate - should fail due to wrong column type
+		tables := stowry.Tables{MetaData: "metadata"}
+		db, err := sqlite.Connect(ctx, tmpPath, tables)
+		assert.NoError(t, err)
+		defer func() { _ = db.Close() }()
+
+		err = db.Validate(ctx)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "file_size_bytes")
+	})
+}
+
+func TestDatabase_GetRepo(t *testing.T) {
+	ctx := context.Background()
+	tables := stowry.Tables{MetaData: "metadata"}
+
+	db, err := sqlite.Connect(ctx, ":memory:", tables)
+	assert.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	err = db.Migrate(ctx)
+	assert.NoError(t, err)
+
+	repo := db.GetRepo()
+	assert.NotNil(t, repo, "GetRepo should return non-nil repo")
+
+	// Verify repo implements the interface by using it
+	entry := stowry.ObjectEntry{
+		Path:        "/test.txt",
+		Size:        100,
+		ETag:        "etag",
+		ContentType: "text/plain",
+	}
+	_, _, err = repo.Upsert(ctx, entry)
+	assert.NoError(t, err, "repo should be functional")
+}
+
+func TestDatabase_Close(t *testing.T) {
+	ctx := context.Background()
+	tables := stowry.Tables{MetaData: "metadata"}
+
+	db, err := sqlite.Connect(ctx, ":memory:", tables)
+	assert.NoError(t, err)
+
+	err = db.Close()
+	assert.NoError(t, err, "close should succeed")
+
+	// After close, operations should fail
+	err = db.Ping(ctx)
+	assert.Error(t, err, "ping should fail after close")
+}
+
+// =============================================================================
+// Repo Tests (via MetaDataRepo interface)
+// =============================================================================
 
 func TestRepo_Upsert(t *testing.T) {
 	t.Run("insert - creates new entry", func(t *testing.T) {

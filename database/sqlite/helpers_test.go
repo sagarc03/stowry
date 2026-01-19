@@ -3,7 +3,6 @@ package sqlite_test
 import (
 	"context"
 	"crypto/rand"
-	"database/sql"
 	"fmt"
 	"math"
 	"math/big"
@@ -12,7 +11,6 @@ import (
 	"github.com/sagarc03/stowry"
 	"github.com/sagarc03/stowry/database/sqlite"
 	"github.com/stretchr/testify/assert"
-	_ "modernc.org/sqlite"
 )
 
 func getRandomString(t *testing.T) string {
@@ -22,45 +20,28 @@ func getRandomString(t *testing.T) string {
 	return fmt.Sprintf("test%x", n.Int64())
 }
 
-// getTestDatabase creates an in-memory SQLite database for testing
-func getTestDatabase(t *testing.T) (*sql.DB, func()) {
-	t.Helper()
-
-	// Use in-memory database with shared cache for testing
-	db, err := sql.Open("sqlite", ":memory:")
-	assert.NoError(t, err, "failed to open sqlite database")
-
-	cleanup := func() {
-		if db != nil {
-			_ = db.Close()
-		}
-	}
-
-	return db, cleanup
-}
-
 // setupTestRepo creates a repo with a unique table name for test isolation
-func setupTestRepo(t *testing.T) (*sqlite.Repo, func()) {
+func setupTestRepo(t *testing.T) (stowry.MetaDataRepo, func()) {
 	t.Helper()
 
-	db, dbCleanup := getTestDatabase(t)
 	ctx := context.Background()
 
 	// Use a unique table name for each test to avoid conflicts
 	tableName := fmt.Sprintf("metadata_%s", getRandomString(t))
 	tables := stowry.Tables{MetaData: tableName}
 
+	// Connect to in-memory database
+	db, err := sqlite.Connect(ctx, ":memory:", tables)
+	assert.NoError(t, err, "failed to connect")
+
 	// Migrate the table
-	err := sqlite.Migrate(ctx, db, tables)
+	err = db.Migrate(ctx)
 	assert.NoError(t, err, "failed to migrate")
 
-	repo, err := sqlite.NewRepo(db, tables)
-	assert.NoError(t, err, "failed to create repo")
+	repo := db.GetRepo()
 
 	cleanup := func() {
-		// Drop the table after the test
-		_ = sqlite.DropTables(ctx, db, tables)
-		dbCleanup()
+		_ = db.Close()
 	}
 
 	return repo, cleanup
