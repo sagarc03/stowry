@@ -63,8 +63,6 @@ func (h *Handler) Router() http.Handler {
 		}))
 	}
 
-	r.Use(PathValidationMiddleware)
-
 	r.Group(func(r chi.Router) {
 		r.Use(AuthMiddleware(h.config.ReadVerifier))
 		r.Get("/", h.handleList)
