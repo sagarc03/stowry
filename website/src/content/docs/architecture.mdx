@@ -118,19 +118,29 @@ The `database` package provides a unified interface for connecting to metadata b
 ### Unified Connection
 
 ```go
-import "github.com/sagarc03/stowry/database"
+import (
+    "github.com/sagarc03/stowry"
+    "github.com/sagarc03/stowry/database"
+)
 
 cfg := database.Config{
-    Type:  "sqlite",  // or "postgres"
-    DSN:   "stowry.db",
-    Table: "stowry_metadata",
+    Type:   "sqlite",  // or "postgres"
+    DSN:    "stowry.db",
+    Tables: stowry.Tables{MetaData: "stowry_metadata"},
 }
 
-repo, cleanup, err := database.Connect(ctx, cfg)
+db, err := database.Connect(ctx, cfg)
 if err != nil {
     log.Fatal(err)
 }
-defer cleanup()
+defer db.Close()
+
+// Run migrations or validate existing schema
+if err := db.Migrate(ctx); err != nil {
+    log.Fatal(err)
+}
+
+repo := db.GetRepo()
 ```
 
 ### SQLite (database/sqlite/)
