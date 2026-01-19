@@ -10,13 +10,13 @@ import (
 )
 
 type MetaData struct {
-	ID            uuid.UUID
-	Path          string
-	ContentType   string
-	Etag          string
-	FileSizeBytes int64
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID            uuid.UUID `json:"id"`
+	Path          string    `json:"path"`
+	ContentType   string    `json:"content_type"`
+	Etag          string    `json:"etag"`
+	FileSizeBytes int64     `json:"file_size_bytes"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 type ObjectEntry struct {
@@ -33,8 +33,8 @@ type ListQuery struct {
 }
 
 type ListResult struct {
-	Items      []MetaData
-	NextCursor string
+	Items      []MetaData `json:"items"`
+	NextCursor string     `json:"next_cursor,omitempty"`
 }
 
 type SaveResult struct {
