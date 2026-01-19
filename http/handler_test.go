@@ -431,3 +431,73 @@ func TestHandler_CORS_Enabled_ActualRequest(t *testing.T) {
 	assert.Equal(t, "http://localhost:3000", rec.Header().Get("Access-Control-Allow-Origin"))
 	assert.Contains(t, rec.Header().Get("Access-Control-Expose-Headers"), "Etag")
 }
+
+func TestHandler_StaticMode_RootPath_CallsGet(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStatic}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	content := "<html></html>"
+	metadata := stowry.MetaData{
+		ID:            uuid.New(),
+		Path:          "index.html",
+		ContentType:   "text/html",
+		Etag:          "abc123",
+		FileSizeBytes: int64(len(content)),
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+
+	// In static mode, GET / should call Get with empty path (service handles index.html)
+	service.On("Get", mock.Anything, "").Return(
+		metadata,
+		readSeekNopCloser{strings.NewReader(content)},
+		nil,
+	)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "text/html", rec.Header().Get("Content-Type"))
+
+	service.AssertExpectations(t)
+	service.AssertNotCalled(t, "List")
+}
+
+func TestHandler_SPAMode_RootPath_CallsGet(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeSPA}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	content := "<html></html>"
+	metadata := stowry.MetaData{
+		ID:            uuid.New(),
+		Path:          "index.html",
+		ContentType:   "text/html",
+		Etag:          "abc123",
+		FileSizeBytes: int64(len(content)),
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+
+	// In SPA mode, GET / should call Get with empty path (service handles index.html)
+	service.On("Get", mock.Anything, "").Return(
+		metadata,
+		readSeekNopCloser{strings.NewReader(content)},
+		nil,
+	)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "text/html", rec.Header().Get("Content-Type"))
+
+	service.AssertExpectations(t)
+	service.AssertNotCalled(t, "List")
+}
