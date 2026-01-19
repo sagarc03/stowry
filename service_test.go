@@ -735,6 +735,39 @@ func TestStowryService_Get(t *testing.T) {
 		repo.AssertExpectations(t)
 		storage.AssertExpectations(t)
 	})
+
+	t.Run("error - empty path returns not found when index.html doesn't exist in static mode", func(t *testing.T) {
+		service, repo, storage := NewStowryServiceWithMode(t, stowry.ModeStatic)
+		ctx := context.Background()
+
+		// First call: index.html (from empty path conversion)
+		repo.On("Get", ctx, "index.html").Return(stowry.MetaData{}, stowry.ErrNotFound).Once()
+		// Fallback call: index.html/index.html (static mode fallback)
+		repo.On("Get", ctx, "index.html/index.html").Return(stowry.MetaData{}, stowry.ErrNotFound).Once()
+
+		_, _, err := service.Get(ctx, "")
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, stowry.ErrNotFound)
+
+		repo.AssertExpectations(t)
+		storage.AssertNotCalled(t, "Get")
+	})
+
+	t.Run("error - empty path returns not found when index.html doesn't exist in spa mode", func(t *testing.T) {
+		service, repo, storage := NewStowryServiceWithMode(t, stowry.ModeSPA)
+		ctx := context.Background()
+
+		// First call: index.html (from empty path conversion)
+		// SPA fallback also tries index.html, so expect two calls
+		repo.On("Get", ctx, "index.html").Return(stowry.MetaData{}, stowry.ErrNotFound).Twice()
+
+		_, _, err := service.Get(ctx, "")
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, stowry.ErrNotFound)
+
+		repo.AssertExpectations(t)
+		storage.AssertNotCalled(t, "Get")
+	})
 }
 
 type mockReadSeekCloser struct {
