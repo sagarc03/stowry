@@ -302,12 +302,27 @@ func (s *StowryService) Get(ctx context.Context, path string) (MetaData, io.Read
 		return MetaData{}, nil, fmt.Errorf("get object: %w", err)
 	}
 
+	// Handle root path based on mode
+	if path == "" {
+		switch s.mode {
+		case ModeStore:
+			return MetaData{}, nil, fmt.Errorf("get object: %w", ErrNotFound)
+		case ModeStatic, ModeSPA:
+			path = "index.html"
+		}
+	}
+
 	m, err := s.repo.Get(ctx, path)
 
-	if s.mode == ModeStatic && errors.Is(err, ErrNotFound) {
-		m, err = s.repo.Get(ctx, filepath.Join(path, "index.html"))
-	} else if s.mode == ModeSPA && errors.Is(err, ErrNotFound) {
-		m, err = s.repo.Get(ctx, "index.html")
+	if errors.Is(err, ErrNotFound) {
+		switch s.mode {
+		case ModeStore:
+			// No fallback in store mode
+		case ModeStatic:
+			m, err = s.repo.Get(ctx, filepath.Join(path, "index.html"))
+		case ModeSPA:
+			m, err = s.repo.Get(ctx, "index.html")
+		}
 	}
 
 	if err != nil {

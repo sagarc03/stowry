@@ -37,11 +37,13 @@ type HandlerConfig struct {
 	CORS          CORSConfig
 }
 
+// Handler provides HTTP handlers for object storage operations.
 type Handler struct {
 	config  HandlerConfig
 	service Service
 }
 
+// NewHandler creates a new Handler with the given configuration and service.
 func NewHandler(config *HandlerConfig, service Service) *Handler {
 	return &Handler{
 		config:  *config,
@@ -49,6 +51,9 @@ func NewHandler(config *HandlerConfig, service Service) *Handler {
 	}
 }
 
+// Router returns an http.Handler with routes configured based on mode.
+// In store mode, GET / returns a list of objects.
+// In static/SPA modes, GET / is handled by the get handler (serves index.html via service).
 func (h *Handler) Router() http.Handler {
 	r := chi.NewRouter()
 
@@ -63,11 +68,11 @@ func (h *Handler) Router() http.Handler {
 		}))
 	}
 
-	r.Use(PathValidationMiddleware)
-
 	r.Group(func(r chi.Router) {
 		r.Use(AuthMiddleware(h.config.ReadVerifier))
-		r.Get("/", h.handleList)
+		if h.config.Mode == stowry.ModeStore {
+			r.Get("/", h.handleList)
+		}
 		r.Get("/*", h.handleGet)
 	})
 
@@ -81,11 +86,6 @@ func (h *Handler) Router() http.Handler {
 }
 
 func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
-	if h.config.Mode != stowry.ModeStore {
-		h.handleGet(w, r)
-		return
-	}
-
 	prefix := r.URL.Query().Get("prefix")
 	limitStr := r.URL.Query().Get("limit")
 	cursor := r.URL.Query().Get("cursor")
@@ -115,16 +115,7 @@ func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/")
 
-	if path == "" {
-		if h.config.Mode == stowry.ModeStatic || h.config.Mode == stowry.ModeSPA {
-			path = "index.html"
-		} else {
-			WriteError(w, http.StatusNotFound, "not_found", "Object not found")
-			return
-		}
-	}
-
-	if !stowry.IsValidPath(path) {
+	if path != "" && !stowry.IsValidPath(path) {
 		WriteError(w, http.StatusBadRequest, "invalid_path", "Invalid path")
 		return
 	}

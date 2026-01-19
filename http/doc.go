@@ -58,16 +58,10 @@
 //
 // # Middleware
 //
-// The package provides two middleware functions:
-//
-// AuthMiddleware - Signature verification (AWS V4 or Stowry native):
+// The package provides AuthMiddleware for signature verification (AWS V4 or Stowry native):
 //
 //	router.Use(http.AuthMiddleware(verifier))  // authenticated
 //	router.Use(http.AuthMiddleware(nil))       // public access
 //
-// PathValidationMiddleware - Path traversal protection:
-//
-//	router.Use(http.PathValidationMiddleware)
-//
-// Both middleware are automatically applied by Handler.Router().
+// Path validation is handled by individual handlers and the service layer.
 package http
