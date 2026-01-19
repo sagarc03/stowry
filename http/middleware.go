@@ -1,11 +1,6 @@
 package http
 
-import (
-	"net/http"
-	"strings"
-
-	"github.com/sagarc03/stowry"
-)
+import "net/http"
 
 // RequestVerifier verifies HTTP requests for authentication.
 // Implementations should return nil if the request is valid,
@@ -34,23 +29,4 @@ func AuthMiddleware(verifier RequestVerifier) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
-}
-
-// PathValidationMiddleware validates request paths
-func PathValidationMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := strings.TrimPrefix(r.URL.Path, "/")
-
-		if path == "" {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		if !stowry.IsValidPath(path) {
-			WriteError(w, http.StatusBadRequest, "invalid_path", "Invalid path format")
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
 }
