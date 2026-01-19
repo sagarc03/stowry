@@ -1,12 +1,12 @@
-package sqlite
+package postgres
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/sagarc03/stowry"
 )
 
@@ -16,12 +16,12 @@ type columnInfo struct {
 	isNullable bool
 }
 
-func validateTableSchema(ctx context.Context, db *sql.DB, tableName string, expectedSchema map[string]columnInfo) error {
+func validateTableSchema(ctx context.Context, pool *pgxpool.Pool, tableName string, expectedSchema map[string]columnInfo) error {
 	if !stowry.IsValidTableName(tableName) {
 		return fmt.Errorf("validate table schema: invalid table name: %s", tableName)
 	}
 
-	exists, err := tableExists(ctx, db, tableName)
+	exists, err := tableExists(ctx, pool, tableName)
 	if err != nil {
 		return fmt.Errorf("validate table schema: %w", err)
 	}
@@ -30,30 +30,29 @@ func validateTableSchema(ctx context.Context, db *sql.DB, tableName string, expe
 		return fmt.Errorf("validate table schema: table %s does not exist", tableName)
 	}
 
-	// SQLite uses PRAGMA table_info to get column information
-	query := fmt.Sprintf(`PRAGMA table_info(%s)`, quoteIdentifier(tableName))
+	query := `
+		SELECT column_name, data_type, is_nullable
+		FROM information_schema.columns
+		WHERE table_name = $1
+		ORDER BY ordinal_position
+	`
 
-	rows, err := db.QueryContext(ctx, query)
+	rows, err := pool.Query(ctx, query, tableName)
 	if err != nil {
 		return fmt.Errorf("validate table schema: query columns: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
+	defer rows.Close()
 
 	actualColumns := make(map[string]columnInfo)
 	for rows.Next() {
-		var cid int
-		var name, dataType string
-		var notNull int
-		var dfltValue sql.NullString
-		var pk int
-
-		if err := rows.Scan(&cid, &name, &dataType, &notNull, &dfltValue, &pk); err != nil {
+		var name, dataType, nullable string
+		if err := rows.Scan(&name, &dataType, &nullable); err != nil {
 			return fmt.Errorf("validate table schema: scan column: %w", err)
 		}
 		actualColumns[name] = columnInfo{
 			name:       name,
 			dataType:   strings.ToLower(dataType),
-			isNullable: notNull == 0,
+			isNullable: nullable == "YES",
 		}
 	}
 
@@ -103,17 +102,21 @@ func validateTableSchema(ctx context.Context, db *sql.DB, tableName string, expe
 	return nil
 }
 
-func tableExists(ctx context.Context, db *sql.DB, tableName string) (bool, error) {
-	var name string
-	query := `SELECT name FROM sqlite_master WHERE type='table' AND name=?`
-	err := db.QueryRowContext(ctx, query, tableName).Scan(&name)
+func tableExists(ctx context.Context, pool *pgxpool.Pool, tableName string) (bool, error) {
+	var exists bool
+	query := `
+		SELECT EXISTS (
+			SELECT 1 
+			FROM information_schema.tables 
+			WHERE table_schema = 'public' 
+			AND table_name = $1
+		)
+	`
+	err := pool.QueryRow(ctx, query, tableName).Scan(&exists)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return false, nil
-		}
 		return false, fmt.Errorf("check table exists: %w", err)
 	}
-	return true, nil
+	return exists, nil
 }
 
 type tableValidation struct {
@@ -122,18 +125,18 @@ type tableValidation struct {
 }
 
 var metaDataTableSchema = map[string]columnInfo{
-	"id":              {"id", "text", false},
+	"id":              {"id", "uuid", false},
 	"path":            {"path", "text", false},
 	"content_type":    {"content_type", "text", false},
 	"etag":            {"etag", "text", false},
-	"file_size_bytes": {"file_size_bytes", "integer", false},
-	"created_at":      {"created_at", "text", false},
-	"updated_at":      {"updated_at", "text", false},
-	"deleted_at":      {"deleted_at", "text", true},
-	"cleaned_up_at":   {"cleaned_up_at", "text", true},
+	"file_size_bytes": {"file_size_bytes", "bigint", false},
+	"created_at":      {"created_at", "timestamp with time zone", false},
+	"updated_at":      {"updated_at", "timestamp with time zone", false},
+	"deleted_at":      {"deleted_at", "timestamp with time zone", true},
+	"cleaned_up_at":   {"cleaned_up_at", "timestamp with time zone", true},
 }
 
-func getTableValidations(tables Tables) []tableValidation {
+func getTableValidations(tables stowry.Tables) []tableValidation {
 	validations := []tableValidation{}
 
 	validations = append(validations, tableValidation{
@@ -141,17 +144,11 @@ func getTableValidations(tables Tables) []tableValidation {
 		expectedSchema: metaDataTableSchema,
 	})
 
+	// Future table validations would be added here:
+	// validations = append(validations, tableValidation{
+	//     tableName:      tables.Users,
+	//     expectedSchema: usersTableSchema,
+	// })
+
 	return validations
-}
-
-func ValidateSchema(ctx context.Context, db *sql.DB, tables Tables) error {
-	validations := getTableValidations(tables)
-
-	for _, validation := range validations {
-		if err := validateTableSchema(ctx, db, validation.tableName, validation.expectedSchema); err != nil {
-			return fmt.Errorf("validate schema %s: %w", validation.tableName, err)
-		}
-	}
-
-	return nil
 }

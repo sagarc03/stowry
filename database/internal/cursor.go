@@ -1,39 +1,12 @@
-package stowry
+// Package internal provides internal utilities for database backends.
+package internal
 
 import (
 	"encoding/base64"
-	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 )
-
-// Tables holds configurable table names for metadata storage.
-// This allows multi-tenant deployments to use different table names.
-type Tables struct {
-	MetaData string
-}
-
-var validTableNameRegex = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
-
-// IsValidTableName checks if a table name is valid (lowercase, alphanumeric with underscores, max 63 chars).
-func IsValidTableName(name string) bool {
-	return validTableNameRegex.MatchString(name) && len(name) <= 63
-}
-
-// Validate checks that all required table names are set and valid.
-func (t Tables) Validate() error {
-	if t.MetaData == "" {
-		return errors.New("validate tables: metadata table name cannot be empty")
-	}
-
-	if !IsValidTableName(t.MetaData) {
-		return fmt.Errorf("validate tables: invalid metadata table name: %s (must match ^[a-z_][a-z0-9_]*$ and be <= 63 chars)", t.MetaData)
-	}
-
-	return nil
-}
 
 // Cursor represents pagination cursor data for list operations.
 type Cursor struct {
