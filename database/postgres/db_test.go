@@ -14,6 +14,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/sagarc03/stowry"
 	"github.com/sagarc03/stowry/database/postgres"
 	"github.com/stretchr/testify/assert"
 )
@@ -25,7 +26,7 @@ func TestValidateSchema(t *testing.T) {
 		defer pool.Close()
 
 		ctx := context.Background()
-		tables := postgres.Tables{MetaData: "metadata"}
+		tables := stowry.Tables{MetaData: "metadata"}
 
 		err := postgres.Migrate(ctx, pool, tables)
 		assert.NoError(t, err, "failed to migrate")
@@ -40,7 +41,7 @@ func TestValidateSchema(t *testing.T) {
 		defer pool.Close()
 
 		ctx := context.Background()
-		tables := postgres.Tables{MetaData: "nonexistent_table"}
+		tables := stowry.Tables{MetaData: "nonexistent_table"}
 
 		err := postgres.ValidateSchema(ctx, pool, tables)
 		assert.Error(t, err, "expected error for nonexistent table")
@@ -52,7 +53,7 @@ func TestValidateSchema(t *testing.T) {
 		defer pool.Close()
 
 		ctx := context.Background()
-		tables := postgres.Tables{MetaData: "incomplete_metadata"}
+		tables := stowry.Tables{MetaData: "incomplete_metadata"}
 
 		_, err := pool.Exec(ctx, `
 			CREATE TABLE incomplete_metadata (
@@ -72,7 +73,7 @@ func TestValidateSchema(t *testing.T) {
 		defer pool.Close()
 
 		ctx := context.Background()
-		tables := postgres.Tables{MetaData: "wrong_type_metadata"}
+		tables := stowry.Tables{MetaData: "wrong_type_metadata"}
 
 		_, err := pool.Exec(ctx, `
 			CREATE TABLE wrong_type_metadata (
@@ -99,7 +100,7 @@ func TestValidateSchema(t *testing.T) {
 		defer pool.Close()
 
 		ctx := context.Background()
-		tables := postgres.Tables{MetaData: "wrong_nullable_metadata"}
+		tables := stowry.Tables{MetaData: "wrong_nullable_metadata"}
 
 		_, err := pool.Exec(ctx, `
 			CREATE TABLE wrong_nullable_metadata (
@@ -126,7 +127,7 @@ func TestValidateSchema(t *testing.T) {
 		defer pool.Close()
 
 		ctx := context.Background()
-		tables := postgres.Tables{MetaData: "metadata_extended"}
+		tables := stowry.Tables{MetaData: "metadata_extended"}
 
 		err := postgres.Migrate(ctx, pool, tables)
 		assert.NoError(t, err, "failed to migrate")
@@ -148,7 +149,7 @@ func TestValidateSchema(t *testing.T) {
 		defer pool.Close()
 
 		ctx := context.Background()
-		tables := postgres.Tables{MetaData: "metadata"}
+		tables := stowry.Tables{MetaData: "metadata"}
 
 		err := postgres.Migrate(ctx, pool, tables)
 		assert.NoError(t, err, "first migrate failed")

@@ -6,6 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/sagarc03/stowry"
 )
 
 type TableMigration struct {
@@ -15,7 +16,7 @@ type TableMigration struct {
 }
 
 // getTableMigrations returns all table migrations for the app
-func getTableMigrations(tables Tables) []TableMigration {
+func getTableMigrations(tables stowry.Tables) []TableMigration {
 	migrations := []TableMigration{}
 
 	migrations = append(migrations, TableMigration{
@@ -30,7 +31,7 @@ func getTableMigrations(tables Tables) []TableMigration {
 	return migrations
 }
 
-func Migrate(ctx context.Context, pool *pgxpool.Pool, tables Tables) error {
+func Migrate(ctx context.Context, pool *pgxpool.Pool, tables stowry.Tables) error {
 	migrations := getTableMigrations(tables)
 
 	for _, migration := range migrations {
@@ -42,7 +43,7 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool, tables Tables) error {
 	return nil
 }
 
-func DropTables(ctx context.Context, pool *pgxpool.Pool, tables Tables) error {
+func DropTables(ctx context.Context, pool *pgxpool.Pool, tables stowry.Tables) error {
 	migrations := getTableMigrations(tables)
 
 	for i := len(migrations) - 1; i >= 0; i-- {

@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/sagarc03/stowry"
 	"github.com/sagarc03/stowry/database/postgres"
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
@@ -98,11 +99,11 @@ type tableSchema struct {
 
 // getExpectedTableSchemas returns the expected schema for all tables.
 // When adding a new table migration:
-// 1. Add the table name to postgres.Tables struct
+// 1. Add the table name to stowry.Tables struct
 // 2. Add table creation to getTableMigrations() in migrations.go
 // 3. Add a new tableSchema entry here with expected columns, indexes, and constraints
 // 4. Add the table name to getAllTableNames()
-func getExpectedTableSchemas(tables postgres.Tables) []tableSchema {
+func getExpectedTableSchemas(tables stowry.Tables) []tableSchema {
 	return []tableSchema{
 		{
 			name: tables.MetaData,
@@ -141,7 +142,7 @@ func getExpectedTableSchemas(tables postgres.Tables) []tableSchema {
 
 // getAllTableNames returns all table names in the order they are created.
 // Update this when adding new tables.
-func getAllTableNames(tables postgres.Tables) []string {
+func getAllTableNames(tables stowry.Tables) []string {
 	return []string{
 		tables.MetaData,
 		// Add new table names here in creation order:
@@ -230,7 +231,7 @@ func TestMigrate(t *testing.T) {
 		defer pool.Close()
 
 		ctx := context.Background()
-		tables := postgres.Tables{MetaData: "metadata"}
+		tables := stowry.Tables{MetaData: "metadata"}
 
 		err := postgres.Migrate(ctx, pool, tables)
 		assert.NoError(t, err, "Migrate failed")
@@ -249,7 +250,7 @@ func TestMigrate(t *testing.T) {
 		defer pool.Close()
 
 		ctx := context.Background()
-		tables := postgres.Tables{MetaData: "metadata"}
+		tables := stowry.Tables{MetaData: "metadata"}
 
 		err := postgres.Migrate(ctx, pool, tables)
 		assert.NoError(t, err, "first Migrate failed")
@@ -266,7 +267,7 @@ func TestDropTables(t *testing.T) {
 		defer pool.Close()
 
 		ctx := context.Background()
-		tables := postgres.Tables{MetaData: "metadata"}
+		tables := stowry.Tables{MetaData: "metadata"}
 
 		err := postgres.Migrate(ctx, pool, tables)
 		assert.NoError(t, err, "Migrate failed")
@@ -298,7 +299,7 @@ func TestDropTables(t *testing.T) {
 		defer pool.Close()
 
 		ctx := context.Background()
-		tables := postgres.Tables{MetaData: "metadata"}
+		tables := stowry.Tables{MetaData: "metadata"}
 
 		err := postgres.Migrate(ctx, pool, tables)
 		assert.NoError(t, err, "Migrate failed")
@@ -318,7 +319,7 @@ func TestMigrate_DropTables_Integration(t *testing.T) {
 		defer pool.Close()
 
 		ctx := context.Background()
-		tables := postgres.Tables{MetaData: "metadata"}
+		tables := stowry.Tables{MetaData: "metadata"}
 		tableNames := getAllTableNames(tables)
 
 		err := postgres.Migrate(ctx, pool, tables)

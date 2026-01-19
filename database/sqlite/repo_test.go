@@ -16,28 +16,28 @@ func TestNewRepo(t *testing.T) {
 	defer cleanup()
 
 	t.Run("success - valid table name", func(t *testing.T) {
-		tables := sqlite.Tables{MetaData: "metadata_valid"}
+		tables := stowry.Tables{MetaData: "metadata_valid"}
 		repo, err := sqlite.NewRepo(db, tables)
 		assert.NoError(t, err)
 		assert.NotNil(t, repo)
 	})
 
 	t.Run("error - empty table name", func(t *testing.T) {
-		tables := sqlite.Tables{MetaData: ""}
+		tables := stowry.Tables{MetaData: ""}
 		repo, err := sqlite.NewRepo(db, tables)
 		assert.Error(t, err, "expected error for empty table name")
 		assert.Nil(t, repo, "expected nil repo for invalid table name")
 	})
 
 	t.Run("error - invalid table name with uppercase", func(t *testing.T) {
-		tables := sqlite.Tables{MetaData: "MetaData"}
+		tables := stowry.Tables{MetaData: "MetaData"}
 		repo, err := sqlite.NewRepo(db, tables)
 		assert.Error(t, err, "expected error for table name with uppercase")
 		assert.Nil(t, repo, "expected nil repo for invalid table name")
 	})
 
 	t.Run("error - invalid table name with special chars", func(t *testing.T) {
-		tables := sqlite.Tables{MetaData: "meta-data"}
+		tables := stowry.Tables{MetaData: "meta-data"}
 		repo, err := sqlite.NewRepo(db, tables)
 		assert.Error(t, err, "expected error for table name with special chars")
 		assert.Nil(t, repo, "expected nil repo for invalid table name")
@@ -49,7 +49,7 @@ func TestNewRepo(t *testing.T) {
 			longName.WriteString("a")
 		}
 
-		tables := sqlite.Tables{MetaData: longName.String()}
+		tables := stowry.Tables{MetaData: longName.String()}
 		repo, err := sqlite.NewRepo(db, tables)
 		assert.Error(t, err, "expected error for table name > 63 chars")
 		assert.Nil(t, repo, "expected nil repo for invalid table name")
