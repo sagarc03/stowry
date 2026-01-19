@@ -314,7 +314,7 @@ func (s *StowryService) Get(ctx context.Context, path string) (MetaData, io.Read
 
 	m, err := s.repo.Get(ctx, path)
 
-	if s.mode != ModeStore && errors.Is(err, ErrNotFound) {
+	if errors.Is(err, ErrNotFound) {
 		switch s.mode {
 		case ModeStore:
 			// No fallback in store mode
