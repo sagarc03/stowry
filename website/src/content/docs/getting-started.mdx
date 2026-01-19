@@ -41,6 +41,7 @@ database:
   type: sqlite
   dsn: stowry.db
   table: stowry_metadata
+  auto_migrate: true
 
 storage:
   path: ./data
@@ -60,7 +61,73 @@ log:
   level: info
 ```
 
-## Step 3: Start the Server
+## Step 3: Database Setup
+
+The config above uses `auto_migrate: true`, which automatically creates the database tables on startup. This is the easiest option for getting started.
+
+The table name (`stowry_metadata` in this example) can be anything you want - just make sure it matches between your config and the SQL schema.
+
+**Alternative: Manual Migration**
+
+If you prefer to manage the schema yourself, remove `auto_migrate: true` and run the SQL manually (replace `stowry_metadata` with your chosen table name):
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+<Tabs>
+  <TabItem label="SQLite">
+```sql
+CREATE TABLE IF NOT EXISTS stowry_metadata (
+    id TEXT NOT NULL PRIMARY KEY,
+    path TEXT NOT NULL UNIQUE,
+    content_type TEXT NOT NULL,
+    etag TEXT NOT NULL,
+    file_size_bytes INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    deleted_at TEXT,
+    cleaned_up_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_stowry_metadata_deleted_at
+ON stowry_metadata (deleted_at);
+
+CREATE INDEX IF NOT EXISTS idx_stowry_metadata_pending_cleanup
+ON stowry_metadata (deleted_at, cleaned_up_at);
+
+CREATE INDEX IF NOT EXISTS idx_stowry_metadata_active_list
+ON stowry_metadata (created_at, path);
+```
+  </TabItem>
+  <TabItem label="PostgreSQL">
+```sql
+CREATE TABLE IF NOT EXISTS stowry_metadata (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    path TEXT NOT NULL UNIQUE,
+    content_type TEXT NOT NULL,
+    etag TEXT NOT NULL,
+    file_size_bytes BIGINT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    deleted_at TIMESTAMPTZ,
+    cleaned_up_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_stowry_metadata_deleted_at
+ON stowry_metadata (deleted_at)
+WHERE (deleted_at IS NOT NULL);
+
+CREATE INDEX IF NOT EXISTS idx_stowry_metadata_pending_cleanup
+ON stowry_metadata (deleted_at, cleaned_up_at)
+WHERE (deleted_at IS NOT NULL AND cleaned_up_at IS NULL);
+
+CREATE INDEX IF NOT EXISTS idx_stowry_metadata_active_list
+ON stowry_metadata (created_at, path)
+WHERE (deleted_at IS NULL);
+```
+  </TabItem>
+</Tabs>
+
+## Step 4: Start the Server
 
 ```bash
 ./stowry serve
@@ -72,7 +139,7 @@ You should see:
 INFO starting server addr=:5708 mode=store
 ```
 
-## Step 4: Upload a File
+## Step 5: Upload a File
 
 Stowry uses presigned URLs for authentication. For this quick test, enable public write access temporarily by setting `public_write: true` in your config, then restart the server.
 
@@ -99,7 +166,7 @@ Response:
 }
 ```
 
-## Step 5: Download the File
+## Step 6: Download the File
 
 ```bash
 curl http://localhost:5708/hello.txt
@@ -111,7 +178,7 @@ Output:
 Hello, Stowry!
 ```
 
-## Step 6: Use Presigned URLs (Production)
+## Step 7: Use Presigned URLs (Production)
 
 For production, disable public access and use presigned URLs. See the [Authentication guide](authentication) for generating presigned URLs with the stowry-go SDK or AWS SDK.
 

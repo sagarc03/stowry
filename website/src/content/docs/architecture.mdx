@@ -158,35 +158,37 @@ repo := db.GetRepo()
 
 ### Schema
 
-Both backends use the same schema:
+Both backends use equivalent schemas with database-specific types. See [Configuration - Database](/configuration#database) for the full SQL if you prefer manual migrations.
 
-```sql
-CREATE TABLE stowry_metadata (
-    id UUID PRIMARY KEY,
-    path TEXT NOT NULL UNIQUE,
-    content_type TEXT NOT NULL,
-    etag TEXT NOT NULL,
-    file_size_bytes BIGINT NOT NULL,
-    created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL,
-    deleted_at TIMESTAMP,
-    cleaned_up_at TIMESTAMP
-);
+**PostgreSQL** uses `UUID`, `TIMESTAMPTZ`, and `BIGINT` types with partial indexes for performance.
 
-CREATE INDEX idx_path ON stowry_metadata(path);
-CREATE INDEX idx_deleted_at ON stowry_metadata(deleted_at);
-CREATE INDEX idx_updated_at_path ON stowry_metadata(updated_at, path);
-```
+**SQLite** uses `TEXT` for all types (UUID as string, timestamps as ISO8601 strings).
 
 ### Migrations
 
-Migrations are code-based, not SQL files. They run automatically when using `database.Connect()`:
+Migrations are code-based, not SQL files. The database provides explicit methods for migration and validation:
 
 ```go
-// Migrations run automatically via Connect()
-repo, cleanup, err := database.Connect(ctx, cfg)
-// Schema is migrated and validated automatically
+db, err := database.Connect(ctx, cfg)
+if err != nil {
+    log.Fatal(err)
+}
+defer db.Close()
+
+// Run migrations (creates tables if they don't exist)
+if err := db.Migrate(ctx); err != nil {
+    log.Fatal(err)
+}
+
+// Validate schema matches expected structure
+if err := db.Validate(ctx); err != nil {
+    log.Fatal(err)
+}
+
+repo := db.GetRepo()
 ```
+
+The CLI handles this automatically when `database.auto_migrate: true` is set in the config.
 
 ## File Storage (filesystem/)
 
