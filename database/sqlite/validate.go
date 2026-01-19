@@ -143,15 +143,3 @@ func getTableValidations(tables stowry.Tables) []tableValidation {
 
 	return validations
 }
-
-func ValidateSchema(ctx context.Context, db *sql.DB, tables stowry.Tables) error {
-	validations := getTableValidations(tables)
-
-	for _, validation := range validations {
-		if err := validateTableSchema(ctx, db, validation.tableName, validation.expectedSchema); err != nil {
-			return fmt.Errorf("validate schema %s: %w", validation.tableName, err)
-		}
-	}
-
-	return nil
-}

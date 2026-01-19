@@ -13,25 +13,12 @@ import (
 	"github.com/sagarc03/stowry/database/internal"
 )
 
-type Repo struct {
+type repo struct {
 	pool      *pgxpool.Pool
 	tableName string
 }
 
-func NewRepo(pool *pgxpool.Pool, tables stowry.Tables) (*Repo, error) {
-	if err := tables.Validate(); err != nil {
-		return nil, fmt.Errorf("new repo: %w", err)
-	}
-
-	return &Repo{pool: pool, tableName: tables.MetaData}, nil
-}
-
-// Ping verifies database connectivity
-func (r *Repo) Ping(ctx context.Context) error {
-	return r.pool.Ping(ctx)
-}
-
-func (r *Repo) Get(ctx context.Context, path string) (stowry.MetaData, error) {
+func (r *repo) Get(ctx context.Context, path string) (stowry.MetaData, error) {
 	query := fmt.Sprintf(`
 		SELECT id, path, content_type, etag, file_size_bytes, created_at, updated_at
 		FROM %s
@@ -52,7 +39,7 @@ func (r *Repo) Get(ctx context.Context, path string) (stowry.MetaData, error) {
 	return m, nil
 }
 
-func (r *Repo) Upsert(ctx context.Context, entry stowry.ObjectEntry) (stowry.MetaData, bool, error) {
+func (r *repo) Upsert(ctx context.Context, entry stowry.ObjectEntry) (stowry.MetaData, bool, error) {
 	query := fmt.Sprintf(`
 		INSERT INTO %s (path, content_type, etag, file_size_bytes)
 		VALUES ($1, $2, $3, $4)
@@ -80,7 +67,7 @@ func (r *Repo) Upsert(ctx context.Context, entry stowry.ObjectEntry) (stowry.Met
 	return m, inserted, nil
 }
 
-func (r *Repo) Delete(ctx context.Context, path string) error {
+func (r *repo) Delete(ctx context.Context, path string) error {
 	query := fmt.Sprintf(`
 		UPDATE %s
 		SET deleted_at = NOW()
@@ -99,15 +86,15 @@ func (r *Repo) Delete(ctx context.Context, path string) error {
 	return nil
 }
 
-func (r *Repo) List(ctx context.Context, q stowry.ListQuery) (stowry.ListResult, error) {
+func (r *repo) List(ctx context.Context, q stowry.ListQuery) (stowry.ListResult, error) {
 	return r.listWithCondition(ctx, q, "deleted_at IS NULL", "list")
 }
 
-func (r *Repo) ListPendingCleanup(ctx context.Context, q stowry.ListQuery) (stowry.ListResult, error) {
+func (r *repo) ListPendingCleanup(ctx context.Context, q stowry.ListQuery) (stowry.ListResult, error) {
 	return r.listWithCondition(ctx, q, "deleted_at IS NOT NULL AND cleaned_up_at IS NULL", "list pending cleanup")
 }
 
-func (r *Repo) listWithCondition(ctx context.Context, q stowry.ListQuery, whereCondition, opName string) (stowry.ListResult, error) {
+func (r *repo) listWithCondition(ctx context.Context, q stowry.ListQuery, whereCondition, opName string) (stowry.ListResult, error) {
 	cursor, err := internal.DecodeCursor(q.Cursor)
 	if err != nil {
 		return stowry.ListResult{}, fmt.Errorf("%s: %w", opName, err)
@@ -168,7 +155,7 @@ func (r *Repo) listWithCondition(ctx context.Context, q stowry.ListQuery, whereC
 	return stowry.ListResult{Items: items, NextCursor: nextCursor}, nil
 }
 
-func (r *Repo) MarkCleanedUp(ctx context.Context, id uuid.UUID) error {
+func (r *repo) MarkCleanedUp(ctx context.Context, id uuid.UUID) error {
 	query := fmt.Sprintf(`
 		UPDATE %s
 		SET cleaned_up_at = NOW()

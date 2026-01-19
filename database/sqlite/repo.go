@@ -13,25 +13,12 @@ import (
 	"github.com/sagarc03/stowry/database/internal"
 )
 
-type Repo struct {
+type repo struct {
 	db        *sql.DB
 	tableName string
 }
 
-func NewRepo(db *sql.DB, tables stowry.Tables) (*Repo, error) {
-	if err := tables.Validate(); err != nil {
-		return nil, fmt.Errorf("new repo: %w", err)
-	}
-
-	return &Repo{db: db, tableName: tables.MetaData}, nil
-}
-
-// Ping verifies database connectivity
-func (r *Repo) Ping(ctx context.Context) error {
-	return r.db.PingContext(ctx)
-}
-
-func (r *Repo) Get(ctx context.Context, path string) (stowry.MetaData, error) {
+func (r *repo) Get(ctx context.Context, path string) (stowry.MetaData, error) {
 	query := fmt.Sprintf( //nolint:gosec // G201: table name is validated
 		`SELECT id, path, content_type, etag, file_size_bytes, created_at, updated_at
 		FROM %s
@@ -69,7 +56,7 @@ func (r *Repo) Get(ctx context.Context, path string) (stowry.MetaData, error) {
 	return m, nil
 }
 
-func (r *Repo) Upsert(ctx context.Context, entry stowry.ObjectEntry) (stowry.MetaData, bool, error) {
+func (r *repo) Upsert(ctx context.Context, entry stowry.ObjectEntry) (stowry.MetaData, bool, error) {
 	// Check if entry exists first to determine if this is an insert or update
 	var existingID string
 	checkQuery := fmt.Sprintf(`SELECT id FROM %s WHERE path = ?`, r.tableName) //nolint:gosec // table name is validated
@@ -133,7 +120,7 @@ func (r *Repo) Upsert(ctx context.Context, entry stowry.ObjectEntry) (stowry.Met
 	return m, isInsert, nil
 }
 
-func (r *Repo) Delete(ctx context.Context, path string) error {
+func (r *repo) Delete(ctx context.Context, path string) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	query := fmt.Sprintf( //nolint:gosec // G201: table name is validated
 		`UPDATE %s
@@ -157,15 +144,15 @@ func (r *Repo) Delete(ctx context.Context, path string) error {
 	return nil
 }
 
-func (r *Repo) List(ctx context.Context, q stowry.ListQuery) (stowry.ListResult, error) {
+func (r *repo) List(ctx context.Context, q stowry.ListQuery) (stowry.ListResult, error) {
 	return r.listWithCondition(ctx, q, "deleted_at IS NULL", "list")
 }
 
-func (r *Repo) ListPendingCleanup(ctx context.Context, q stowry.ListQuery) (stowry.ListResult, error) {
+func (r *repo) ListPendingCleanup(ctx context.Context, q stowry.ListQuery) (stowry.ListResult, error) {
 	return r.listWithCondition(ctx, q, "deleted_at IS NOT NULL AND cleaned_up_at IS NULL", "list pending cleanup")
 }
 
-func (r *Repo) listWithCondition(ctx context.Context, q stowry.ListQuery, whereCondition, opName string) (stowry.ListResult, error) {
+func (r *repo) listWithCondition(ctx context.Context, q stowry.ListQuery, whereCondition, opName string) (stowry.ListResult, error) {
 	cursor, err := internal.DecodeCursor(q.Cursor)
 	if err != nil {
 		return stowry.ListResult{}, fmt.Errorf("%s: %w", opName, err)
@@ -245,7 +232,7 @@ func (r *Repo) listWithCondition(ctx context.Context, q stowry.ListQuery, whereC
 	return stowry.ListResult{Items: items, NextCursor: nextCursor}, nil
 }
 
-func (r *Repo) MarkCleanedUp(ctx context.Context, id uuid.UUID) error {
+func (r *repo) MarkCleanedUp(ctx context.Context, id uuid.UUID) error {
 	now := time.Now().UTC().Format(time.RFC3339Nano)
 	query := fmt.Sprintf( //nolint:gosec // G201: table name is validated
 		`UPDATE %s
