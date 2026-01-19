@@ -32,16 +32,35 @@ func runInit(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
 
 	dbCfg := database.Config{
-		Type:  viper.GetString("database.type"),
-		DSN:   viper.GetString("database.dsn"),
-		Table: viper.GetString("database.table"),
+		Type:   viper.GetString("database.type"),
+		DSN:    viper.GetString("database.dsn"),
+		Tables: stowry.Tables{MetaData: viper.GetString("database.table")},
 	}
 
-	repo, closeDB, err := database.Connect(ctx, dbCfg)
+	if err := dbCfg.Tables.Validate(); err != nil {
+		return fmt.Errorf("invalid database config: %w", err)
+	}
+
+	db, err := database.Connect(ctx, dbCfg)
 	if err != nil {
 		return fmt.Errorf("connect database: %w", err)
 	}
-	defer closeDB()
+	defer func() { _ = db.Close() }()
+
+	if err = db.Ping(ctx); err != nil {
+		return fmt.Errorf("ping database: %w", err)
+	}
+
+	// Always migrate for init command - we're setting up the database
+	if err = db.Migrate(ctx); err != nil {
+		return fmt.Errorf("migrate database: %w", err)
+	}
+
+	if err = db.Validate(ctx); err != nil {
+		return fmt.Errorf("validate database schema: %w", err)
+	}
+
+	repo := db.GetRepo()
 
 	storagePath := viper.GetString("storage.path")
 	_, err = os.Stat(storagePath)
