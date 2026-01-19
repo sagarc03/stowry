@@ -133,7 +133,7 @@ var metaDataTableSchema = map[string]columnInfo{
 	"cleaned_up_at":   {"cleaned_up_at", "text", true},
 }
 
-func getTableValidations(tables Tables) []tableValidation {
+func getTableValidations(tables stowry.Tables) []tableValidation {
 	validations := []tableValidation{}
 
 	validations = append(validations, tableValidation{
@@ -144,7 +144,7 @@ func getTableValidations(tables Tables) []tableValidation {
 	return validations
 }
 
-func ValidateSchema(ctx context.Context, db *sql.DB, tables Tables) error {
+func ValidateSchema(ctx context.Context, db *sql.DB, tables stowry.Tables) error {
 	validations := getTableValidations(tables)
 
 	for _, validation := range validations {

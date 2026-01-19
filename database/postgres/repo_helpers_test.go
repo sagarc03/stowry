@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/sagarc03/stowry"
 	"github.com/sagarc03/stowry/database/postgres"
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
@@ -74,7 +75,7 @@ func setupTestRepo(t *testing.T) (*postgres.Repo, func()) {
 
 	// Use a unique table name for each test to avoid conflicts
 	tableName := fmt.Sprintf("metadata_%s", getRandomString(t))
-	tables := postgres.Tables{MetaData: tableName}
+	tables := stowry.Tables{MetaData: tableName}
 
 	// Migrate the table
 	err := postgres.Migrate(ctx, pool, tables)

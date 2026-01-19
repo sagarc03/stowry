@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/sagarc03/stowry"
 	"github.com/sagarc03/stowry/database/sqlite"
 	"github.com/stretchr/testify/assert"
 	_ "modernc.org/sqlite"
@@ -47,7 +48,7 @@ func setupTestRepo(t *testing.T) (*sqlite.Repo, func()) {
 
 	// Use a unique table name for each test to avoid conflicts
 	tableName := fmt.Sprintf("metadata_%s", getRandomString(t))
-	tables := sqlite.Tables{MetaData: tableName}
+	tables := stowry.Tables{MetaData: tableName}
 
 	// Migrate the table
 	err := sqlite.Migrate(ctx, db, tables)

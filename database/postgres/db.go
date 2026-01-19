@@ -136,7 +136,7 @@ var metaDataTableSchema = map[string]columnInfo{
 	"cleaned_up_at":   {"cleaned_up_at", "timestamp with time zone", true},
 }
 
-func getTableValidations(tables Tables) []tableValidation {
+func getTableValidations(tables stowry.Tables) []tableValidation {
 	validations := []tableValidation{}
 
 	validations = append(validations, tableValidation{
@@ -153,7 +153,7 @@ func getTableValidations(tables Tables) []tableValidation {
 	return validations
 }
 
-func ValidateSchema(ctx context.Context, pool *pgxpool.Pool, tables Tables) error {
+func ValidateSchema(ctx context.Context, pool *pgxpool.Pool, tables stowry.Tables) error {
 	validations := getTableValidations(tables)
 
 	for _, validation := range validations {

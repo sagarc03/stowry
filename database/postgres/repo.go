@@ -10,17 +10,15 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/sagarc03/stowry"
+	"github.com/sagarc03/stowry/database/internal"
 )
-
-// Tables is an alias for stowry.Tables for package compatibility.
-type Tables = stowry.Tables
 
 type Repo struct {
 	pool      *pgxpool.Pool
 	tableName string
 }
 
-func NewRepo(pool *pgxpool.Pool, tables Tables) (*Repo, error) {
+func NewRepo(pool *pgxpool.Pool, tables stowry.Tables) (*Repo, error) {
 	if err := tables.Validate(); err != nil {
 		return nil, fmt.Errorf("new repo: %w", err)
 	}
@@ -110,12 +108,12 @@ func (r *Repo) ListPendingCleanup(ctx context.Context, q stowry.ListQuery) (stow
 }
 
 func (r *Repo) listWithCondition(ctx context.Context, q stowry.ListQuery, whereCondition, opName string) (stowry.ListResult, error) {
-	cursor, err := stowry.DecodeCursor(q.Cursor)
+	cursor, err := internal.DecodeCursor(q.Cursor)
 	if err != nil {
 		return stowry.ListResult{}, fmt.Errorf("%s: %w", opName, err)
 	}
 
-	escapedPrefix := stowry.EscapeLikePattern(q.PathPrefix)
+	escapedPrefix := internal.EscapeLikePattern(q.PathPrefix)
 
 	var query string
 	var args []any
@@ -163,7 +161,7 @@ func (r *Repo) listWithCondition(ctx context.Context, q stowry.ListQuery, whereC
 	if len(items) > q.Limit {
 		// Cursor points to the last item of the current page
 		lastItem := items[q.Limit-1]
-		nextCursor = stowry.EncodeCursor(lastItem.CreatedAt, lastItem.Path)
+		nextCursor = internal.EncodeCursor(lastItem.CreatedAt, lastItem.Path)
 		items = items[:q.Limit]
 	}
 
