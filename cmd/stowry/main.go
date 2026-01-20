@@ -23,7 +23,7 @@ a REST API backed by local filesystem storage.`,
 }
 
 func init() {
-	rootCmd.PersistentFlags().String("config", "", "config file path (default: ./config.yaml)")
+	rootCmd.PersistentFlags().StringSliceP("config", "c", nil, "config file paths (can be specified multiple times, merged left-to-right; default: ./config.yaml)")
 	rootCmd.PersistentFlags().String("db-type", "", "database type: sqlite, postgres (default: sqlite, env: STOWRY_DATABASE_TYPE)")
 	rootCmd.PersistentFlags().String("db-dsn", "", "database connection string (default: stowry.db, env: STOWRY_DATABASE_DSN)")
 	rootCmd.PersistentFlags().String("storage-path", "", "storage directory path (default: ./data, env: STOWRY_STORAGE_PATH)")

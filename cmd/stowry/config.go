@@ -37,23 +37,37 @@ func readConfig(cmd *cobra.Command) {
 		slog.Warn("failed to bind flags", "err", err)
 	}
 
-	configFile, _ := cmd.Flags().GetString("config")
-	if configFile != "" {
-		viper.SetConfigFile(configFile)
+	configFiles, _ := cmd.Flags().GetStringSlice("config")
+
+	if len(configFiles) > 0 {
+		// Read first config file
+		viper.SetConfigFile(configFiles[0])
+		if err := viper.ReadInConfig(); err != nil {
+			slog.Warn("error reading config file", "file", configFiles[0], "err", err)
+		}
+
+		// Merge remaining config files (left-to-right)
+		for _, cf := range configFiles[1:] {
+			viper.SetConfigFile(cf)
+			if err := viper.MergeInConfig(); err != nil {
+				slog.Warn("error merging config file", "file", cf, "err", err)
+			}
+		}
 	} else {
+		// Fall back to default config.yaml in current directory
 		viper.SetConfigName("config")
 		viper.SetConfigType("yaml")
 		viper.AddConfigPath(".")
+
+		if err := viper.ReadInConfig(); err != nil {
+			var configNotFound viper.ConfigFileNotFoundError
+			if !errors.As(err, &configNotFound) {
+				slog.Warn("error reading config file", "err", err)
+			}
+		}
 	}
 
 	viper.SetEnvPrefix("STOWRY")
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
-
-	if err := viper.ReadInConfig(); err != nil {
-		var configNotFound viper.ConfigFileNotFoundError
-		if !errors.As(err, &configNotFound) {
-			slog.Warn("error reading config file", "err", err)
-		}
-	}
 }
