@@ -1,0 +1,503 @@
+---
+title: Deployment
+description: Deploy Stowry with Docker, systemd, or Kubernetes.
+---
+
+# Deployment
+
+This guide covers deploying Stowry in production environments.
+
+## Docker
+
+### Basic Docker Run
+
+```bash
+docker run -d \
+  --name stowry \
+  -p 5708:5708 \
+  -v $(pwd)/config.yaml:/app/config.yaml:ro \
+  -v $(pwd)/data:/app/data \
+  ghcr.io/sagarc03/stowry:latest serve
+```
+
+### Docker Compose
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  stowry:
+    image: ghcr.io/sagarc03/stowry:latest
+    container_name: stowry
+    restart: unless-stopped
+    ports:
+      - "5708:5708"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - stowry-data:/app/data
+    command: serve
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5708/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  stowry-data:
+```
+
+### With PostgreSQL
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  stowry:
+    image: ghcr.io/sagarc03/stowry:latest
+    container_name: stowry
+    restart: unless-stopped
+    ports:
+      - "5708:5708"
+    environment:
+      - STOWRY_DATABASE_TYPE=postgres
+      - STOWRY_DATABASE_DSN=postgres://stowry:password@postgres:5432/stowry?sslmode=disable
+      - STOWRY_DATABASE_AUTO_MIGRATE=true
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - stowry-data:/app/data
+    command: serve
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: stowry-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=stowry
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=stowry
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stowry"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  stowry-data:
+  postgres-data:
+```
+
+---
+
+## Systemd
+
+### Create Service User
+
+```bash
+sudo useradd -r -s /bin/false stowry
+sudo mkdir -p /var/lib/stowry/data
+sudo mkdir -p /etc/stowry
+sudo chown -R stowry:stowry /var/lib/stowry
+```
+
+### Install Binary
+
+```bash
+sudo cp stowry /usr/local/bin/
+sudo chmod +x /usr/local/bin/stowry
+```
+
+### Configuration
+
+```bash
+sudo tee /etc/stowry/config.yaml << 'EOF'
+server:
+  port: 5708
+  mode: store
+
+database:
+  type: sqlite
+  dsn: /var/lib/stowry/stowry.db
+  table: stowry_metadata
+  auto_migrate: true
+
+storage:
+  path: /var/lib/stowry/data
+
+auth:
+  region: us-east-1
+  service: s3
+  keys:
+    - access_key: ${STOWRY_ACCESS_KEY}
+      secret_key: ${STOWRY_SECRET_KEY}
+
+access:
+  public_read: false
+  public_write: false
+
+log:
+  level: info
+EOF
+
+sudo chown stowry:stowry /etc/stowry/config.yaml
+sudo chmod 600 /etc/stowry/config.yaml
+```
+
+### Service Unit
+
+```bash
+sudo tee /etc/systemd/system/stowry.service << 'EOF'
+[Unit]
+Description=Stowry Object Storage Server
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=stowry
+Group=stowry
+ExecStart=/usr/local/bin/stowry serve --config /etc/stowry/config.yaml
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/stowry
+
+# Environment file for secrets
+EnvironmentFile=-/etc/stowry/environment
+
+[Install]
+WantedBy=multi-user.target
+EOF
+```
+
+### Environment File (for secrets)
+
+```bash
+sudo tee /etc/stowry/environment << 'EOF'
+STOWRY_ACCESS_KEY=your-access-key
+STOWRY_SECRET_KEY=your-secret-key
+EOF
+
+sudo chmod 600 /etc/stowry/environment
+sudo chown stowry:stowry /etc/stowry/environment
+```
+
+### Enable and Start
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable stowry
+sudo systemctl start stowry
+sudo systemctl status stowry
+```
+
+### Cleanup Timer
+
+```bash
+sudo tee /etc/systemd/system/stowry-cleanup.service << 'EOF'
+[Unit]
+Description=Stowry Cleanup Service
+After=stowry.service
+
+[Service]
+Type=oneshot
+User=stowry
+Group=stowry
+ExecStart=/usr/local/bin/stowry cleanup --config /etc/stowry/config.yaml --limit 1000
+EnvironmentFile=-/etc/stowry/environment
+EOF
+
+sudo tee /etc/systemd/system/stowry-cleanup.timer << 'EOF'
+[Unit]
+Description=Run Stowry cleanup hourly
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable stowry-cleanup.timer
+sudo systemctl start stowry-cleanup.timer
+```
+
+---
+
+## Kubernetes
+
+### ConfigMap
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stowry-config
+data:
+  config.yaml: |
+    server:
+      port: 5708
+      mode: store
+    database:
+      type: sqlite
+      dsn: /data/stowry.db
+      table: stowry_metadata
+      auto_migrate: true
+    storage:
+      path: /data/files
+    auth:
+      region: us-east-1
+      service: s3
+    access:
+      public_read: false
+      public_write: false
+    log:
+      level: info
+```
+
+### Secret
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: stowry-secrets
+type: Opaque
+stringData:
+  access-key: "your-access-key"
+  secret-key: "your-secret-key"
+```
+
+### Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stowry
+  labels:
+    app: stowry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stowry
+  template:
+    metadata:
+      labels:
+        app: stowry
+    spec:
+      containers:
+        - name: stowry
+          image: ghcr.io/sagarc03/stowry:latest
+          args: ["serve"]
+          ports:
+            - containerPort: 5708
+          env:
+            - name: STOWRY_AUTH_KEYS_0_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stowry-secrets
+                  key: access-key
+            - name: STOWRY_AUTH_KEYS_0_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stowry-secrets
+                  key: secret-key
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+            - name: data
+              mountPath: /data
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 5708
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 5708
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: config
+          configMap:
+            name: stowry-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: stowry-pvc
+```
+
+### PersistentVolumeClaim
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: stowry-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+```
+
+### Service
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: stowry
+spec:
+  selector:
+    app: stowry
+  ports:
+    - protocol: TCP
+      port: 5708
+      targetPort: 5708
+```
+
+### Ingress (with TLS)
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stowry
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+    - hosts:
+        - storage.example.com
+      secretName: stowry-tls
+  rules:
+    - host: storage.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stowry
+                port:
+                  number: 5708
+```
+
+### CronJob for Cleanup
+
+```yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: stowry-cleanup
+spec:
+  schedule: "0 * * * *"  # Every hour
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: cleanup
+              image: ghcr.io/sagarc03/stowry:latest
+              args: ["cleanup", "--limit", "1000"]
+              volumeMounts:
+                - name: config
+                  mountPath: /app/config.yaml
+                  subPath: config.yaml
+                - name: data
+                  mountPath: /data
+          volumes:
+            - name: config
+              configMap:
+                name: stowry-config
+            - name: data
+              persistentVolumeClaim:
+                claimName: stowry-pvc
+          restartPolicy: OnFailure
+```
+
+---
+
+## Reverse Proxy
+
+### Nginx
+
+```nginx
+upstream stowry {
+    server 127.0.0.1:5708;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name storage.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/storage.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/storage.example.com/privkey.pem;
+
+    client_max_body_size 100M;
+
+    location / {
+        proxy_pass http://stowry;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Timeouts for large file uploads
+        proxy_connect_timeout 300;
+        proxy_send_timeout 300;
+        proxy_read_timeout 300;
+    }
+}
+```
+
+### Caddy
+
+```
+storage.example.com {
+    reverse_proxy localhost:5708
+}
+```
+
+---
+
+## Production Checklist
+
+- [ ] Use HTTPS (TLS termination at reverse proxy or load balancer)
+- [ ] Set strong, unique access keys
+- [ ] Disable public write access
+- [ ] Configure appropriate file size limits
+- [ ] Set up regular backups of storage directory and database
+- [ ] Configure cleanup job to run periodically
+- [ ] Monitor disk space usage
+- [ ] Set up logging and alerting
+- [ ] Use PostgreSQL for production workloads
+- [ ] Configure firewall to restrict access to Stowry port

@@ -1,0 +1,279 @@
+---
+title: HTTP API Reference
+description: REST API documentation for Stowry object storage operations.
+---
+
+# HTTP API Reference
+
+Stowry provides a REST API for object storage operations. All endpoints support presigned URL authentication.
+
+## Base URL
+
+```
+http://localhost:5708
+```
+
+## Authentication
+
+Requests require presigned URL authentication unless `public_read` or `public_write` is enabled. See [Authentication](authentication) for details.
+
+## Endpoints
+
+### List Objects
+
+List objects with optional prefix filtering and pagination.
+
+```
+GET /
+```
+
+**Query Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `prefix` | string | - | Filter objects by path prefix |
+| `limit` | int | 100 | Maximum objects per page (1-1000) |
+| `cursor` | string | - | Pagination cursor from previous response |
+
+**Response:** `200 OK`
+
+```json
+{
+  "items": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "path": "photos/vacation.jpg",
+      "content_type": "image/jpeg",
+      "etag": "a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e",
+      "file_size_bytes": 1048576,
+      "created_at": "2024-01-15T10:30:00Z",
+      "updated_at": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "next_cursor": "MjAyNC0wMS0xNVQxMDozMDowMFp8cGhvdG9zL3ZhY2F0aW9uLmpwZw=="
+}
+```
+
+**Example:**
+
+```bash
+# List all objects
+curl "http://localhost:5708/"
+
+# List with prefix
+curl "http://localhost:5708/?prefix=photos/"
+
+# Paginate
+curl "http://localhost:5708/?limit=10&cursor=MjAyNC0wMS0..."
+```
+
+---
+
+### Get Object
+
+Download an object by path.
+
+```
+GET /{path}
+```
+
+**Path Parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `path` | Object path (e.g., `photos/vacation.jpg`) |
+
+**Response Headers:**
+
+| Header | Description |
+|--------|-------------|
+| `Content-Type` | MIME type of the object |
+| `ETag` | Object hash (SHA256) |
+| `Content-Length` | Object size in bytes |
+| `Last-Modified` | Last modification time |
+
+**Response:** `200 OK` with file content
+
+**Errors:**
+
+| Status | Error Code | Description |
+|--------|------------|-------------|
+| 400 | `invalid_path` | Invalid path format |
+| 404 | `not_found` | Object not found |
+
+**Example:**
+
+```bash
+# Download object
+curl -O http://localhost:5708/photos/vacation.jpg
+
+# Get with headers
+curl -I http://localhost:5708/photos/vacation.jpg
+```
+
+**Server Mode Behavior:**
+
+- **Store:** Returns exact path or 404
+- **Static:** Falls back to `{path}/index.html` if path not found
+- **SPA:** Falls back to `/index.html` for client-side routing
+
+---
+
+### Upload Object
+
+Upload or overwrite an object.
+
+```
+PUT /{path}
+```
+
+**Path Parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `path` | Object path (e.g., `photos/vacation.jpg`) |
+
+**Request Headers:**
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `Content-Type` | No | MIME type (auto-detected if not provided) |
+| `If-Match` | No | Conditional update (ETag must match) |
+
+**Request Body:** Raw file content
+
+**Response:** `200 OK`
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "path": "photos/vacation.jpg",
+  "content_type": "image/jpeg",
+  "etag": "a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e",
+  "file_size_bytes": 1048576,
+  "created_at": "2024-01-15T10:30:00Z",
+  "updated_at": "2024-01-15T10:30:00Z"
+}
+```
+
+**Errors:**
+
+| Status | Error Code | Description |
+|--------|------------|-------------|
+| 400 | `invalid_path` | Invalid path format |
+| 412 | `precondition_failed` | ETag mismatch (If-Match) |
+| 500 | `internal_error` | Server error |
+
+**Example:**
+
+```bash
+# Upload file
+curl -X PUT \
+  -H "Content-Type: image/jpeg" \
+  --data-binary @vacation.jpg \
+  http://localhost:5708/photos/vacation.jpg
+
+# Conditional update
+curl -X PUT \
+  -H "If-Match: a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e" \
+  --data-binary @vacation.jpg \
+  http://localhost:5708/photos/vacation.jpg
+```
+
+---
+
+### Delete Object
+
+Soft delete an object (marks for deletion but doesn't remove immediately).
+
+```
+DELETE /{path}
+```
+
+**Path Parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `path` | Object path (e.g., `photos/vacation.jpg`) |
+
+**Response:** `204 No Content`
+
+**Errors:**
+
+| Status | Error Code | Description |
+|--------|------------|-------------|
+| 400 | `invalid_path` | Invalid path format |
+| 404 | `not_found` | Object not found |
+
+**Example:**
+
+```bash
+curl -X DELETE http://localhost:5708/photos/vacation.jpg
+```
+
+**Note:** Deleted objects remain in storage until `stowry cleanup` is run.
+
+---
+
+## Error Response Format
+
+All errors return JSON:
+
+```json
+{
+  "error": "error_code",
+  "message": "Human-readable error message"
+}
+```
+
+## Path Validation
+
+Valid paths must:
+- Be relative (no leading `/`)
+- Contain no path traversal (`..`)
+- Contain no empty segments (`//`)
+- Contain no invalid characters (`\ ? # ~`)
+- Be valid UTF-8
+- Have no trailing slashes
+
+**Valid paths:**
+- `file.txt`
+- `photos/vacation.jpg`
+- `data/2024/01/report.pdf`
+
+**Invalid paths:**
+- `/file.txt` (leading slash)
+- `../secret.txt` (path traversal)
+- `folder//file.txt` (empty segment)
+- `file?.txt` (invalid character)
+
+## Content Type Detection
+
+If `Content-Type` header is not provided on upload, Stowry detects it from the file extension:
+
+| Extension | Content Type |
+|-----------|--------------|
+| `.html` | `text/html` |
+| `.css` | `text/css` |
+| `.js` | `application/javascript` |
+| `.json` | `application/json` |
+| `.png` | `image/png` |
+| `.jpg`, `.jpeg` | `image/jpeg` |
+| `.gif` | `image/gif` |
+| `.svg` | `image/svg+xml` |
+| `.pdf` | `application/pdf` |
+| (unknown) | `application/octet-stream` |
+
+## Pagination
+
+List responses use cursor-based pagination:
+
+1. Make initial request: `GET /?limit=10`
+2. If `next_cursor` is present in response, there are more results
+3. Request next page: `GET /?limit=10&cursor={next_cursor}`
+4. Repeat until `next_cursor` is empty or null
+
+**Benefits:**
+- Consistent results during concurrent modifications
+- Efficient for large datasets
+- No offset skipping issues

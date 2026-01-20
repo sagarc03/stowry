@@ -1,0 +1,269 @@
+---
+title: Authentication
+description: Guide to presigned URL authentication with AWS Signature V4 and Stowry native signing.
+---
+
+# Authentication
+
+Stowry uses presigned URLs for authentication. This approach allows secure file access without exposing credentials to end users.
+
+## How Presigned URLs Work
+
+1. Your server generates a presigned URL using your access key and secret key
+2. The URL includes a cryptographic signature valid for a limited time
+3. Users can access the resource using only the URL - no credentials needed
+4. The signature expires after the specified duration
+
+## Authentication Methods
+
+Stowry supports two signing schemes:
+
+### 1. Stowry Native Signing (Recommended)
+
+Simpler implementation using HMAC-SHA256.
+
+**URL Format:**
+```
+http://localhost:5708/path/to/file?X-Stowry-AccessKey=KEY&X-Stowry-Expires=1705323000&X-Stowry-Signature=abc123...
+```
+
+**Query Parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `X-Stowry-AccessKey` | Your access key ID |
+| `X-Stowry-Expires` | Unix timestamp when URL expires |
+| `X-Stowry-Signature` | HMAC-SHA256 signature |
+
+### 2. AWS Signature V4
+
+Compatible with AWS SDK presigning. Useful if you're already using AWS SDKs.
+
+**URL Format:**
+```
+http://localhost:5708/bucket/key?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=...&X-Amz-Date=...&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=...
+```
+
+**Query Parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `X-Amz-Algorithm` | Always `AWS4-HMAC-SHA256` |
+| `X-Amz-Credential` | Access key and scope |
+| `X-Amz-Date` | Request timestamp (ISO 8601) |
+| `X-Amz-Expires` | URL validity in seconds (max 604800) |
+| `X-Amz-SignedHeaders` | Headers included in signature |
+| `X-Amz-Signature` | The signature |
+
+## Generating Presigned URLs
+
+### Using stowry-go SDK (Native Signing)
+
+```go
+import stowry "github.com/sagarc03/stowry-go"
+
+client := stowry.NewClient(
+    "http://localhost:5708",
+    "AKIAIOSFODNN7EXAMPLE",
+    "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+)
+
+// Generate URLs (expiry in seconds)
+getURL := client.PresignGet("/photos/vacation.jpg", 900)      // 15 minutes
+putURL := client.PresignPut("/photos/new.jpg", 3600)          // 1 hour
+deleteURL := client.PresignDelete("/photos/old.jpg", 300)     // 5 minutes
+```
+
+### Using AWS SDK for Go
+
+```go
+import (
+    "context"
+    "time"
+
+    "github.com/aws/aws-sdk-go-v2/aws"
+    "github.com/aws/aws-sdk-go-v2/config"
+    "github.com/aws/aws-sdk-go-v2/credentials"
+    "github.com/aws/aws-sdk-go-v2/service/s3"
+)
+
+func createPresignClient() (*s3.PresignClient, error) {
+    cfg, err := config.LoadDefaultConfig(context.Background(),
+        config.WithRegion("us-east-1"),
+        config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+            "AKIAIOSFODNN7EXAMPLE",
+            "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            "",
+        )),
+    )
+    if err != nil {
+        return nil, err
+    }
+
+    client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+        o.BaseEndpoint = aws.String("http://localhost:5708")
+        o.UsePathStyle = true
+    })
+
+    return s3.NewPresignClient(client), nil
+}
+
+// Generate presigned GET URL
+func presignGet(client *s3.PresignClient, key string) (string, error) {
+    resp, err := client.PresignGetObject(context.Background(), &s3.GetObjectInput{
+        Bucket: aws.String("bucket"),
+        Key:    aws.String(key),
+    }, s3.WithPresignExpires(15*time.Minute))
+    if err != nil {
+        return "", err
+    }
+    return resp.URL, nil
+}
+
+// Generate presigned PUT URL
+func presignPut(client *s3.PresignClient, key string) (string, error) {
+    resp, err := client.PresignPutObject(context.Background(), &s3.PutObjectInput{
+        Bucket: aws.String("bucket"),
+        Key:    aws.String(key),
+    }, s3.WithPresignExpires(15*time.Minute))
+    if err != nil {
+        return "", err
+    }
+    return resp.URL, nil
+}
+```
+
+### Using AWS SDK for Python (Boto3)
+
+```python
+import boto3
+from botocore.config import Config
+
+s3_client = boto3.client(
+    's3',
+    endpoint_url='http://localhost:5708',
+    aws_access_key_id='AKIAIOSFODNN7EXAMPLE',
+    aws_secret_access_key='wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+    region_name='us-east-1',
+    config=Config(s3={'addressing_style': 'path'})
+)
+
+# Generate presigned GET URL
+get_url = s3_client.generate_presigned_url(
+    'get_object',
+    Params={'Bucket': 'bucket', 'Key': 'photos/vacation.jpg'},
+    ExpiresIn=900  # 15 minutes
+)
+
+# Generate presigned PUT URL
+put_url = s3_client.generate_presigned_url(
+    'put_object',
+    Params={'Bucket': 'bucket', 'Key': 'photos/new.jpg'},
+    ExpiresIn=3600  # 1 hour
+)
+```
+
+### Using AWS SDK for JavaScript
+
+```javascript
+import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+
+const client = new S3Client({
+  endpoint: 'http://localhost:5708',
+  region: 'us-east-1',
+  credentials: {
+    accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
+    secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+  },
+  forcePathStyle: true,
+});
+
+// Generate presigned GET URL
+const getUrl = await getSignedUrl(
+  client,
+  new GetObjectCommand({ Bucket: 'bucket', Key: 'photos/vacation.jpg' }),
+  { expiresIn: 900 }
+);
+
+// Generate presigned PUT URL
+const putUrl = await getSignedUrl(
+  client,
+  new PutObjectCommand({ Bucket: 'bucket', Key: 'photos/new.jpg' }),
+  { expiresIn: 3600 }
+);
+```
+
+## Using Presigned URLs
+
+### Download (GET)
+
+```bash
+# Using curl
+curl -o vacation.jpg "http://localhost:5708/photos/vacation.jpg?X-Stowry-AccessKey=..."
+
+# Or in browser - just visit the URL
+```
+
+### Upload (PUT)
+
+```bash
+curl -X PUT \
+  -H "Content-Type: image/jpeg" \
+  --data-binary @vacation.jpg \
+  "http://localhost:5708/photos/vacation.jpg?X-Stowry-AccessKey=..."
+```
+
+### Delete (DELETE)
+
+```bash
+curl -X DELETE "http://localhost:5708/photos/vacation.jpg?X-Stowry-AccessKey=..."
+```
+
+## Public Access Mode
+
+For development or public content, you can disable authentication:
+
+```yaml
+access:
+  public_read: true   # Anyone can download
+  public_write: false # Upload still requires auth
+```
+
+## Security Best Practices
+
+1. **Keep URLs short-lived** - Use the minimum expiration time needed (e.g., 5-15 minutes for downloads)
+
+2. **Generate URLs server-side** - Never expose your secret key to clients
+
+3. **Use HTTPS in production** - Presigned URLs should be transmitted over TLS
+
+4. **Rotate keys periodically** - Update access keys and secret keys regularly
+
+5. **Validate paths** - Ensure users can only access paths they're authorized for
+
+6. **Log access** - Monitor presigned URL usage for suspicious activity
+
+## Maximum Expiration
+
+- Stowry native signing: No enforced maximum
+- AWS Signature V4: Maximum 7 days (604800 seconds)
+
+## Troubleshooting
+
+### "Signature does not match"
+
+- Verify access key and secret key are correct
+- Check region and service name match configuration
+- Ensure URL hasn't been modified after signing
+- Verify system clock is synchronized (within 5 minutes)
+
+### "Request has expired"
+
+- The presigned URL has passed its expiration time
+- Generate a new URL with longer expiration if needed
+
+### "Missing authentication"
+
+- URL is missing required signature parameters
+- Ensure you're using a properly signed URL

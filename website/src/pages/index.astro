@@ -1,0 +1,236 @@
+---
+import '../styles/global.css';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Stowry - Self-hosted Object Storage, Simplified</title>
+    <meta name="description" content="A lightweight object storage server written in Go. Single binary, pluggable backends, presigned URL authentication." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script is:inline>
+      (function() {
+        const stored = localStorage.getItem('starlight-theme');
+        const theme = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+    <style>
+      :root {
+        --page-bg: #ffffff;
+        --page-bg-alt: #f4f4f5;
+        --text-main: #18181b;
+        --text-muted: #52525b;
+        --border: #e4e4e7;
+        --accent: #ea580c;
+        --accent-hover: #c2410c;
+        --accent-text: #ea580c;
+        --card-bg: #ffffff;
+        --btn-secondary-bg: #ffffff;
+        --btn-secondary-border: #d4d4d8;
+        --btn-secondary-text: #18181b;
+      }
+      :root[data-theme="dark"] {
+        --page-bg: #09090b;
+        --page-bg-alt: #18181b;
+        --text-main: #fafafa;
+        --text-muted: #a1a1aa;
+        --border: #27272a;
+        --accent: #f97316;
+        --accent-hover: #fb923c;
+        --accent-text: #fb923c;
+        --card-bg: #18181b;
+        --btn-secondary-bg: #27272a;
+        --btn-secondary-border: #3f3f46;
+        --btn-secondary-text: #fafafa;
+      }
+      body {
+        background: var(--page-bg);
+        color: var(--text-main);
+      }
+    </style>
+  </head>
+  <body class="font-sans antialiased">
+    <!-- Navigation -->
+    <nav style="border-bottom: 1px solid var(--border);">
+      <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+        <div class="flex h-16 items-center justify-between">
+          <a href="/" class="text-xl font-bold">Stowry</a>
+          <div class="flex items-center gap-6">
+            <a href="/getting-started" class="text-sm font-medium hover:opacity-80" style="color: var(--text-muted);">
+              Docs
+            </a>
+            <a href="https://github.com/sagarc03/stowry" class="text-sm font-medium hover:opacity-80" style="color: var(--text-muted);">
+              GitHub
+            </a>
+            <button
+              id="theme-toggle"
+              type="button"
+              class="rounded-lg p-2 hover:opacity-80"
+              style="color: var(--text-muted);"
+              aria-label="Toggle theme"
+            >
+              <svg class="sun-icon h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+              <svg class="moon-icon h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <main>
+      <!-- Hero Section -->
+      <section class="py-20 sm:py-32">
+        <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 text-center">
+          <h1 class="text-4xl font-bold tracking-tight sm:text-6xl">
+            Self-hosted Object Storage,
+            <span style="color: var(--accent-text);">Simplified</span>
+          </h1>
+          <p class="mx-auto mt-6 max-w-2xl text-lg" style="color: var(--text-muted);">
+            A lightweight object storage server written in Go. Deploy a single binary,
+            configure your metadata backend, and start storing files with secure presigned URL authentication.
+          </p>
+          <div class="mt-10 flex items-center justify-center gap-4">
+            <a
+              href="/getting-started"
+              class="rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+              style="background: var(--accent);"
+            >
+              Get Started
+            </a>
+            <a
+              href="https://github.com/sagarc03/stowry"
+              class="rounded-lg px-5 py-2.5 text-sm font-semibold shadow-sm transition hover:opacity-90"
+              style="background: var(--btn-secondary-bg); border: 1px solid var(--btn-secondary-border); color: var(--btn-secondary-text);"
+            >
+              View on GitHub
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Features Section -->
+      <section class="py-20" style="border-top: 1px solid var(--border); background: var(--page-bg-alt);">
+        <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <h2 class="text-center text-3xl font-bold">Why Stowry?</h2>
+          <div class="mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+            <div class="rounded-xl p-6" style="background: var(--card-bg); border: 1px solid var(--border);">
+              <h3 class="font-semibold">Single Binary</h3>
+              <p class="mt-2 text-sm" style="color: var(--text-muted);">
+                No external dependencies. SQLite embedded for development, PostgreSQL for production scale.
+              </p>
+            </div>
+            <div class="rounded-xl p-6" style="background: var(--card-bg); border: 1px solid var(--border);">
+              <h3 class="font-semibold">Presigned URLs</h3>
+              <p class="mt-2 text-sm" style="color: var(--text-muted);">
+                Secure file access without exposing credentials. Compatible with AWS SDK for easy integration.
+              </p>
+            </div>
+            <div class="rounded-xl p-6" style="background: var(--card-bg); border: 1px solid var(--border);">
+              <h3 class="font-semibold">Three Server Modes</h3>
+              <p class="mt-2 text-sm" style="color: var(--text-muted);">
+                Store mode for APIs, Static mode for file hosting, SPA mode for single-page applications.
+              </p>
+            </div>
+            <div class="rounded-xl p-6" style="background: var(--card-bg); border: 1px solid var(--border);">
+              <h3 class="font-semibold">Pluggable Backends</h3>
+              <p class="mt-2 text-sm" style="color: var(--text-muted);">
+                Switch between SQLite and PostgreSQL metadata storage without code changes.
+              </p>
+            </div>
+            <div class="rounded-xl p-6" style="background: var(--card-bg); border: 1px solid var(--border);">
+              <h3 class="font-semibold">AWS SDK Compatible</h3>
+              <p class="mt-2 text-sm" style="color: var(--text-muted);">
+                Generate presigned URLs using familiar AWS SDKs in any language.
+              </p>
+            </div>
+            <div class="rounded-xl p-6" style="background: var(--card-bg); border: 1px solid var(--border);">
+              <h3 class="font-semibold">Simple Configuration</h3>
+              <p class="mt-2 text-sm" style="color: var(--text-muted);">
+                YAML config file or environment variables. Get running in minutes.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SDKs Section -->
+      <section class="py-20" style="border-top: 1px solid var(--border);">
+        <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <h2 class="text-center text-3xl font-bold">Official SDKs</h2>
+          <p class="mx-auto mt-4 max-w-2xl text-center" style="color: var(--text-muted);">
+            Native SDKs for generating presigned URLs. Also compatible with AWS SDKs.
+          </p>
+          <div class="mt-12 grid grid-rows-[1fr] gap-8 sm:grid-cols-3">
+            <a href="https://github.com/sagarc03/stowry-go" class="group flex h-full flex-col rounded-xl p-6 transition" style="background: var(--card-bg); border: 1px solid var(--border);">
+              <div class="flex items-center gap-3">
+                <svg class="h-8 w-8" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M1.811 10.231c-.047 0-.058-.023-.035-.059l.246-.315c.023-.035.081-.058.128-.058h4.172c.046 0 .058.035.035.07l-.199.303c-.023.036-.082.07-.117.07zM.047 11.306c-.047 0-.059-.023-.035-.058l.245-.316c.023-.035.082-.058.129-.058h5.328c.047 0 .07.035.058.07l-.093.28c-.012.047-.058.07-.105.07zm2.828 1.075c-.047 0-.059-.035-.035-.07l.163-.292c.023-.035.07-.07.117-.07h2.337c.047 0 .07.035.07.082l-.023.28c0 .047-.047.082-.082.082zm12.129-2.36c-.736.187-1.239.327-1.963.514-.176.046-.187.058-.34-.117-.174-.199-.303-.327-.548-.444-.737-.362-1.45-.257-2.115.175-.795.514-1.204 1.274-1.192 2.22.011.935.654 1.706 1.577 1.835.795.105 1.46-.175 1.987-.771.105-.13.198-.27.315-.434H10.47c-.245 0-.304-.152-.222-.35.152-.362.432-.97.596-1.274a.315.315 0 01.292-.187h4.253c-.023.316-.023.631-.07.947a4.983 4.983 0 01-.958 2.29c-.841 1.11-1.94 1.8-3.33 1.986-1.145.152-2.209-.07-3.143-.77-.865-.655-1.356-1.52-1.484-2.595-.152-1.274.222-2.419.993-3.424.83-1.086 1.928-1.776 3.272-2.02 1.098-.2 2.15-.07 3.096.571.62.41 1.063.97 1.356 1.648.07.105.023.164-.117.2z"/>
+                </svg>
+                <h3 class="font-semibold">Go</h3>
+              </div>
+              <p class="mt-3 text-sm" style="color: var(--text-muted);">stowry-go</p>
+              <code class="mt-auto pt-3 block text-xs" style="color: var(--accent-text);">go get github.com/sagarc03/stowry-go</code>
+            </a>
+            <a href="https://github.com/sagarc03/stowrypy" class="group flex h-full flex-col rounded-xl p-6 transition" style="background: var(--card-bg); border: 1px solid var(--border);">
+              <div class="flex items-center gap-3">
+                <svg class="h-8 w-8" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M14.25.18l.9.2.73.26.59.3.45.32.34.34.25.34.16.33.1.3.04.26.02.2-.01.13V8.5l-.05.63-.13.55-.21.46-.26.38-.3.31-.33.25-.35.19-.35.14-.33.1-.3.07-.26.04-.21.02H8.77l-.69.05-.59.14-.5.22-.41.27-.33.32-.27.35-.2.36-.15.37-.1.35-.07.32-.04.27-.02.21v3.06H3.17l-.21-.03-.28-.07-.32-.12-.35-.18-.36-.26-.36-.36-.35-.46-.32-.59-.28-.73-.21-.88-.14-1.05-.05-1.23.06-1.22.16-1.04.24-.87.32-.71.36-.57.4-.44.42-.33.42-.24.4-.16.36-.1.32-.05.24-.01h.16l.06.01h8.16v-.83H6.18l-.01-2.75-.02-.37.05-.34.11-.31.17-.28.25-.26.31-.23.38-.2.44-.18.51-.15.58-.12.64-.1.71-.06.77-.04.84-.02 1.27.05zm-6.3 1.98l-.23.33-.08.41.08.41.23.34.33.22.41.09.41-.09.33-.22.23-.34.08-.41-.08-.41-.23-.33-.33-.22-.41-.09-.41.09zm13.09 3.95l.28.06.32.12.35.18.36.27.36.35.35.47.32.59.28.73.21.88.14 1.04.05 1.23-.06 1.23-.16 1.04-.24.86-.32.71-.36.57-.4.45-.42.33-.42.24-.4.16-.36.09-.32.05-.24.02-.16-.01h-8.22v.82h5.84l.01 2.76.02.36-.05.34-.11.31-.17.29-.25.25-.31.24-.38.2-.44.17-.51.15-.58.13-.64.09-.71.07-.77.04-.84.01-1.27-.04-1.07-.14-.9-.2-.73-.25-.59-.3-.45-.33-.34-.34-.25-.34-.16-.33-.1-.3-.04-.25-.02-.2.01-.13v-5.34l.05-.64.13-.54.21-.46.26-.38.3-.32.33-.24.35-.2.35-.14.33-.1.3-.06.26-.04.21-.02.13-.01h5.84l.69-.05.59-.14.5-.21.41-.28.33-.32.27-.35.2-.36.15-.36.1-.35.07-.32.04-.28.02-.21V6.07h2.09l.14.01zm-6.47 14.25l-.23.33-.08.41.08.41.23.33.33.23.41.08.41-.08.33-.23.23-.33.08-.41-.08-.41-.23-.33-.33-.23-.41-.08-.41.08z"/>
+                </svg>
+                <h3 class="font-semibold">Python</h3>
+              </div>
+              <p class="mt-3 text-sm" style="color: var(--text-muted);">stowrypy</p>
+              <code class="mt-auto pt-3 block text-xs" style="color: var(--accent-text);">pip install stowrypy</code>
+            </a>
+            <a href="https://github.com/sagarc03/stowryjs" class="group flex h-full flex-col rounded-xl p-6 transition" style="background: var(--card-bg); border: 1px solid var(--border);">
+              <div class="flex items-center gap-3">
+                <svg class="h-8 w-8" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M0 0h24v24H0V0zm22.034 18.276c-.175-1.095-.888-2.015-3.003-2.873-.736-.345-1.554-.585-1.797-1.14-.091-.33-.105-.51-.046-.705.15-.646.915-.84 1.515-.66.39.12.75.42.976.9 1.034-.676 1.034-.676 1.755-1.125-.27-.42-.404-.601-.586-.78-.63-.705-1.469-1.065-2.834-1.034l-.705.089c-.676.165-1.32.525-1.71 1.005-1.14 1.291-.811 3.541.569 4.471 1.365 1.02 3.361 1.244 3.616 2.205.24 1.17-.87 1.545-1.966 1.41-.811-.18-1.26-.586-1.755-1.336l-1.83 1.051c.21.48.45.689.81 1.109 1.74 1.756 6.09 1.666 6.871-1.004.029-.09.24-.705.074-1.65l.046.067zm-8.983-7.245h-2.248c0 1.938-.009 3.864-.009 5.805 0 1.232.063 2.363-.138 2.711-.33.689-1.18.601-1.566.48-.396-.196-.597-.466-.83-.855-.063-.105-.11-.196-.127-.196l-1.825 1.125c.305.63.75 1.172 1.324 1.517.855.51 2.004.675 3.207.405.783-.226 1.458-.691 1.811-1.411.51-.93.402-2.07.397-3.346.012-2.054 0-4.109 0-6.179l.004-.056z"/>
+                </svg>
+                <h3 class="font-semibold">JavaScript</h3>
+              </div>
+              <p class="mt-3 text-sm" style="color: var(--text-muted);">stowryjs</p>
+              <code class="mt-auto pt-3 block text-xs" style="color: var(--accent-text);">npm install stowryjs</code>
+            </a>
+          </div>
+          <p class="mt-8 text-center text-sm" style="color: var(--text-muted);">
+            Also compatible with <a href="/sdks#using-aws-sdks" class="hover:underline" style="color: var(--accent-text);">AWS SDKs</a> via Signature V4.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="py-8" style="border-top: 1px solid var(--border);">
+      <div class="mx-auto max-w-6xl px-4 text-center text-sm sm:px-6 lg:px-8" style="color: var(--text-muted);">
+        MIT License &middot;
+        <a href="https://github.com/sagarc03/stowry" class="hover:underline" style="color: var(--accent-text);">GitHub</a>
+      </div>
+    </footer>
+
+    <script is:inline>
+      // Icon visibility based on theme
+      function updateIcons() {
+        const isDark = document.documentElement.dataset.theme === 'dark';
+        document.querySelector('.sun-icon').style.display = isDark ? 'block' : 'none';
+        document.querySelector('.moon-icon').style.display = isDark ? 'none' : 'block';
+      }
+      updateIcons();
+
+      // Toggle button handler
+      document.getElementById('theme-toggle').addEventListener('click', () => {
+        const current = document.documentElement.dataset.theme;
+        const newTheme = current === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('starlight-theme', newTheme);
+        document.documentElement.dataset.theme = newTheme;
+        updateIcons();
+      });
+    </script>
+  </body>
+</html>
