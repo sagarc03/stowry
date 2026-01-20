@@ -1,4 +1,4 @@
 flask
 flask-cors
-stowrypy
+stowrypy==0.1.0
 python-dotenv
