@@ -250,7 +250,8 @@ store := keybackend.NewMapSecretStore(map[string]string{
     "AKIAIOSFODNN7EXAMPLE": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
 })
 
-verifier := stowry.NewSignatureVerifier("us-east-1", "s3", store)
+cfg := stowry.AuthConfig{Region: "us-east-1", Service: "s3"}
+verifier := stowry.NewSignatureVerifier(cfg, store)
 ```
 
 ## HTTP Layer (http/)

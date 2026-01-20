@@ -40,7 +40,8 @@ func TestAuthMiddleware_RequiresAuth_NoSignature(t *testing.T) {
 	store := keybackend.NewMapSecretStore(map[string]string{
 		"AKIATEST": "testsecret",
 	})
-	verifier := stowry.NewSignatureVerifier("us-east-1", "s3", store)
+	cfg := stowry.AuthConfig{Region: "us-east-1", Service: "s3"}
+	verifier := stowry.NewSignatureVerifier(cfg, store)
 	wrapped := stowryhttp.AuthMiddleware(verifier)(handler)
 
 	req := httptest.NewRequest("GET", "/test.txt", nil)
@@ -62,7 +63,8 @@ func TestAuthMiddleware_RequiresAuth_InvalidSignature(t *testing.T) {
 	store := keybackend.NewMapSecretStore(map[string]string{
 		"AKIATEST": "testsecret",
 	})
-	verifier := stowry.NewSignatureVerifier("us-east-1", "s3", store)
+	cfg := stowry.AuthConfig{Region: "us-east-1", Service: "s3"}
+	verifier := stowry.NewSignatureVerifier(cfg, store)
 	wrapped := stowryhttp.AuthMiddleware(verifier)(handler)
 
 	// Request with invalid signature

@@ -101,11 +101,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 
 	store := keybackend.NewMapSecretStore(getAccessKeys())
-	verifier := stowry.NewSignatureVerifier(
-		viper.GetString("auth.region"),
-		viper.GetString("auth.service"),
-		store,
-	)
+	authCfg := stowry.AuthConfig{
+		Region:  viper.GetString("auth.region"),
+		Service: viper.GetString("auth.service"),
+	}
+	verifier := stowry.NewSignatureVerifier(authCfg, store)
 
 	var readVerifier, writeVerifier stowryhttp.RequestVerifier
 	if !viper.GetBool("access.public_read") {

@@ -32,7 +32,8 @@
 //	store := keybackend.NewMapSecretStore(map[string]string{
 //	    "AKIAIOSFODNN7EXAMPLE": "wJalrXUt...",
 //	})
-//	verifier := stowry.NewSignatureVerifier("us-east-1", "s3", store)
+//	cfg := stowry.AuthConfig{Region: "us-east-1", Service: "s3"}
+//	verifier := stowry.NewSignatureVerifier(cfg, store)
 //
 //	// Apply middleware (nil = public access)
 //	router.Use(http.AuthMiddleware(verifier))
@@ -42,7 +43,8 @@
 // Create a handler with HandlerConfig:
 //
 //	store := keybackend.NewMapSecretStore(accessKeys)
-//	verifier := stowry.NewSignatureVerifier("us-east-1", "s3", store)
+//	cfg := stowry.AuthConfig{Region: "us-east-1", Service: "s3"}
+//	verifier := stowry.NewSignatureVerifier(cfg, store)
 //
 //	handlerCfg := http.HandlerConfig{
 //	    Mode:          stowry.ModeStore,
