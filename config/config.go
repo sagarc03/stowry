@@ -1,4 +1,3 @@
-// Package config provides configuration loading and validation for stowry.
 package config
 
 import (

@@ -1,10 +1,12 @@
 package config_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -313,4 +315,82 @@ func TestLoad_EnvironmentVariables(t *testing.T) {
 	assert.Equal(t, 9090, cfg.Server.Port)
 	assert.Equal(t, "postgres", cfg.Database.Type)
 	assert.Equal(t, "private", cfg.Auth.Read)
+}
+
+func TestWithContext_FromContext(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{Port: 8080, Mode: "store"},
+	}
+
+	ctx := context.Background()
+	ctx = config.WithContext(ctx, cfg)
+
+	retrieved, err := config.FromContext(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, cfg, retrieved)
+	assert.Equal(t, 8080, retrieved.Server.Port)
+}
+
+func TestFromContext_NotFound(t *testing.T) {
+	ctx := context.Background()
+
+	_, err := config.FromContext(ctx)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "config not found")
+}
+
+func TestLoad_WithFlags(t *testing.T) {
+	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+	flags.Int("port", 5708, "port")
+	flags.String("mode", "store", "mode")
+	flags.String("db-type", "sqlite", "db type")
+
+	// Simulate flag being set
+	err := flags.Set("port", "9999")
+	require.NoError(t, err)
+	err = flags.Set("db-type", "postgres")
+	require.NoError(t, err)
+
+	cfg, err := config.Load(nil, flags)
+	require.NoError(t, err)
+
+	assert.Equal(t, 9999, cfg.Server.Port)
+	assert.Equal(t, "postgres", cfg.Database.Type)
+}
+
+func TestLoad_MissingConfigFile(t *testing.T) {
+	// Missing config file should use defaults, not error
+	cfg, err := config.Load([]string{"/nonexistent/config.yaml"}, nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, 5708, cfg.Server.Port) // Default value
+}
+
+func TestLoad_ValidationError_InvalidLogLevel(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	configContent := `
+server:
+  port: 5708
+  mode: store
+database:
+  type: sqlite
+  dsn: stowry.db
+  tables:
+    meta_data: test
+storage:
+  path: ./data
+auth:
+  read: public
+  write: public
+log:
+  level: invalid
+`
+	err := os.WriteFile(configPath, []byte(configContent), 0o644)
+	require.NoError(t, err)
+
+	_, err = config.Load([]string{configPath}, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "validate config")
 }
