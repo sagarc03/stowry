@@ -236,7 +236,7 @@ func TestNewSignatureVerifier(t *testing.T) {
 		"test": "secret",
 	})
 
-	cfg := stowry.AuthConfig{Region: "us-west-1", Service: "ec2"}
+	cfg := stowry.AuthConfig{AWS: stowry.AWSConfig{Region: "us-west-1", Service: "ec2"}}
 	verifier := stowry.NewSignatureVerifier(cfg, store)
 	assert.NotNil(t, verifier)
 }
@@ -421,7 +421,7 @@ func TestSignatureVerifier_Verify(t *testing.T) {
 		accessKey: secretKey,
 	})
 
-	cfg := stowry.AuthConfig{Region: "us-east-1", Service: "s3"}
+	cfg := stowry.AuthConfig{AWS: stowry.AWSConfig{Region: "us-east-1", Service: "s3"}}
 	verifier := stowry.NewSignatureVerifier(cfg, store)
 
 	// Generate valid Stowry signature

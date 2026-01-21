@@ -1,14 +1,15 @@
 auth:
-  region: us-east-1
-  service: s3
-  # WARNING: Example keys only - do not use in production
+  read: private  # public | private
+  write: private # public | private
+  aws:
+    region: us-east-1
+    service: s3
   keys:
-    - access_key: FE373CEF5632FDED3081
-      secret_key: 9218d0ddfdb1779169f4b6b3b36df321099e98e9
-
-access:
-  public_read: false
-  public_write: false
+    # WARNING: Example keys only - do not use in production
+    inline:
+      - access_key: FE373CEF5632FDED3081
+        secret_key: 9218d0ddfdb1779169f4b6b3b36df321099e98e9
+    # file: /path/to/keys.json  # JSON format: [{"access_key": "...", "secret_key": "..."}]
 
 cors:
   enabled: true

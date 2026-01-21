@@ -23,11 +23,11 @@ func setDefaults() {
 
 	viper.SetDefault("storage.path", "./data")
 
-	viper.SetDefault("access.public_read", false)
-	viper.SetDefault("access.public_write", false)
+	viper.SetDefault("auth.read", "public")
+	viper.SetDefault("auth.write", "public")
 
-	viper.SetDefault("auth.region", "us-east-1")
-	viper.SetDefault("auth.service", "s3")
+	viper.SetDefault("auth.aws.region", "us-east-1")
+	viper.SetDefault("auth.aws.service", "s3")
 
 	viper.SetDefault("log.level", "info")
 }

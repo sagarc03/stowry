@@ -38,10 +38,15 @@ type SecretStore interface {
 	Lookup(accessKey string) (secretKey string, err error)
 }
 
-// AuthConfig holds configuration SignatureVerifier
-type AuthConfig struct {
+// AWSConfig holds AWS-specific configuration for signature verification.
+type AWSConfig struct {
 	Region  string // AWS region (e.g., "us-east-1")
 	Service string // AWS service name (e.g., "s3")
+}
+
+// AuthConfig holds configuration for SignatureVerifier.
+type AuthConfig struct {
+	AWS AWSConfig
 }
 
 // SignatureVerifier verifies signed requests using either AWS Signature V4 or native Stowry signing.
@@ -60,7 +65,7 @@ type SignatureVerifier struct {
 func NewSignatureVerifier(cfg AuthConfig, store SecretStore) *SignatureVerifier {
 	return &SignatureVerifier{
 		stowryVerifier: NewStowrySignatureVerifier(store),
-		awsVerifier:    NewAWSSignatureVerifier(cfg.Region, cfg.Service, store),
+		awsVerifier:    NewAWSSignatureVerifier(cfg.AWS.Region, cfg.AWS.Service, store),
 	}
 }
 

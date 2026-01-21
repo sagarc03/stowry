@@ -100,18 +100,23 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("create service: %w", err)
 	}
 
-	store := keybackend.NewMapSecretStore(getAccessKeys())
+	store, err := keybackend.NewSecretStore(getKeysConfig())
+	if err != nil {
+		return fmt.Errorf("create secret store: %w", err)
+	}
 	authCfg := stowry.AuthConfig{
-		Region:  viper.GetString("auth.region"),
-		Service: viper.GetString("auth.service"),
+		AWS: stowry.AWSConfig{
+			Region:  viper.GetString("auth.aws.region"),
+			Service: viper.GetString("auth.aws.service"),
+		},
 	}
 	verifier := stowry.NewSignatureVerifier(authCfg, store)
 
 	var readVerifier, writeVerifier stowryhttp.RequestVerifier
-	if !viper.GetBool("access.public_read") {
+	if viper.GetString("auth.read") != "public" {
 		readVerifier = verifier
 	}
-	if !viper.GetBool("access.public_write") {
+	if viper.GetString("auth.write") != "public" {
 		writeVerifier = verifier
 	}
 
@@ -168,32 +173,33 @@ func runServe(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func getAccessKeys() map[string]string {
-	keys := make(map[string]string)
+func getKeysConfig() keybackend.KeysConfig {
+	var cfg keybackend.KeysConfig
 
-	authKeys := viper.Get("auth.keys")
-	if authKeys == nil {
-		return keys
-	}
+	// Load inline keys from auth.keys.inline
+	inlineKeys := viper.Get("auth.keys.inline")
+	if inlineKeys != nil {
+		if keyList, ok := inlineKeys.([]any); ok {
+			for _, k := range keyList {
+				keyMap, ok := k.(map[string]any)
+				if !ok {
+					continue
+				}
 
-	keyList, ok := authKeys.([]any)
-	if !ok {
-		return keys
-	}
+				accessKey, _ := keyMap["access_key"].(string)
+				secretKey, _ := keyMap["secret_key"].(string)
 
-	for _, k := range keyList {
-		keyMap, ok := k.(map[string]any)
-		if !ok {
-			continue
+				if accessKey != "" && secretKey != "" {
+					cfg.Inline = append(cfg.Inline, keybackend.KeyPair{
+						AccessKey: accessKey,
+						SecretKey: secretKey,
+					})
+				}
+			}
 		}
-
-		accessKey, _ := keyMap["access_key"].(string)
-		secretKey, _ := keyMap["secret_key"].(string)
-
-		if accessKey != "" && secretKey != "" {
-			keys[accessKey] = secretKey
-		}
 	}
 
-	return keys
+	cfg.File = viper.GetString("auth.keys.file")
+
+	return cfg
 }

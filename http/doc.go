@@ -32,7 +32,7 @@
 //	store := keybackend.NewMapSecretStore(map[string]string{
 //	    "AKIAIOSFODNN7EXAMPLE": "wJalrXUt...",
 //	})
-//	cfg := stowry.AuthConfig{Region: "us-east-1", Service: "s3"}
+//	cfg := stowry.AuthConfig{AWS: stowry.AWSConfig{Region: "us-east-1", Service: "s3"}}
 //	verifier := stowry.NewSignatureVerifier(cfg, store)
 //
 //	// Apply middleware (nil = public access)
@@ -43,7 +43,7 @@
 // Create a handler with HandlerConfig:
 //
 //	store := keybackend.NewMapSecretStore(accessKeys)
-//	cfg := stowry.AuthConfig{Region: "us-east-1", Service: "s3"}
+//	cfg := stowry.AuthConfig{AWS: stowry.AWSConfig{Region: "us-east-1", Service: "s3"}}
 //	verifier := stowry.NewSignatureVerifier(cfg, store)
 //
 //	handlerCfg := http.HandlerConfig{
