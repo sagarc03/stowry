@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/sagarc03/stowry"
+	"github.com/sagarc03/stowry/config"
 	"github.com/sagarc03/stowry/database"
 	"github.com/sagarc03/stowry/filesystem"
 	stowryhttp "github.com/sagarc03/stowry/http"
@@ -34,7 +35,7 @@ func init() {
 }
 
 func runServe(cmd *cobra.Command, args []string) error {
-	cfg, err := configFromContext(cmd.Context())
+	cfg, err := config.FromContext(cmd.Context())
 	if err != nil {
 		return err
 	}

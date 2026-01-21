@@ -2,6 +2,7 @@
 package config
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -16,6 +17,24 @@ import (
 	stowryhttp "github.com/sagarc03/stowry/http"
 	"github.com/sagarc03/stowry/keybackend"
 )
+
+// configKey is the context key for storing the loaded configuration.
+type configKey struct{}
+
+// WithContext returns a new context with the config stored.
+func WithContext(ctx context.Context, cfg *Config) context.Context {
+	return context.WithValue(ctx, configKey{}, cfg)
+}
+
+// FromContext retrieves the config from context.
+// Returns an error if config is not found.
+func FromContext(ctx context.Context) (*Config, error) {
+	cfg, ok := ctx.Value(configKey{}).(*Config)
+	if !ok || cfg == nil {
+		return nil, errors.New("config not found in context")
+	}
+	return cfg, nil
+}
 
 // Config is the root configuration struct for stowry.
 type Config struct {

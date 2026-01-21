@@ -25,7 +25,7 @@ a REST API backed by local filesystem storage.`,
 		}
 
 		// Store config in context for subcommands
-		cmd.SetContext(withConfig(cmd.Context(), cfg))
+		cmd.SetContext(config.WithContext(cmd.Context(), cfg))
 
 		setupLogging(cfg)
 		return nil
