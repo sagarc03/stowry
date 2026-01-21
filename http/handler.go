@@ -35,6 +35,7 @@ type HandlerConfig struct {
 	ReadVerifier  RequestVerifier
 	WriteVerifier RequestVerifier
 	CORS          CORSConfig
+	MaxUploadSize int64 // Maximum upload size in bytes. 0 means no limit.
 }
 
 // Handler provides HTTP handlers for object storage operations.
@@ -168,7 +169,12 @@ func (h *Handler) handlePut(w http.ResponseWriter, r *http.Request) {
 		ContentType: contentType,
 	}
 
-	metaData, err := h.service.Create(r.Context(), obj, r.Body)
+	body := io.Reader(r.Body)
+	if h.config.MaxUploadSize > 0 {
+		body = http.MaxBytesReader(w, r.Body, h.config.MaxUploadSize)
+	}
+
+	metaData, err := h.service.Create(r.Context(), obj, body)
 	if err != nil {
 		HandleError(w, err)
 		return

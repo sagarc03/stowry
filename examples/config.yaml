@@ -1,3 +1,11 @@
+server:
+  port: 5708
+  mode: store              # store | static | spa
+  max_upload_size: 0       # Maximum upload size in bytes (0 = unlimited)
+
+service:
+  cleanup_timeout: 30      # Cleanup operation timeout in seconds
+
 auth:
   read: private  # public | private
   write: private # public | private

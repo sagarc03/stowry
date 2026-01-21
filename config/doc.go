@@ -35,7 +35,8 @@
 // # Configuration Structure
 //
 // The Config struct contains:
-//   - Server: port and mode (store/static/spa)
+//   - Server: port, mode (store/static/spa), and max_upload_size
+//   - Service: cleanup_timeout for background operations
 //   - Database: type, DSN, and table names
 //   - Storage: file storage path
 //   - Auth: access control (read/write), AWS settings, and keys

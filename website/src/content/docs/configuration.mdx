@@ -23,6 +23,11 @@ Configuration values are loaded in this order (later sources override earlier on
 server:
   port: 5708              # HTTP server port (default: 5708)
   mode: store             # Server mode: store, static, spa (default: store)
+  max_upload_size: 0      # Max upload size in bytes, 0 = unlimited (default: 0)
+
+# Service configuration
+service:
+  cleanup_timeout: 30     # Cleanup operation timeout in seconds (default: 30)
 
 # Database configuration
 database:
@@ -61,6 +66,13 @@ log:
 |--------|------|---------|-------------|
 | `port` | int | 5708 | HTTP server port |
 | `mode` | string | store | Server mode (`store`, `static`, `spa`) |
+| `max_upload_size` | int | 0 | Maximum upload size in bytes (0 = unlimited) |
+
+### Service
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `cleanup_timeout` | int | 30 | Cleanup operation timeout in seconds |
 
 ### Database
 
@@ -216,6 +228,8 @@ All configuration options can be set via environment variables using the `STOWRY
 |-------------|---------------------|
 | `server.port` | `STOWRY_SERVER_PORT` |
 | `server.mode` | `STOWRY_SERVER_MODE` |
+| `server.max_upload_size` | `STOWRY_SERVER_MAX_UPLOAD_SIZE` |
+| `service.cleanup_timeout` | `STOWRY_SERVICE_CLEANUP_TIMEOUT` |
 | `database.type` | `STOWRY_DATABASE_TYPE` |
 | `database.dsn` | `STOWRY_DATABASE_DSN` |
 | `database.tables.meta_data` | `STOWRY_DATABASE_TABLES_META_DATA` |
@@ -284,6 +298,10 @@ log:
 server:
   port: 5708
   mode: store
+  max_upload_size: 104857600  # 100MB upload limit
+
+service:
+  cleanup_timeout: 30
 
 database:
   type: postgres

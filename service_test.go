@@ -75,7 +75,8 @@ func NewStowryService(t *testing.T) (*stowry.StowryService, *SpyMetaDataRepo, *S
 	t.Helper()
 	spyRepo := new(SpyMetaDataRepo)
 	spyStorage := new(SpyFileStorage)
-	s, err := stowry.NewStowryService(spyRepo, spyStorage, stowry.ModeStore)
+	cfg := stowry.ServiceConfig{Mode: stowry.ModeStore}
+	s, err := stowry.NewStowryService(spyRepo, spyStorage, cfg)
 	assert.NoError(t, err, "new stowry service")
 	return s, spyRepo, spyStorage
 }
@@ -448,7 +449,8 @@ func NewStowryServiceWithMode(t *testing.T, mode stowry.ServerMode) (*stowry.Sto
 	t.Helper()
 	spyRepo := new(SpyMetaDataRepo)
 	spyStorage := new(SpyFileStorage)
-	s, err := stowry.NewStowryService(spyRepo, spyStorage, mode)
+	cfg := stowry.ServiceConfig{Mode: mode}
+	s, err := stowry.NewStowryService(spyRepo, spyStorage, cfg)
 	assert.NoError(t, err, "new stowry service")
 	return s, spyRepo, spyStorage
 }

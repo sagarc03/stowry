@@ -38,6 +38,7 @@ func FromContext(ctx context.Context) (*Config, error) {
 // Config is the root configuration struct for stowry.
 type Config struct {
 	Server   ServerConfig          `mapstructure:"server"`
+	Service  ServiceConfig         `mapstructure:"service"`
 	Database database.Config       `mapstructure:"database"`
 	Storage  StorageConfig         `mapstructure:"storage"`
 	Auth     AuthConfig            `mapstructure:"auth"`
@@ -47,8 +48,14 @@ type Config struct {
 
 // ServerConfig holds HTTP server configuration.
 type ServerConfig struct {
-	Port int    `mapstructure:"port" validate:"required,min=1,max=65535"`
-	Mode string `mapstructure:"mode" validate:"required,oneof=store static spa"`
+	Port          int    `mapstructure:"port" validate:"required,min=1,max=65535"`
+	Mode          string `mapstructure:"mode" validate:"required,oneof=store static spa"`
+	MaxUploadSize int64  `mapstructure:"max_upload_size" validate:"min=0"`
+}
+
+// ServiceConfig holds service-level configuration.
+type ServiceConfig struct {
+	CleanupTimeout int `mapstructure:"cleanup_timeout" validate:"min=1"`
 }
 
 // StorageConfig holds file storage configuration.
@@ -98,6 +105,9 @@ func bindFlags(v *viper.Viper, flags *pflag.FlagSet) {
 func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.port", 5708)
 	v.SetDefault("server.mode", "store")
+	v.SetDefault("server.max_upload_size", 0) // 0 means no limit
+
+	v.SetDefault("service.cleanup_timeout", 30) // seconds
 
 	v.SetDefault("database.type", "sqlite")
 	v.SetDefault("database.dsn", "stowry.db")

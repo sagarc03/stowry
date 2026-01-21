@@ -76,7 +76,8 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 
 	storage := filesystem.NewFileStorage(root)
 
-	service, err := stowry.NewStowryService(repo, storage, stowry.ModeStore)
+	serviceCfg := stowry.ServiceConfig{Mode: stowry.ModeStore}
+	service, err := stowry.NewStowryService(repo, storage, serviceCfg)
 	if err != nil {
 		return fmt.Errorf("create service: %w", err)
 	}

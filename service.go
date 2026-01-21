@@ -168,16 +168,32 @@ type FileStorage interface {
 }
 
 type StowryService struct {
-	repo    MetaDataRepo
-	storage FileStorage
-	mode    ServerMode
+	repo           MetaDataRepo
+	storage        FileStorage
+	mode           ServerMode
+	cleanupTimeout time.Duration
 }
 
-func NewStowryService(repo MetaDataRepo, storage FileStorage, mode ServerMode) (*StowryService, error) {
-	if !mode.IsValid() {
-		return nil, fmt.Errorf("new stowry service: invalide mode: %s", mode)
+// ServiceConfig holds configuration options for StowryService.
+type ServiceConfig struct {
+	Mode           ServerMode
+	CleanupTimeout time.Duration // Timeout for cleanup operations (default: 30s)
+}
+
+func NewStowryService(repo MetaDataRepo, storage FileStorage, cfg ServiceConfig) (*StowryService, error) {
+	if !cfg.Mode.IsValid() {
+		return nil, fmt.Errorf("new stowry service: invalide mode: %s", cfg.Mode)
 	}
-	return &StowryService{repo: repo, storage: storage, mode: mode}, nil
+	cleanupTimeout := cfg.CleanupTimeout
+	if cleanupTimeout <= 0 {
+		cleanupTimeout = 30 * time.Second
+	}
+	return &StowryService{
+		repo:           repo,
+		storage:        storage,
+		mode:           cfg.Mode,
+		cleanupTimeout: cleanupTimeout,
+	}, nil
 }
 
 // Populate synchronizes metadata from physical storage files.
@@ -246,8 +262,8 @@ func (s *StowryService) Populate(ctx context.Context) error {
 //
 // Concurrency safety: Safe for concurrent calls with different paths.
 // Data consistency: If metadata creation fails, the stored file is automatically deleted
-// using a background context with 30-second timeout to ensure cleanup completes even
-// if the original context is cancelled.
+// using a background context with the configured cleanup timeout to ensure cleanup completes
+// even if the original context is cancelled.
 func (s *StowryService) Create(ctx context.Context, obj CreateObject, content io.Reader) (MetaData, error) {
 	// Early context check - fail fast before expensive operations
 	if err := ctx.Err(); err != nil {
@@ -285,7 +301,7 @@ func (s *StowryService) Create(ctx context.Context, obj CreateObject, content io
 	metaData, _, upsertErr := s.repo.Upsert(ctx, oe)
 	if upsertErr != nil {
 		// Use background context for cleanup since original context may be cancelled
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), s.cleanupTimeout)
 		defer cancel()
 
 		if delErr := s.storage.Delete(cleanupCtx, obj.Path); delErr != nil {

@@ -82,7 +82,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("parse server mode: %w", err)
 	}
 
-	service, err := stowry.NewStowryService(repo, storage, mode)
+	serviceCfg := stowry.ServiceConfig{
+		Mode:           mode,
+		CleanupTimeout: time.Duration(cfg.Service.CleanupTimeout) * time.Second,
+	}
+	service, err := stowry.NewStowryService(repo, storage, serviceCfg)
 	if err != nil {
 		return fmt.Errorf("create service: %w", err)
 	}
@@ -110,6 +114,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		ReadVerifier:  readVerifier,
 		WriteVerifier: writeVerifier,
 		CORS:          cfg.CORS,
+		MaxUploadSize: cfg.Server.MaxUploadSize,
 	}
 
 	handler := stowryhttp.NewHandler(&handlerConfig, service)
