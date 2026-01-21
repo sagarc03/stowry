@@ -12,13 +12,19 @@ This document describes Stowry's technical architecture and design decisions.
 Stowry follows a clean architecture with clear separation between:
 
 - **Core domain logic** (root package)
+- **Configuration** (config package)
 - **Infrastructure adapters** (database, filesystem, keybackend, http packages)
 - **CLI application** (cmd/stowry)
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                      CLI (cmd/stowry)                   │
-│              Cobra commands, Viper config               │
+│                     Cobra commands                      │
+└────────────────────────┬────────────────────────────────┘
+                         │
+┌────────────────────────▼────────────────────────────────┐
+│                   Config (config/)                      │
+│            Load, validate, context helpers              │
 └────────────────────────┬────────────────────────────────┘
                          │
 ┌────────────────────────▼────────────────────────────────┐
@@ -188,7 +194,7 @@ if err := db.Validate(ctx); err != nil {
 repo := db.GetRepo()
 ```
 
-The CLI handles this automatically when `database.auto_migrate: true` is set in the config.
+The CLI handles this via the `stowry init` command which runs migrations and populates metadata from existing files.
 
 ## File Storage (filesystem/)
 
@@ -395,13 +401,15 @@ type ListResult struct {
 
 ### Architecture Separation
 
-Configuration logic stays in `cmd/stowry`:
+Configuration logic is handled by the `config` package, which the CLI uses:
 
 ```go
-// cmd/stowry/root.go - Viper configuration
-viper.SetDefault("server.port", 5708)
-viper.SetEnvPrefix("STOWRY")
-viper.AutomaticEnv()
+// config/config.go - Configuration loading
+cfg, err := config.Load(configFiles, cmd.Flags())
+// Returns typed Config struct with validation
+
+// Config is passed through context
+cmd.SetContext(config.WithContext(ctx, cfg))
 
 // Core package - no config awareness
 service, err := stowry.NewStowryService(repo, storage, mode)

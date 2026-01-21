@@ -12,10 +12,9 @@ Stowry provides a command-line interface for managing the server and performing 
 These flags are available for all commands:
 
 ```bash
---config string         Config file path (default "config.yaml")
+--config, -c string     Config file paths (can be specified multiple times, merged left-to-right)
 --db-type string        Database type (sqlite, postgres)
 --db-dsn string         Database connection string
---db-table string       Database table name
 --storage-path string   Storage directory path
 -h, --help              Help for the command
 ```

@@ -27,9 +27,9 @@ server:
 # Database configuration
 database:
   type: sqlite            # Database type: sqlite, postgres (default: sqlite)
-  dsn: stowry.db         # Connection string or file path
-  table: stowry_metadata  # Metadata table name (default: stowry_metadata)
-  auto_migrate: true      # Automatically create/update tables on startup (default: false)
+  dsn: stowry.db          # Connection string or file path
+  tables:
+    meta_data: stowry_metadata  # Metadata table name (default: stowry_metadata)
 
 # Storage configuration
 storage:
@@ -37,16 +37,16 @@ storage:
 
 # Authentication configuration
 auth:
-  region: us-east-1      # AWS region for signature verification
-  service: s3            # AWS service name (default: s3)
-  keys:                  # List of access keys
-    - access_key: AKIAIOSFODNN7EXAMPLE
-      secret_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-
-# Access control
-access:
-  public_read: false     # Allow unauthenticated read access (default: false)
-  public_write: false    # Allow unauthenticated write access (default: false)
+  read: public           # Read access: public, private (default: public)
+  write: public          # Write access: public, private (default: public)
+  aws:
+    region: us-east-1    # AWS region for signature verification
+    service: s3          # AWS service name (default: s3)
+  keys:
+    inline:              # Inline key definitions
+      - access_key: AKIAIOSFODNN7EXAMPLE
+        secret_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+    # file: /path/to/keys.json  # Or load from JSON file
 
 # Logging
 log:
@@ -68,19 +68,17 @@ log:
 |--------|------|---------|-------------|
 | `type` | string | sqlite | Database type (`sqlite`, `postgres`) |
 | `dsn` | string | stowry.db | Connection string |
-| `table` | string | stowry_metadata | Metadata table name |
-| `auto_migrate` | bool | false | Automatically create/update database schema on startup |
+| `tables.meta_data` | string | stowry_metadata | Metadata table name |
 
 **Migration Options:**
 
-1. **Auto-migrate (recommended for development):** Set `auto_migrate: true` in config
-2. **CLI migration:** Run `stowry init` before starting the server
-3. **Manual SQL:** Execute the schema SQL below directly in your database
+1. **CLI migration (recommended):** Run `stowry init` before starting the server
+2. **Manual SQL:** Execute the schema SQL below directly in your database
 
 #### PostgreSQL Schema
 
 ```sql
--- Table name can be anything - just ensure it matches database.table in your config
+-- Table name can be anything - just ensure it matches database.tables.meta_data in your config
 CREATE TABLE IF NOT EXISTS stowry_metadata (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     path TEXT NOT NULL UNIQUE,
@@ -109,7 +107,7 @@ WHERE (deleted_at IS NULL);
 #### SQLite Schema
 
 ```sql
--- Table name can be anything - just ensure it matches database.table in your config
+-- Table name can be anything - just ensure it matches database.tables.meta_data in your config
 CREATE TABLE IF NOT EXISTS stowry_metadata (
     id TEXT NOT NULL PRIMARY KEY,
     path TEXT NOT NULL UNIQUE,
@@ -158,35 +156,49 @@ The storage directory is created automatically if it doesn't exist. Files are or
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `region` | string | us-east-1 | AWS region for signature verification |
-| `service` | string | s3 | AWS service name |
-| `keys` | list | [] | List of access key pairs |
-
-**Multiple Keys:**
-```yaml
-auth:
-  keys:
-    - access_key: KEY1
-      secret_key: SECRET1
-    - access_key: KEY2
-      secret_key: SECRET2
-```
-
-### Access
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `public_read` | bool | false | Allow unauthenticated GET requests |
-| `public_write` | bool | false | Allow unauthenticated PUT/DELETE requests |
+| `read` | string | public | Read access mode (`public`, `private`) |
+| `write` | string | public | Write access mode (`public`, `private`) |
+| `aws.region` | string | us-east-1 | AWS region for signature verification |
+| `aws.service` | string | s3 | AWS service name |
+| `keys.inline` | list | [] | Inline list of access key pairs |
+| `keys.file` | string | - | Path to JSON file containing keys |
 
 **Access Control Matrix:**
 
-| public_read | public_write | GET | PUT | DELETE |
-|-------------|--------------|-----|-----|--------|
-| false | false | Auth required | Auth required | Auth required |
-| true | false | Public | Auth required | Auth required |
-| true | true | Public | Public | Public |
-| false | true | Auth required | Public | Public |
+| read | write | GET | PUT | DELETE |
+|------|-------|-----|-----|--------|
+| public | public | Public | Public | Public |
+| public | private | Public | Auth required | Auth required |
+| private | private | Auth required | Auth required | Auth required |
+| private | public | Auth required | Public | Public |
+
+**Multiple Keys (inline):**
+```yaml
+auth:
+  read: private
+  write: private
+  keys:
+    inline:
+      - access_key: KEY1
+        secret_key: SECRET1
+      - access_key: KEY2
+        secret_key: SECRET2
+```
+
+**Keys from file:**
+```yaml
+auth:
+  keys:
+    file: /path/to/keys.json
+```
+
+Where `keys.json` contains:
+```json
+[
+  {"access_key": "KEY1", "secret_key": "SECRET1"},
+  {"access_key": "KEY2", "secret_key": "SECRET2"}
+]
+```
 
 ### Log
 
@@ -206,12 +218,12 @@ All configuration options can be set via environment variables using the `STOWRY
 | `server.mode` | `STOWRY_SERVER_MODE` |
 | `database.type` | `STOWRY_DATABASE_TYPE` |
 | `database.dsn` | `STOWRY_DATABASE_DSN` |
-| `database.table` | `STOWRY_DATABASE_TABLE` |
-| `database.auto_migrate` | `STOWRY_DATABASE_AUTO_MIGRATE` |
+| `database.tables.meta_data` | `STOWRY_DATABASE_TABLES_META_DATA` |
 | `storage.path` | `STOWRY_STORAGE_PATH` |
-| `auth.region` | `STOWRY_AUTH_REGION` |
-| `access.public_read` | `STOWRY_ACCESS_PUBLIC_READ` |
-| `access.public_write` | `STOWRY_ACCESS_PUBLIC_WRITE` |
+| `auth.read` | `STOWRY_AUTH_READ` |
+| `auth.write` | `STOWRY_AUTH_WRITE` |
+| `auth.aws.region` | `STOWRY_AUTH_AWS_REGION` |
+| `auth.aws.service` | `STOWRY_AUTH_AWS_SERVICE` |
 | `log.level` | `STOWRY_LOG_LEVEL` |
 
 **Example:**
@@ -228,10 +240,9 @@ STOWRY_DATABASE_DSN="postgres://localhost/stowry" \
 Global flags available for all commands:
 
 ```bash
---config string         Config file path (default "config.yaml")
+--config, -c string     Config file paths (can be specified multiple times, merged left-to-right)
 --db-type string        Database type (sqlite, postgres)
 --db-dsn string         Database connection string
---db-table string       Database table name
 --storage-path string   Storage directory path
 ```
 
@@ -253,14 +264,15 @@ server:
 database:
   type: sqlite
   dsn: dev.db
-  auto_migrate: true
+  tables:
+    meta_data: stowry_metadata
 
 storage:
   path: ./uploads
 
-access:
-  public_read: true
-  public_write: true
+auth:
+  read: public
+  write: public
 
 log:
   level: debug
@@ -276,22 +288,22 @@ server:
 database:
   type: postgres
   dsn: postgres://stowry:${DB_PASSWORD}@db.example.com:5432/stowry?sslmode=require
-  table: stowry_metadata
-  auto_migrate: true  # Or run 'stowry init' manually before first start
+  tables:
+    meta_data: stowry_metadata
 
 storage:
   path: /var/lib/stowry/data
 
 auth:
-  region: us-east-1
-  service: s3
+  read: private
+  write: private
+  aws:
+    region: us-east-1
+    service: s3
   keys:
-    - access_key: ${STOWRY_ACCESS_KEY}
-      secret_key: ${STOWRY_SECRET_KEY}
-
-access:
-  public_read: false
-  public_write: false
+    inline:
+      - access_key: ${STOWRY_ACCESS_KEY}
+        secret_key: ${STOWRY_SECRET_KEY}
 
 log:
   level: info
@@ -307,14 +319,15 @@ server:
 database:
   type: sqlite
   dsn: metadata.db
-  auto_migrate: true
+  tables:
+    meta_data: stowry_metadata
 
 storage:
   path: /var/www/html
 
-access:
-  public_read: true
-  public_write: false
+auth:
+  read: public
+  write: private
 ```
 
 ### SPA Hosting
@@ -327,12 +340,13 @@ server:
 database:
   type: sqlite
   dsn: app.db
-  auto_migrate: true
+  tables:
+    meta_data: stowry_metadata
 
 storage:
   path: ./dist
 
-access:
-  public_read: true
-  public_write: false
+auth:
+  read: public
+  write: private
 ```

@@ -225,9 +225,9 @@ curl -X DELETE "http://localhost:5708/photos/vacation.jpg?X-Stowry-AccessKey=...
 For development or public content, you can disable authentication:
 
 ```yaml
-access:
-  public_read: true   # Anyone can download
-  public_write: false # Upload still requires auth
+auth:
+  read: public    # Anyone can download
+  write: private  # Upload still requires auth
 ```
 
 ## Security Best Practices
