@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	"github.com/sagarc03/stowry"
 	"github.com/sagarc03/stowry/database"
@@ -31,27 +30,23 @@ func init() {
 	serveCmd.Flags().Int("port", 5708, "HTTP server port")
 	serveCmd.Flags().String("mode", "store", "server mode (store, static, spa)")
 
-	_ = viper.BindPFlag("server.port", serveCmd.Flags().Lookup("port"))
-	_ = viper.BindPFlag("server.mode", serveCmd.Flags().Lookup("mode"))
-
 	rootCmd.AddCommand(serveCmd)
 }
 
 func runServe(cmd *cobra.Command, args []string) error {
+	cfg, err := configFromContext(cmd.Context())
+	if err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
 
-	dbCfg := database.Config{
-		Type:   viper.GetString("database.type"),
-		DSN:    viper.GetString("database.dsn"),
-		Tables: stowry.Tables{MetaData: viper.GetString("database.table")},
-	}
-
-	if err := dbCfg.Tables.Validate(); err != nil {
+	if err = cfg.Database.Tables.Validate(); err != nil {
 		return fmt.Errorf("invalid database config: %w", err)
 	}
 
-	db, err := database.Connect(ctx, dbCfg)
+	db, err := database.Connect(ctx, cfg.Database)
 	if err != nil {
 		return fmt.Errorf("connect database: %w", err)
 	}
@@ -61,27 +56,19 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("ping database: %w", err)
 	}
 
-	if viper.GetBool("database.auto_migrate") {
-		if err = db.Migrate(ctx); err != nil {
-			return fmt.Errorf("migrate database: %w", err)
-		}
-		slog.Info("database migration complete")
-	}
-
 	if err = db.Validate(ctx); err != nil {
 		return fmt.Errorf("validate database schema: %w", err)
 	}
 
 	repo := db.GetRepo()
-	slog.Info("connected to database", "type", dbCfg.Type)
+	slog.Info("connected to database", "type", cfg.Database.Type)
 
-	storagePath := viper.GetString("storage.path")
-	err = os.MkdirAll(storagePath, 0o750)
+	err = os.MkdirAll(cfg.Storage.Path, 0o750)
 	if err != nil {
 		return fmt.Errorf("create storage directory: %w", err)
 	}
 
-	root, err := os.OpenRoot(storagePath)
+	root, err := os.OpenRoot(cfg.Storage.Path)
 	if err != nil {
 		return fmt.Errorf("open storage root: %w", err)
 	}
@@ -89,8 +76,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	storage := filesystem.NewFileStorage(root)
 
-	modeStr := viper.GetString("server.mode")
-	mode, err := stowry.ParseServerMode(modeStr)
+	mode, err := stowry.ParseServerMode(cfg.Server.Mode)
 	if err != nil {
 		return fmt.Errorf("parse server mode: %w", err)
 	}
@@ -100,47 +86,34 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("create service: %w", err)
 	}
 
-	store, err := keybackend.NewSecretStore(getKeysConfig())
+	store, err := keybackend.NewSecretStore(cfg.Auth.Keys)
 	if err != nil {
 		return fmt.Errorf("create secret store: %w", err)
 	}
+
 	authCfg := stowry.AuthConfig{
-		AWS: stowry.AWSConfig{
-			Region:  viper.GetString("auth.aws.region"),
-			Service: viper.GetString("auth.aws.service"),
-		},
+		AWS: cfg.Auth.AWS,
 	}
 	verifier := stowry.NewSignatureVerifier(authCfg, store)
 
 	var readVerifier, writeVerifier stowryhttp.RequestVerifier
-	if viper.GetString("auth.read") != "public" {
+	if cfg.Auth.Read != "public" {
 		readVerifier = verifier
 	}
-	if viper.GetString("auth.write") != "public" {
+	if cfg.Auth.Write != "public" {
 		writeVerifier = verifier
-	}
-
-	corsConfig := stowryhttp.CORSConfig{
-		Enabled:          viper.GetBool("cors.enabled"),
-		AllowedOrigins:   viper.GetStringSlice("cors.allowed_origins"),
-		AllowedMethods:   viper.GetStringSlice("cors.allowed_methods"),
-		AllowedHeaders:   viper.GetStringSlice("cors.allowed_headers"),
-		ExposedHeaders:   viper.GetStringSlice("cors.exposed_headers"),
-		AllowCredentials: viper.GetBool("cors.allow_credentials"),
-		MaxAge:           viper.GetInt("cors.max_age"),
 	}
 
 	handlerConfig := stowryhttp.HandlerConfig{
 		Mode:          mode,
 		ReadVerifier:  readVerifier,
 		WriteVerifier: writeVerifier,
-		CORS:          corsConfig,
+		CORS:          cfg.CORS,
 	}
 
 	handler := stowryhttp.NewHandler(&handlerConfig, service)
 
-	port := viper.GetInt("server.port")
-	addr := fmt.Sprintf(":%d", port)
+	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 
 	server := &http.Server{
 		Addr:         addr,
@@ -171,35 +144,4 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 
 	return nil
-}
-
-func getKeysConfig() keybackend.KeysConfig {
-	var cfg keybackend.KeysConfig
-
-	// Load inline keys from auth.keys.inline
-	inlineKeys := viper.Get("auth.keys.inline")
-	if inlineKeys != nil {
-		if keyList, ok := inlineKeys.([]any); ok {
-			for _, k := range keyList {
-				keyMap, ok := k.(map[string]any)
-				if !ok {
-					continue
-				}
-
-				accessKey, _ := keyMap["access_key"].(string)
-				secretKey, _ := keyMap["secret_key"].(string)
-
-				if accessKey != "" && secretKey != "" {
-					cfg.Inline = append(cfg.Inline, keybackend.KeyPair{
-						AccessKey: accessKey,
-						SecretKey: secretKey,
-					})
-				}
-			}
-		}
-	}
-
-	cfg.File = viper.GetString("auth.keys.file")
-
-	return cfg
 }

@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	"github.com/sagarc03/stowry"
 	"github.com/sagarc03/stowry/database"
@@ -35,19 +34,18 @@ func init() {
 }
 
 func runCleanup(cmd *cobra.Command, args []string) error {
-	ctx := cmd.Context()
-
-	dbCfg := database.Config{
-		Type:   viper.GetString("database.type"),
-		DSN:    viper.GetString("database.dsn"),
-		Tables: stowry.Tables{MetaData: viper.GetString("database.table")},
+	cfg, err := configFromContext(cmd.Context())
+	if err != nil {
+		return err
 	}
 
-	if err := dbCfg.Tables.Validate(); err != nil {
+	ctx := cmd.Context()
+
+	if err = cfg.Database.Tables.Validate(); err != nil {
 		return fmt.Errorf("invalid database config: %w", err)
 	}
 
-	db, err := database.Connect(ctx, dbCfg)
+	db, err := database.Connect(ctx, cfg.Database)
 	if err != nil {
 		return fmt.Errorf("connect database: %w", err)
 	}
@@ -64,13 +62,12 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 
 	repo := db.GetRepo()
 
-	storagePath := viper.GetString("storage.path")
-	_, err = os.Stat(storagePath)
+	_, err = os.Stat(cfg.Storage.Path)
 	if os.IsNotExist(err) {
-		return fmt.Errorf("storage directory does not exist: %s", storagePath)
+		return fmt.Errorf("storage directory does not exist: %s", cfg.Storage.Path)
 	}
 
-	root, err := os.OpenRoot(storagePath)
+	root, err := os.OpenRoot(cfg.Storage.Path)
 	if err != nil {
 		return fmt.Errorf("open storage root: %w", err)
 	}

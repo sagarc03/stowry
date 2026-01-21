@@ -8,8 +8,8 @@ import (
 
 // KeyPair represents an access key and secret key pair.
 type KeyPair struct {
-	AccessKey string `json:"access_key"`
-	SecretKey string `json:"secret_key"`
+	AccessKey string `json:"access_key" mapstructure:"access_key"`
+	SecretKey string `json:"secret_key" mapstructure:"secret_key"`
 }
 
 // LoadKeysFromFile loads access keys from a JSON file.

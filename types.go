@@ -75,7 +75,7 @@ func ParseServerMode(s string) (ServerMode, error) {
 // Tables holds configurable table names for metadata storage.
 // This allows multi-tenant deployments to use different table names.
 type Tables struct {
-	MetaData string
+	MetaData string `mapstructure:"meta_data"`
 }
 
 var validTableNameRegex = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)

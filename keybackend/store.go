@@ -6,8 +6,8 @@ import (
 
 // KeysConfig holds configuration for loading access keys.
 type KeysConfig struct {
-	Inline []KeyPair // Inline key pairs from config
-	File   string    // Path to JSON file containing key pairs
+	Inline []KeyPair `mapstructure:"inline"` // Inline key pairs from config
+	File   string    `mapstructure:"file"`   // Path to JSON file containing key pairs
 }
 
 // NewSecretStore creates a SecretStore from the given configuration.

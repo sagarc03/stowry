@@ -32,11 +32,11 @@ type Database interface {
 // Config holds the configuration for connecting to a metadata backend.
 type Config struct {
 	// Type specifies the database type: "sqlite" or "postgres"
-	Type string
+	Type string `mapstructure:"type"`
 	// DSN is the data source name (connection string)
-	DSN string
+	DSN string `mapstructure:"dsn"`
 	// Tables defines the table names for the database
-	Tables stowry.Tables
+	Tables stowry.Tables `mapstructure:"tables"`
 }
 
 // Connect establishes a connection to the configured database backend.

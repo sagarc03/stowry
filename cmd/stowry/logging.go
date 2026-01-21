@@ -5,47 +5,20 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/lmittmann/tint"
-	"github.com/spf13/viper"
+
+	"github.com/sagarc03/stowry/config"
 )
 
-func setupLogging() {
-	env := viper.GetString("env")
+func setupLogging(cfg *config.Config) {
+	level := parseLevel(cfg.Log.Level)
 
-	isProd := env == "prod" || env == "production"
-
-	levelStr := viper.GetString("log.level")
-	if levelStr == "" {
-		if isProd {
-			levelStr = "info"
-		} else {
-			levelStr = "debug"
-		}
-	}
-	level := parseLevel(levelStr)
-
-	var h slog.Handler
-	if isProd {
-		h = slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-			Level:     level,
-			AddSource: false,
-			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
-				if a.Key == slog.TimeKey {
-					a.Key = "ts"
-					return slog.String("ts", a.Value.Time().UTC().Format(time.RFC3339Nano))
-				}
-				return a
-			},
-		})
-	} else {
-		h = tint.NewHandler(os.Stdout, &tint.Options{
-			Level:      level,
-			AddSource:  true,
-			TimeFormat: "15:04:05.000",
-		})
-	}
+	h := tint.NewHandler(os.Stdout, &tint.Options{
+		Level:      level,
+		AddSource:  true,
+		TimeFormat: "15:04:05.000",
+	})
 
 	logger := slog.New(h)
 	slog.SetDefault(logger)

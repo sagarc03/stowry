@@ -7,7 +7,8 @@ server:
 database:
   type: sqlite # sqlite | postgres
   dsn: stowry.db # file path for sqlite, connection string for postgres
-  table: stowry_metadata # metadata table name
+  tables:
+    meta_data: stowry_metadata # metadata table name
 
 # Storage settings
 storage:

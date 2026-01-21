@@ -40,13 +40,13 @@ type SecretStore interface {
 
 // AWSConfig holds AWS-specific configuration for signature verification.
 type AWSConfig struct {
-	Region  string // AWS region (e.g., "us-east-1")
-	Service string // AWS service name (e.g., "s3")
+	Region  string `mapstructure:"region"`  // AWS region (e.g., "us-east-1")
+	Service string `mapstructure:"service"` // AWS service name (e.g., "s3")
 }
 
 // AuthConfig holds configuration for SignatureVerifier.
 type AuthConfig struct {
-	AWS AWSConfig
+	AWS AWSConfig `mapstructure:"aws"`
 }
 
 // SignatureVerifier verifies signed requests using either AWS Signature V4 or native Stowry signing.
