@@ -57,67 +57,53 @@ func (r *repo) Get(ctx context.Context, path string) (stowry.MetaData, error) {
 }
 
 func (r *repo) Upsert(ctx context.Context, entry stowry.ObjectEntry) (stowry.MetaData, bool, error) {
-	// Check if entry exists first to determine if this is an insert or update
-	var existingID string
-	checkQuery := fmt.Sprintf(`SELECT id FROM %s WHERE path = ?`, r.tableName) //nolint:gosec // table name is validated
-	err := r.db.QueryRowContext(ctx, checkQuery, entry.Path).Scan(&existingID)
-	isInsert := errors.Is(err, sql.ErrNoRows)
-	if err != nil && !isInsert {
-		return stowry.MetaData{}, false, fmt.Errorf("upsert: check existing: %w", err)
-	}
+	newID := uuid.New()
+	now := time.Now().UTC()
+	nowStr := now.Format(time.RFC3339Nano)
 
-	now := time.Now().UTC().Format(time.RFC3339Nano)
+	// Use INSERT ... ON CONFLICT for atomic upsert (requires SQLite 3.24+)
+	query := fmt.Sprintf( //nolint:gosec // G201: table name is validated
+		`INSERT INTO %s (id, path, content_type, etag, file_size_bytes, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT (path) DO UPDATE
+		SET content_type = excluded.content_type,
+			etag = excluded.etag,
+			file_size_bytes = excluded.file_size_bytes,
+			updated_at = excluded.updated_at,
+			deleted_at = NULL,
+			cleaned_up_at = NULL
+		RETURNING id, created_at`, r.tableName)
+
 	var m stowry.MetaData
+	var idStr, createdAtStr string
 
-	if isInsert {
-		// Insert new entry
-		newID := uuid.New()
-		insertQuery := fmt.Sprintf( //nolint:gosec // G201: table name is validated
-			`INSERT INTO %s (id, path, content_type, etag, file_size_bytes, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?)`, r.tableName)
-
-		_, err = r.db.ExecContext(ctx, insertQuery,
-			newID.String(), entry.Path, entry.ContentType, entry.ETag, entry.Size, now, now,
-		)
-		if err != nil {
-			return stowry.MetaData{}, false, fmt.Errorf("upsert: insert: %w", err)
-		}
-
-		m.ID = newID
-		m.CreatedAt, _ = time.Parse(time.RFC3339Nano, now)
-	} else {
-		// Update existing entry
-		updateQuery := fmt.Sprintf( //nolint:gosec // G201: table name is validated
-			`UPDATE %s
-			SET content_type = ?, etag = ?, file_size_bytes = ?, updated_at = ?,
-				deleted_at = NULL, cleaned_up_at = NULL
-			WHERE path = ?`, r.tableName)
-
-		_, err = r.db.ExecContext(ctx, updateQuery,
-			entry.ContentType, entry.ETag, entry.Size, now, entry.Path,
-		)
-		if err != nil {
-			return stowry.MetaData{}, false, fmt.Errorf("upsert: update: %w", err)
-		}
-
-		m.ID, _ = uuid.Parse(existingID)
-
-		// Get the original created_at
-		var createdAt string
-		createdQuery := fmt.Sprintf(`SELECT created_at FROM %s WHERE path = ?`, r.tableName) //nolint:gosec // table name is validated
-		if err := r.db.QueryRowContext(ctx, createdQuery, entry.Path).Scan(&createdAt); err != nil {
-			return stowry.MetaData{}, false, fmt.Errorf("upsert: get created_at: %w", err)
-		}
-		m.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
+	err := r.db.QueryRowContext(ctx, query,
+		newID.String(), entry.Path, entry.ContentType, entry.ETag, entry.Size, nowStr, nowStr,
+	).Scan(&idStr, &createdAtStr)
+	if err != nil {
+		return stowry.MetaData{}, false, fmt.Errorf("upsert: %w", err)
 	}
+
+	m.ID, err = uuid.Parse(idStr)
+	if err != nil {
+		return stowry.MetaData{}, false, fmt.Errorf("upsert: parse id: %w", err)
+	}
+
+	m.CreatedAt, err = time.Parse(time.RFC3339Nano, createdAtStr)
+	if err != nil {
+		return stowry.MetaData{}, false, fmt.Errorf("upsert: parse created_at: %w", err)
+	}
+
+	// If the returned ID matches our newID, it was an insert
+	inserted := m.ID == newID
 
 	m.Path = entry.Path
 	m.ContentType = entry.ContentType
 	m.Etag = entry.ETag
 	m.FileSizeBytes = entry.Size
-	m.UpdatedAt, _ = time.Parse(time.RFC3339Nano, now)
+	m.UpdatedAt = now
 
-	return m, isInsert, nil
+	return m, inserted, nil
 }
 
 func (r *repo) Delete(ctx context.Context, path string) error {
