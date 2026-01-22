@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -17,14 +18,18 @@ type ErrorResponse struct {
 
 // WriteError writes a JSON error response
 func WriteError(w http.ResponseWriter, code int, errCode, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(code)
-	if err := json.NewEncoder(w).Encode(ErrorResponse{
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(ErrorResponse{
 		Error:   errCode,
 		Message: message,
 	}); err != nil {
 		slog.Error("failed to encode error response", "error", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	_, _ = w.Write(buf.Bytes())
 }
 
 // HandleError writes appropriate error response based on error type
@@ -52,7 +57,12 @@ func HandleError(w http.ResponseWriter, err error) {
 
 // WriteJSON writes a JSON response
 func WriteJSON(w http.ResponseWriter, code int, data any) error {
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(data); err != nil {
+		return err
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	return json.NewEncoder(w).Encode(data)
+	_, _ = w.Write(buf.Bytes())
+	return nil
 }
