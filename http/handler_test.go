@@ -3,6 +3,7 @@ package http_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -796,5 +797,119 @@ func TestHandler_HandleList_NegativeLimit(t *testing.T) {
 	handler.Router().ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
+	service.AssertExpectations(t)
+}
+
+// Internal error tests - testing non-sentinel errors that trigger 500 responses
+
+func TestHandler_HandleList_InternalError(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	service.On("List", mock.Anything, mock.Anything).Return(
+		stowry.ListResult{},
+		errors.New("database connection failed"),
+	)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Contains(t, rec.Body.String(), "internal_error")
+
+	service.AssertExpectations(t)
+}
+
+func TestHandler_HandleGet_InternalError(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	service.On("Get", mock.Anything, "file.txt").Return(
+		stowry.MetaData{},
+		nil,
+		errors.New("storage read failed"),
+	)
+
+	req := httptest.NewRequest("GET", "/file.txt", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Contains(t, rec.Body.String(), "internal_error")
+
+	service.AssertExpectations(t)
+}
+
+func TestHandler_HandlePut_InternalError(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	service.On("Create", mock.Anything, mock.Anything, mock.Anything).Return(
+		stowry.MetaData{},
+		errors.New("storage write failed"),
+	)
+
+	req := httptest.NewRequest("PUT", "/file.txt", strings.NewReader("content"))
+	req.Header.Set("Content-Type", "text/plain")
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Contains(t, rec.Body.String(), "internal_error")
+
+	service.AssertExpectations(t)
+}
+
+func TestHandler_HandlePut_IfMatch_GetInternalError(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	// When checking If-Match, Get returns an internal error
+	service.On("Get", mock.Anything, "file.txt").Return(
+		stowry.MetaData{},
+		nil,
+		errors.New("database error"),
+	)
+
+	req := httptest.NewRequest("PUT", "/file.txt", strings.NewReader("content"))
+	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("If-Match", "some-etag")
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Contains(t, rec.Body.String(), "internal_error")
+
+	// Create should NOT be called due to Get error
+	service.AssertNotCalled(t, "Create")
+	service.AssertExpectations(t)
+}
+
+func TestHandler_HandleDelete_InternalError(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	service.On("Delete", mock.Anything, "file.txt").Return(
+		errors.New("storage delete failed"),
+	)
+
+	req := httptest.NewRequest("DELETE", "/file.txt", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.Contains(t, rec.Body.String(), "internal_error")
+
 	service.AssertExpectations(t)
 }
