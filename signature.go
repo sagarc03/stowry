@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -118,8 +119,15 @@ func (v *StowrySignatureVerifier) Verify(r *http.Request) error {
 		return errors.New("missing required signature parameters")
 	}
 
-	timestamp := parseInt64(dateStr)
-	expires := parseInt64(expiresStr)
+	timestamp, err := strconv.ParseInt(dateStr, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid X-Stowry-Date: %w", err)
+	}
+
+	expires, err := strconv.ParseInt(expiresStr, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid X-Stowry-Expires: %w", err)
+	}
 
 	if expires <= 0 || expires > stowrysign.MaxExpires {
 		return fmt.Errorf("invalid expires: must be between 1 and %d", stowrysign.MaxExpires)
@@ -235,7 +243,10 @@ func (v *AWSSignatureVerifier) extractParams(query url.Values) (*signatureParams
 		return nil, errors.New("invalid X-Amz-Date format")
 	}
 
-	expires := parseInt64(amzExpires)
+	expires, err := strconv.ParseInt(amzExpires, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid X-Amz-Expires: %w", err)
+	}
 	if expires <= 0 || expires > MaxExpiresSeconds {
 		return nil, fmt.Errorf("invalid X-Amz-Expires: must be between 1 and %d", MaxExpiresSeconds)
 	}
@@ -378,13 +389,4 @@ func sha256Hash(data string) string {
 	h := sha256.New()
 	h.Write([]byte(data))
 	return hex.EncodeToString(h.Sum(nil))
-}
-
-func parseInt64(s string) int64 {
-	var n int64
-	_, err := fmt.Sscanf(s, "%d", &n)
-	if err != nil {
-		return 0
-	}
-	return n
 }
