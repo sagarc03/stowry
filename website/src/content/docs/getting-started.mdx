@@ -69,11 +69,11 @@ Run the init command to create the database schema:
 ./stowry init
 ```
 
-The table name (`stowry_metadata` in this example) can be anything you want - just make sure it matches between your config and the SQL schema.
+The table name (`stowry_metadata` in this example) must be lowercase, use only alphanumeric characters and underscores, and be at most 63 characters long.
 
 **Alternative: Manual Migration**
 
-If you prefer to manage the schema yourself, run the SQL manually (replace `stowry_metadata` with your chosen table name):
+If you prefer to manage the schema yourself, run the SQL manually:
 
 import { Tabs, TabItem } from '@astrojs/starlight/components';
 
