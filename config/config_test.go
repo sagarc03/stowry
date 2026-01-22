@@ -394,3 +394,33 @@ log:
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "validate config")
 }
+
+func TestLoad_ValidationError_InvalidTableName(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	configContent := `
+server:
+  port: 5708
+  mode: store
+database:
+  type: sqlite
+  dsn: stowry.db
+  tables:
+    meta_data: INVALID-TABLE-NAME
+storage:
+  path: ./data
+auth:
+  read: public
+  write: public
+log:
+  level: info
+`
+	err := os.WriteFile(configPath, []byte(configContent), 0o644)
+	require.NoError(t, err)
+
+	_, err = config.Load([]string{configPath}, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "validate config")
+	assert.Contains(t, err.Error(), "invalid metadata table name")
+}

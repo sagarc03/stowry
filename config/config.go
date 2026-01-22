@@ -183,5 +183,10 @@ func Load(configFiles []string, flags *pflag.FlagSet) (*Config, error) {
 		return nil, fmt.Errorf("validate config: %w", err)
 	}
 
+	// 7. Validate database table names
+	if err := cfg.Database.Tables.Validate(); err != nil {
+		return nil, fmt.Errorf("validate config: %w", err)
+	}
+
 	return &cfg, nil
 }

@@ -36,10 +36,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	ctx := cmd.Context()
 
-	if err = cfg.Database.Tables.Validate(); err != nil {
-		return fmt.Errorf("invalid database config: %w", err)
-	}
-
 	db, err := database.Connect(ctx, cfg.Database)
 	if err != nil {
 		return fmt.Errorf("connect database: %w", err)

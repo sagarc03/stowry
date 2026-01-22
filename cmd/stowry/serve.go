@@ -43,10 +43,6 @@ func runServe(cmd *cobra.Command, args []string) error {
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
 
-	if err = cfg.Database.Tables.Validate(); err != nil {
-		return fmt.Errorf("invalid database config: %w", err)
-	}
-
 	db, err := database.Connect(ctx, cfg.Database)
 	if err != nil {
 		return fmt.Errorf("connect database: %w", err)
