@@ -182,7 +182,7 @@ type ServiceConfig struct {
 
 func NewStowryService(repo MetaDataRepo, storage FileStorage, cfg ServiceConfig) (*StowryService, error) {
 	if !cfg.Mode.IsValid() {
-		return nil, fmt.Errorf("new stowry service: invalide mode: %s", cfg.Mode)
+		return nil, fmt.Errorf("new stowry service: invalid mode: %s", cfg.Mode)
 	}
 	cleanupTimeout := cfg.CleanupTimeout
 	if cleanupTimeout <= 0 {
