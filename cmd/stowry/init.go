@@ -91,7 +91,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	for {
 		result, err := service.List(ctx, stowry.ListQuery{Limit: 1000, Cursor: cursor})
 		if err != nil {
-			break
+			return fmt.Errorf("count files: %w", err)
 		}
 		total += len(result.Items)
 		if result.NextCursor == "" {
