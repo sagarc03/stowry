@@ -49,7 +49,7 @@ func TestAuthMiddleware_RequiresAuth_NoSignature(t *testing.T) {
 
 	wrapped.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 	assert.Contains(t, rec.Body.String(), "unauthorized")
 }
 
@@ -73,5 +73,5 @@ func TestAuthMiddleware_RequiresAuth_InvalidSignature(t *testing.T) {
 
 	wrapped.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }

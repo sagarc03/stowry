@@ -42,7 +42,7 @@ func HandleError(w http.ResponseWriter, err error) {
 	}
 
 	if errors.Is(err, ErrUnauthorized) {
-		WriteError(w, http.StatusForbidden, "unauthorized", err.Error())
+		WriteError(w, http.StatusUnauthorized, "unauthorized", err.Error())
 		return
 	}
 
