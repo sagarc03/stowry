@@ -130,6 +130,24 @@ func TestHandler_HandleList_MaxLimit(t *testing.T) {
 	service.AssertExpectations(t)
 }
 
+func TestHandler_HandleList_InvalidLimit(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	// No service call expected for invalid limit
+
+	req := httptest.NewRequest("GET", "/?limit=abc", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "invalid_parameter")
+
+	service.AssertExpectations(t)
+}
+
 func TestHandler_HandleGet_Success(t *testing.T) {
 	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
 	service := new(MockService)

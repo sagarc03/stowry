@@ -93,9 +93,12 @@ func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
 
 	limit := 100
 	if limitStr != "" {
-		if parsed, err := strconv.Atoi(limitStr); err == nil {
-			limit = max(1, min(1000, parsed))
+		parsed, err := strconv.Atoi(limitStr)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, "invalid_parameter", "limit must be a valid integer")
+			return
 		}
+		limit = max(1, min(1000, parsed))
 	}
 
 	query := stowry.ListQuery{
