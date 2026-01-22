@@ -1,6 +1,9 @@
 package http
 
-import "net/http"
+import (
+	"log/slog"
+	"net/http"
+)
 
 // RequestVerifier verifies HTTP requests for authentication.
 // Implementations should return nil if the request is valid,
@@ -21,7 +24,7 @@ func AuthMiddleware(verifier RequestVerifier) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if err := verifier.Verify(r); err != nil {
-				// TODO: log error
+				slog.Warn("authentication failed", "error", err, "method", r.Method, "path", r.URL.Path)
 				HandleError(w, ErrUnauthorized)
 				return
 			}
