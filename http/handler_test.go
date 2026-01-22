@@ -519,3 +519,282 @@ func TestHandler_SPAMode_RootPath_CallsGet(t *testing.T) {
 	service.AssertExpectations(t)
 	service.AssertNotCalled(t, "List")
 }
+
+// MaxUploadSize tests
+
+func TestHandler_HandlePut_MaxUploadSize_WithinLimit(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{
+		Mode:          stowry.ModeStore,
+		MaxUploadSize: 1024, // 1KB limit
+	}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	content := strings.Repeat("x", 100) // 100 bytes, within limit
+	metadata := stowry.MetaData{
+		ID:            uuid.New(),
+		Path:          "small.txt",
+		ContentType:   "text/plain",
+		Etag:          "abc123",
+		FileSizeBytes: int64(len(content)),
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+
+	service.On("Create", mock.Anything, mock.MatchedBy(func(obj stowry.CreateObject) bool {
+		return obj.Path == "small.txt"
+	}), mock.Anything).Return(metadata, nil)
+
+	req := httptest.NewRequest("PUT", "/small.txt", strings.NewReader(content))
+	req.Header.Set("Content-Type", "text/plain")
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	service.AssertExpectations(t)
+}
+
+func TestHandler_HandlePut_MaxUploadSize_NoLimit(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{
+		Mode:          stowry.ModeStore,
+		MaxUploadSize: 0, // No limit
+	}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	content := strings.Repeat("x", 10000) // 10KB, should work with no limit
+	metadata := stowry.MetaData{
+		ID:            uuid.New(),
+		Path:          "large.txt",
+		ContentType:   "text/plain",
+		Etag:          "abc123",
+		FileSizeBytes: int64(len(content)),
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+
+	service.On("Create", mock.Anything, mock.MatchedBy(func(obj stowry.CreateObject) bool {
+		return obj.Path == "large.txt"
+	}), mock.Anything).Return(metadata, nil)
+
+	req := httptest.NewRequest("PUT", "/large.txt", strings.NewReader(content))
+	req.Header.Set("Content-Type", "text/plain")
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	service.AssertExpectations(t)
+}
+
+// If-Match header tests for conditional updates
+
+func TestHandler_HandlePut_IfMatch_Success(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	existingMetadata := stowry.MetaData{
+		ID:            uuid.New(),
+		Path:          "existing.txt",
+		ContentType:   "text/plain",
+		Etag:          "existing-etag",
+		FileSizeBytes: 50,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+
+	newContent := "Updated content"
+	newMetadata := stowry.MetaData{
+		ID:            existingMetadata.ID,
+		Path:          "existing.txt",
+		ContentType:   "text/plain",
+		Etag:          "new-etag",
+		FileSizeBytes: int64(len(newContent)),
+		CreatedAt:     existingMetadata.CreatedAt,
+		UpdatedAt:     time.Now(),
+	}
+
+	// First call to check existing ETag
+	service.On("Get", mock.Anything, "existing.txt").Return(
+		existingMetadata,
+		readSeekNopCloser{strings.NewReader("old content")},
+		nil,
+	).Once()
+
+	// Then create the new version
+	service.On("Create", mock.Anything, mock.MatchedBy(func(obj stowry.CreateObject) bool {
+		return obj.Path == "existing.txt"
+	}), mock.Anything).Return(newMetadata, nil)
+
+	req := httptest.NewRequest("PUT", "/existing.txt", strings.NewReader(newContent))
+	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("If-Match", "existing-etag") // Matches existing ETag
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	service.AssertExpectations(t)
+}
+
+func TestHandler_HandlePut_IfMatch_WithQuotes(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	existingMetadata := stowry.MetaData{
+		ID:            uuid.New(),
+		Path:          "existing.txt",
+		ContentType:   "text/plain",
+		Etag:          "existing-etag",
+		FileSizeBytes: 50,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+
+	newContent := "Updated content"
+	newMetadata := stowry.MetaData{
+		ID:            existingMetadata.ID,
+		Path:          "existing.txt",
+		ContentType:   "text/plain",
+		Etag:          "new-etag",
+		FileSizeBytes: int64(len(newContent)),
+		CreatedAt:     existingMetadata.CreatedAt,
+		UpdatedAt:     time.Now(),
+	}
+
+	service.On("Get", mock.Anything, "existing.txt").Return(
+		existingMetadata,
+		readSeekNopCloser{strings.NewReader("old content")},
+		nil,
+	).Once()
+
+	service.On("Create", mock.Anything, mock.MatchedBy(func(obj stowry.CreateObject) bool {
+		return obj.Path == "existing.txt"
+	}), mock.Anything).Return(newMetadata, nil)
+
+	req := httptest.NewRequest("PUT", "/existing.txt", strings.NewReader(newContent))
+	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("If-Match", `"existing-etag"`) // With quotes, also valid
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	service.AssertExpectations(t)
+}
+
+func TestHandler_HandlePut_IfMatch_Mismatch(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	existingMetadata := stowry.MetaData{
+		ID:            uuid.New(),
+		Path:          "existing.txt",
+		ContentType:   "text/plain",
+		Etag:          "current-etag",
+		FileSizeBytes: 50,
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+
+	service.On("Get", mock.Anything, "existing.txt").Return(
+		existingMetadata,
+		readSeekNopCloser{strings.NewReader("content")},
+		nil,
+	).Once()
+
+	req := httptest.NewRequest("PUT", "/existing.txt", strings.NewReader("new content"))
+	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("If-Match", "stale-etag") // Doesn't match
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusPreconditionFailed, rec.Code)
+	assert.Contains(t, rec.Body.String(), "precondition_failed")
+
+	// Create should NOT be called
+	service.AssertNotCalled(t, "Create")
+	service.AssertExpectations(t)
+}
+
+func TestHandler_HandlePut_IfMatch_FileNotExists(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	newContent := "New file content"
+	newMetadata := stowry.MetaData{
+		ID:            uuid.New(),
+		Path:          "new.txt",
+		ContentType:   "text/plain",
+		Etag:          "new-etag",
+		FileSizeBytes: int64(len(newContent)),
+		CreatedAt:     time.Now(),
+		UpdatedAt:     time.Now(),
+	}
+
+	// File doesn't exist
+	service.On("Get", mock.Anything, "new.txt").Return(
+		stowry.MetaData{},
+		nil,
+		stowry.ErrNotFound,
+	).Once()
+
+	// If file doesn't exist and If-Match is provided, create should still proceed
+	service.On("Create", mock.Anything, mock.MatchedBy(func(obj stowry.CreateObject) bool {
+		return obj.Path == "new.txt"
+	}), mock.Anything).Return(newMetadata, nil)
+
+	req := httptest.NewRequest("PUT", "/new.txt", strings.NewReader(newContent))
+	req.Header.Set("Content-Type", "text/plain")
+	req.Header.Set("If-Match", "any-etag") // File doesn't exist, so this is ignored
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	service.AssertExpectations(t)
+}
+
+// Limit edge cases
+
+func TestHandler_HandleList_LimitZero(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	service.On("List", mock.Anything, mock.MatchedBy(func(q stowry.ListQuery) bool {
+		return q.Limit == 1 // Zero or negative should be clamped to 1
+	})).Return(stowry.ListResult{Items: []stowry.MetaData{}}, nil)
+
+	req := httptest.NewRequest("GET", "/?limit=0", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	service.AssertExpectations(t)
+}
+
+func TestHandler_HandleList_NegativeLimit(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	service.On("List", mock.Anything, mock.MatchedBy(func(q stowry.ListQuery) bool {
+		return q.Limit == 1 // Negative should be clamped to 1
+	})).Return(stowry.ListResult{Items: []stowry.MetaData{}}, nil)
+
+	req := httptest.NewRequest("GET", "/?limit=-10", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	service.AssertExpectations(t)
+}
