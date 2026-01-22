@@ -64,7 +64,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 	repo := db.GetRepo()
 	slog.Info("connected to database", "type", cfg.Database.Type)
 
-	err = os.MkdirAll(cfg.Storage.Path, 0o750)
+	// 0o700: owner-only access. For Kubernetes deployments with shared access needs,
+	// use fsGroup in securityContext and pre-create the directory with 0o750.
+	err = os.MkdirAll(cfg.Storage.Path, 0o700)
 	if err != nil {
 		return fmt.Errorf("create storage directory: %w", err)
 	}
