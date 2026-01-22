@@ -139,7 +139,7 @@ func (v *StowrySignatureVerifier) Verify(r *http.Request) error {
 
 	secretKey, err := v.store.Lookup(credential)
 	if err != nil {
-		return fmt.Errorf("failed to lookup access key: %w", err)
+		return fmt.Errorf("lookup access key: %w", err)
 	}
 
 	expectedSignature := stowrysign.Sign(secretKey, r.Method, r.URL.Path, timestamp, expires)
@@ -190,7 +190,7 @@ func (v *AWSSignatureVerifier) Verify(r *http.Request) error {
 
 	secretKey, err := v.store.Lookup(params.accessKey)
 	if err != nil {
-		return fmt.Errorf("failed to lookup access key: %w", err)
+		return fmt.Errorf("lookup access key: %w", err)
 	}
 
 	expectedSignature := calculateSignature(

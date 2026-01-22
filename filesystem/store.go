@@ -42,7 +42,7 @@ func (s *Store) Get(ctx context.Context, path string) (io.ReadSeekCloser, error)
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, stowry.ErrNotFound
 		}
-		return nil, fmt.Errorf("failed to open file: %w", err)
+		return nil, fmt.Errorf("open file: %w", err)
 	}
 
 	return f, nil
@@ -71,7 +71,7 @@ func (s *Store) Write(ctx context.Context, path string, content io.Reader) (stow
 	tmpFile := tmpFileName()
 	t, createErr := s.root.Create(tmpFile)
 	if createErr != nil {
-		return stowry.SaveResult{}, fmt.Errorf("could not open temp file: %w", createErr)
+		return stowry.SaveResult{}, fmt.Errorf("create temp file: %w", createErr)
 	}
 
 	success := false
@@ -91,23 +91,23 @@ func (s *Store) Write(ctx context.Context, path string, content io.Reader) (stow
 
 	fileSizeBytes, err := io.Copy(w, &ctxReader{ctx: ctx, r: content})
 	if err != nil {
-		return stowry.SaveResult{}, fmt.Errorf("could not copy file contents: %w", err)
+		return stowry.SaveResult{}, fmt.Errorf("copy contents: %w", err)
 	}
 
 	err = t.Sync()
 	if err != nil {
-		return stowry.SaveResult{}, fmt.Errorf("could not sync written file: %w", err)
+		return stowry.SaveResult{}, fmt.Errorf("sync file: %w", err)
 	}
 
 	destDir := filepath.Dir(path)
 	if destDir != "." {
 		if err := s.root.MkdirAll(destDir, 0o755); err != nil {
-			return stowry.SaveResult{}, fmt.Errorf("could not create intermediate directories: %w", err)
+			return stowry.SaveResult{}, fmt.Errorf("create directories: %w", err)
 		}
 	}
 
 	if renameErr := s.root.Rename(tmpFile, path); renameErr != nil {
-		return stowry.SaveResult{}, fmt.Errorf("failed to rename file: %w", renameErr)
+		return stowry.SaveResult{}, fmt.Errorf("rename file: %w", renameErr)
 	}
 
 	etag := hex.EncodeToString(h.Sum(nil))
@@ -127,7 +127,7 @@ func (s *Store) Delete(ctx context.Context, path string) error {
 		if errors.Is(err, os.ErrNotExist) {
 			return stowry.ErrNotFound
 		}
-		return fmt.Errorf("could not delete file: %w", err)
+		return fmt.Errorf("delete file: %w", err)
 	}
 	return nil
 }
@@ -144,7 +144,7 @@ func (s *Store) List(ctx context.Context) ([]stowry.ObjectEntry, error) {
 
 	err := s.walkDir(ctx, ".", &entries)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list files: %w", err)
+		return nil, fmt.Errorf("list files: %w", err)
 	}
 
 	return entries, nil
