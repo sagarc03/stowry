@@ -11,7 +11,7 @@ A lightweight, self-hosted object storage server with AWS Signature V4 authentic
 
 - **AWS Sig V4 authentication** - Uses AWS Signature V4 presigned URLs (not S3-compatible API)
 - **Three server modes** - Object storage API, static file server, or SPA host
-- **Minimal dependencies** - Single binary, SQLite or PostgreSQL for metadata
+- **Minimal dependencies** - Single binary, SQLite (3.24+) or PostgreSQL for metadata
 - **Soft deletion** - Files are recoverable until cleanup runs
 - **Atomic writes** - No partial or corrupted files
 - **Pluggable storage** - Filesystem now, S3/GCS ready interface

@@ -78,7 +78,7 @@ log:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `type` | string | sqlite | Database type (`sqlite`, `postgres`) |
+| `type` | string | sqlite | Database type (`sqlite` requires 3.24+, `postgres`) |
 | `dsn` | string | stowry.db | Connection string |
 | `tables.meta_data` | string | stowry_metadata | Metadata table name |
 
@@ -162,7 +162,7 @@ dsn: host=localhost port=5432 user=stowry password=secret dbname=stowry
 |--------|------|---------|-------------|
 | `path` | string | ./data | Directory for file storage |
 
-The storage directory is created automatically if it doesn't exist. Files are organized by their path, maintaining the original directory structure.
+The storage directory is created automatically with `0o700` permissions (owner-only access). For Kubernetes deployments with shared access needs, pre-create the directory with `0o750` and use `fsGroup` in securityContext. Files are organized by their path, maintaining the original directory structure.
 
 ### Auth
 

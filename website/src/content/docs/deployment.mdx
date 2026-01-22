@@ -92,3 +92,94 @@ volumes:
   stowry-data:
   postgres-data:
 ```
+
+## Kubernetes
+
+### Basic Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stowry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stowry
+  template:
+    metadata:
+      labels:
+        app: stowry
+    spec:
+      securityContext:
+        runAsUser: 1000
+        fsGroup: 1000  # Required for shared volume access
+      containers:
+        - name: stowry
+          image: ghcr.io/sagarc03/stowry:latest
+          args: ["serve"]
+          ports:
+            - containerPort: 5708
+          volumeMounts:
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: data
+              mountPath: /app/data
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+      volumes:
+        - name: config
+          configMap:
+            name: stowry-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: stowry-data
+```
+
+### Storage Permissions Note
+
+The storage directory is created with `0o700` (owner-only) permissions by default. For Kubernetes deployments where multiple containers or pods need access:
+
+1. **Use `fsGroup`** in securityContext (shown above) - Kubernetes sets group ownership on mounted volumes
+2. **Pre-create the directory** with `0o750` permissions if using init containers or sidecars that need read access
+3. **Use consistent `runAsUser`** across deployments to maintain file ownership
+
+### Service and Ingress
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: stowry
+spec:
+  selector:
+    app: stowry
+  ports:
+    - port: 5708
+      targetPort: 5708
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: stowry
+spec:
+  rules:
+    - host: storage.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: stowry
+                port:
+                  number: 5708
+```
