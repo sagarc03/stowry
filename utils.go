@@ -8,8 +8,8 @@ import (
 
 // IsValidPath validates that a path string meets the requirements for a storage path.
 // It checks that the path:
-//   - is not empty or just "/"
-//   - starts with "/" (absolute path)
+//   - is not empty, ".", or "/"
+//   - is relative (does not start with "/")
 //   - does not end with "/"
 //   - does not contain ".." (path traversal)
 //   - does not contain "//" (empty segments)
