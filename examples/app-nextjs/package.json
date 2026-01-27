@@ -12,7 +12,7 @@
     "@better-upload/client": "^3.0.12",
     "@better-upload/server": "^3.0.12",
     "better-sqlite3": "^12.6.2",
-    "next": "16.1.3",
+    "next": "16.1.5",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "stowryjs": "^0.1.0"
