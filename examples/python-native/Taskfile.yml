@@ -1,0 +1,30 @@
+version: "3"
+
+tasks:
+  default:
+    desc: Run the Python native SDK example
+    deps: [deps]
+    cmds:
+      - .venv/bin/python main.py
+
+  venv:
+    desc: Create virtual environment
+    cmds:
+      - python3 -m venv .venv
+    status:
+      - test -d .venv
+
+  deps:
+    desc: Install dependencies
+    deps: [venv]
+    cmds:
+      - .venv/bin/pip install -r requirements.txt
+    sources:
+      - requirements.txt
+    generates:
+      - .venv/lib/**/site-packages/*
+
+  clean:
+    desc: Remove virtual environment
+    cmds:
+      - rm -rf .venv __pycache__

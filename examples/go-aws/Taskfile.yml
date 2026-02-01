@@ -1,0 +1,23 @@
+version: "3"
+
+tasks:
+  default:
+    desc: Run the Go AWS SDK example
+    deps: [deps]
+    cmds:
+      - go run main.go
+
+  deps:
+    desc: Install dependencies
+    cmds:
+      - go mod tidy
+    sources:
+      - go.mod
+      - go.sum
+    generates:
+      - go.sum
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - go clean -cache

@@ -1,0 +1,66 @@
+version: "3"
+
+includes:
+  go-aws:
+    taskfile: ./go-aws/Taskfile.yml
+    dir: ./go-aws
+  go-native:
+    taskfile: ./go-native/Taskfile.yml
+    dir: ./go-native
+  python-aws:
+    taskfile: ./python-aws/Taskfile.yml
+    dir: ./python-aws
+  python-native:
+    taskfile: ./python-native/Taskfile.yml
+    dir: ./python-native
+  js-aws:
+    taskfile: ./javascript-aws/Taskfile.yml
+    dir: ./javascript-aws
+  js-native:
+    taskfile: ./javascript-native/Taskfile.yml
+    dir: ./javascript-native
+  nextjs:
+    taskfile: ./app-nextjs/Taskfile.yml
+    dir: ./app-nextjs
+  flask-react:
+    taskfile: ./app-flask-react/Taskfile.yml
+    dir: ./app-flask-react
+
+tasks:
+  default:
+    desc: List available tasks
+    cmds:
+      - task --list
+
+  stowry:init:
+    desc: Initialize Stowry database (run once before stowry)
+    cmds:
+      - mkdir -p /tmp/data
+      - go run ../cmd/stowry init --config config.yaml
+    status:
+      - test -f /tmp/stowry.db
+
+  stowry:
+    desc: Start Stowry server for examples
+    deps: [stowry:init]
+    cmds:
+      - go run ../cmd/stowry serve --config config.yaml
+
+  stowry:reset:
+    desc: Reset database and restart Stowry
+    cmds:
+      - rm -f /tmp/stowry.db
+      - task: stowry
+
+  clean:
+    desc: Clean all example artifacts
+    cmds:
+      - rm -rf /tmp/stowry.db /tmp/data
+      - task: go-aws:clean
+      - task: go-native:clean
+      - task: python-aws:clean
+      - task: python-native:clean
+      - task: js-aws:clean
+      - task: js-native:clean
+      - task: nextjs:clean
+      - task: flask-react:clean

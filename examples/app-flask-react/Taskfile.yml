@@ -1,0 +1,69 @@
+version: "3"
+
+tasks:
+  default:
+    desc: Start both backend and frontend (use separate terminals)
+    cmds:
+      - echo "Run 'task backend' and 'task frontend' in separate terminals"
+
+  backend:
+    desc: Run the Flask backend
+    dir: backend
+    deps: [backend:deps]
+    cmds:
+      - ../.venv/bin/python app.py
+
+  backend:venv:
+    desc: Create virtual environment for backend
+    cmds:
+      - python3 -m venv .venv
+    status:
+      - test -d .venv
+
+  backend:deps:
+    desc: Install backend dependencies
+    dir: backend
+    deps: [backend:venv]
+    cmds:
+      - ../.venv/bin/pip install -r requirements.txt
+    sources:
+      - requirements.txt
+    generates:
+      - ../.venv/lib/**/site-packages/*
+
+  backend:env:
+    desc: Create .env file from example
+    dir: backend
+    cmds:
+      - cp .env.example .env
+    status:
+      - test -f .env
+
+  frontend:
+    desc: Run the React frontend
+    dir: frontend
+    deps: [frontend:deps]
+    cmds:
+      - npm run dev
+
+  frontend:deps:
+    desc: Install frontend dependencies
+    dir: frontend
+    cmds:
+      - npm install
+    sources:
+      - package.json
+    generates:
+      - node_modules/**/*
+
+  frontend:build:
+    desc: Build frontend for production
+    dir: frontend
+    deps: [frontend:deps]
+    cmds:
+      - npm run build
+
+  clean:
+    desc: Remove all artifacts
+    cmds:
+      - rm -rf .venv backend/__pycache__ frontend/node_modules frontend/dist

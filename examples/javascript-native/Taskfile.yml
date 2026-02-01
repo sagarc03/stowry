@@ -1,0 +1,22 @@
+version: "3"
+
+tasks:
+  default:
+    desc: Run the JavaScript native SDK example
+    deps: [deps]
+    cmds:
+      - npm start
+
+  deps:
+    desc: Install dependencies
+    cmds:
+      - npm install
+    sources:
+      - package.json
+    generates:
+      - node_modules/**/*
+
+  clean:
+    desc: Remove node_modules
+    cmds:
+      - rm -rf node_modules

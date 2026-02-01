@@ -38,5 +38,6 @@ go.work.sum
 bin/
 dist/
 tmp/
+.task/
 
 .DS_Store
