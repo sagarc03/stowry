@@ -261,18 +261,30 @@ spec:
 
 ## Development
 
+This project uses [Task](https://taskfile.dev/) as a task runner.
+
 ```bash
+# Install Task (macOS)
+brew install go-task
+
+# List available tasks
+task --list
+
 # Run tests
-make test
+task test
 
 # Run linter
-make lint
+task lint
 
 # Build binary
-make build
+task build
 
-# Run all checks
-make check
+# Run all checks (fmt, lint, test)
+task check
+
+# Run examples
+task examples:stowry   # Start server
+task examples:go-aws   # Run Go AWS example
 ```
 
 ## Contributing
@@ -282,7 +294,7 @@ Contributions are welcome! Please follow these steps:
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes
-4. Run tests and linter (`make check`)
+4. Run tests and linter (`task check`)
 5. Commit your changes (`git commit -m 'Add amazing feature'`)
 6. Push to the branch (`git push origin feature/amazing-feature`)
 7. Open a Pull Request
