@@ -34,9 +34,11 @@ const (
 
 type exampleConfig struct {
 	Auth struct {
-		Keys []struct {
-			AccessKey string `yaml:"access_key"`
-			SecretKey string `yaml:"secret_key"`
+		Keys struct {
+			Inline []struct {
+				AccessKey string `yaml:"access_key"`
+				SecretKey string `yaml:"secret_key"`
+			} `yaml:"inline"`
 		} `yaml:"keys"`
 	} `yaml:"auth"`
 }
@@ -47,15 +49,15 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	if len(cfg.Auth.Keys) == 0 {
+	if len(cfg.Auth.Keys.Inline) == 0 {
 		log.Fatal("no auth keys found in config")
 	}
 
 	// Create stowry-go client
 	client := stowry.NewClient(
 		stowryEndpoint,
-		cfg.Auth.Keys[0].AccessKey,
-		cfg.Auth.Keys[0].SecretKey,
+		cfg.Auth.Keys.Inline[0].AccessKey,
+		cfg.Auth.Keys.Inline[0].SecretKey,
 	)
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}

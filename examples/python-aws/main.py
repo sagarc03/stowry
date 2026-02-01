@@ -34,16 +34,17 @@ def load_config(path: str) -> dict:
 def create_client(config: dict):
     """Create an S3 client for generating presigned URLs."""
     auth = config.get("auth", {})
-    keys = auth.get("keys", [])
+    keys = auth.get("keys", {}).get("inline", [])
     if not keys:
         raise ValueError("No auth keys found in config")
 
+    region = auth.get("aws", {}).get("region", "us-east-1")
     return boto3.client(
         "s3",
         endpoint_url=STOWRY_ENDPOINT,
         aws_access_key_id=keys[0]["access_key"],
         aws_secret_access_key=keys[0]["secret_key"],
-        region_name=auth.get("region", "us-east-1"),
+        region_name=region,
         config=Config(
             s3={"addressing_style": "path"},
             signature_version="s3v4",

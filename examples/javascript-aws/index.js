@@ -33,14 +33,15 @@ function loadConfig(path) {
 
 function createClient(config) {
   const auth = config.auth || {};
-  const keys = auth.keys || [];
+  const keys = auth.keys?.inline || [];
   if (keys.length === 0) {
     throw new Error("No auth keys found in config");
   }
 
+  const region = auth.aws?.region || "us-east-1";
   return new S3Client({
     endpoint: STOWRY_ENDPOINT,
-    region: auth.region || "us-east-1",
+    region: region,
     credentials: {
       accessKeyId: keys[0].access_key,
       secretAccessKey: keys[0].secret_key,

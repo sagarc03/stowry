@@ -6,6 +6,15 @@ server:
 service:
   cleanup_timeout: 30      # Cleanup operation timeout in seconds
 
+database:
+  type: sqlite
+  dsn: /tmp/stowry.db
+  tables:
+    meta_data: stowry_metadata
+
+storage:
+  path: /tmp/data
+
 auth:
   read: private  # public | private
   write: private # public | private

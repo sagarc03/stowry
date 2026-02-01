@@ -30,7 +30,7 @@ function loadConfig(path) {
 async function main() {
   const config = loadConfig(CONFIG_PATH);
   const auth = config.auth || {};
-  const keys = auth.keys || [];
+  const keys = auth.keys?.inline || [];
 
   if (keys.length === 0) {
     throw new Error("No auth keys found in config");

@@ -34,7 +34,7 @@ def load_config(path: str) -> dict:
 def main():
     config = load_config(CONFIG_PATH)
     auth = config.get("auth", {})
-    keys = auth.get("keys", [])
+    keys = auth.get("keys", {}).get("inline", [])
 
     if not keys:
         raise ValueError("No auth keys found in config")
