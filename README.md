@@ -110,27 +110,31 @@ Create `config.yaml`:
 server:
   port: 5708
   mode: store  # store | static | spa
+  max_upload_size: 0  # Maximum upload size in bytes (0 = unlimited)
+
+service:
+  cleanup_timeout: 30  # Cleanup operation timeout in seconds
 
 database:
   type: sqlite      # sqlite | postgres
   dsn: stowry.db    # file path or connection string
-  table: stowry_metadata
+  tables:
+    meta_data: stowry_metadata
 
 storage:
   path: ./data
 
-# Optional: Authentication
 auth:
-  region: us-east-1
-  service: s3
+  read: public   # public | private
+  write: public  # public | private
+  aws:
+    region: us-east-1
+    service: s3
   keys:
-    - access_key: YOUR_ACCESS_KEY
-      secret_key: YOUR_SECRET_KEY
-
-# Optional: Public access
-access:
-  public_read: false
-  public_write: false
+    inline:
+      - access_key: YOUR_ACCESS_KEY
+        secret_key: YOUR_SECRET_KEY
+    # file: /path/to/keys.json
 
 log:
   level: info  # debug | info | warn | error
@@ -186,7 +190,7 @@ Response:
 
 ### Authentication
 
-When `access.public_read` or `access.public_write` is `false`, requests require AWS Signature V4 presigned URL parameters.
+When `auth.read` or `auth.write` is set to `private`, requests require AWS Signature V4 presigned URL parameters.
 
 #### Generating Keys
 
@@ -239,7 +243,13 @@ kind: Deployment
 metadata:
   name: stowry
 spec:
+  selector:
+    matchLabels:
+      app: stowry
   template:
+    metadata:
+      labels:
+        app: stowry
     spec:
       securityContext:
         runAsUser: 65532
@@ -305,10 +315,6 @@ Contributions are welcome! Please follow these steps:
 - Add tests for new features
 - Update documentation as needed
 - Keep commits focused and atomic
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## License
 
