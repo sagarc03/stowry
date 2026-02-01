@@ -32,15 +32,15 @@ Server starts at `http://localhost:5708`
 
 Generate presigned URLs to interact with Stowry:
 
-| Language | Package | Install |
-|----------|---------|---------|
-| Go | [stowry-go](https://github.com/sagarc03/stowry-go) | `go get github.com/sagarc03/stowry-go` |
-| Python | [stowrypy](https://pypi.org/project/stowrypy/) | `pip install stowrypy` |
-| JavaScript | [stowryjs](https://www.npmjs.com/package/stowryjs) | `npm install stowryjs` |
+| Language   | Package                                              | Install                                 |
+|------------|------------------------------------------------------|-----------------------------------------|
+| Go         | [stowry-go](https://github.com/sagarc03/stowry-go)   | `go get github.com/sagarc03/stowry-go`  |
+| Python     | [stowrypy](https://pypi.org/project/stowrypy/)       | `pip install stowrypy`                  |
+| JavaScript | [stowryjs](https://www.npmjs.com/package/stowryjs)   | `npm install stowryjs`                  |
 
 AWS SDKs (boto3, aws-sdk-go-v2, @aws-sdk/client-s3) also work for generating presigned URLs.
 
-See [examples/](examples/) for usage.
+See [examples](examples) for usage.
 
 ## Installation
 
@@ -95,12 +95,12 @@ stowry cleanup [--limit 100]
 
 ### Global Flags
 
-| Flag | Env Var | Default | Description |
-|------|---------|---------|-------------|
-| `--config` | - | `config.yaml` | Config file path |
-| `--db-type` | `STOWRY_DATABASE_TYPE` | `sqlite` | Database type |
-| `--db-dsn` | `STOWRY_DATABASE_DSN` | `stowry.db` | Database connection |
-| `--storage` | `STOWRY_STORAGE_PATH` | `./data` | Storage directory |
+| Flag        | Env Var                | Default       | Description         |
+|-------------|------------------------|---------------|---------------------|
+| `--config`  | -                      | `config.yaml` | Config file path    |
+| `--db-type` | `STOWRY_DATABASE_TYPE` | `sqlite`      | Database type       |
+| `--db-dsn`  | `STOWRY_DATABASE_DSN`  | `stowry.db`   | Database connection |
+| `--storage` | `STOWRY_STORAGE_PATH`  | `./data`      | Storage directory   |
 
 ## Configuration
 
