@@ -5,10 +5,12 @@ import sitemap from '@astrojs/sitemap';
 import starlight from '@astrojs/starlight';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
+import mermaid from 'astro-mermaid';
 
 export default defineConfig({
   site: 'https://stowry.dev',
   integrations: [
+    mermaid(),
     starlight({
       title: 'Stowry',
       description: 'Documentation for Stowry - Self-hosted object storage, simplified',
