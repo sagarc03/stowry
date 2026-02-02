@@ -14,17 +14,24 @@ var (
 )
 
 var uploadCmd = &cobra.Command{
-	Use:   "upload <local-path> <remote-path>",
+	Use:   "upload <local-path> [remote-path]",
 	Short: "Upload files to the server",
 	Long: `Upload files to the server.
 
 Works in all server modes (store, static, spa).
 
+If remote-path is omitted, the local path is used (normalized):
+  ./foo/bar.txt       -> foo/bar.txt
+  /abs/path/file.txt  -> abs/path/file.txt
+  ../sibling/file.txt -> sibling/file.txt
+
 Examples:
-  stowry-cli upload ./file.txt path/file.txt
-  stowry-cli upload -r ./images/ media/images/
-  stowry-cli upload --content-type application/json ./data config.json`,
-	Args: cobra.ExactArgs(2),
+  stowry-cli upload ./file.txt
+  stowry-cli upload ./images/photo.jpg
+  stowry-cli upload -r ./images/
+  stowry-cli upload ./file.txt custom/path.txt
+  stowry-cli upload -r ./local/images/ remote/media/`,
+	Args: cobra.RangeArgs(1, 2),
 	RunE: runUpload,
 }
 
@@ -35,7 +42,14 @@ func init() {
 
 func runUpload(_ *cobra.Command, args []string) error {
 	localPath := args[0]
-	remotePath := args[1]
+
+	// Derive remote path from local path if not specified
+	remotePath := ""
+	if len(args) > 1 {
+		remotePath = args[1]
+	} else {
+		remotePath = clientcli.NormalizeLocalToRemotePath(localPath)
+	}
 
 	client, err := getClient()
 	if err != nil {

@@ -528,6 +528,43 @@ func normalizePath(path string) string {
 	return strings.TrimSuffix(path, "/")
 }
 
+// NormalizeLocalToRemotePath converts a local path to a clean remote path.
+// It handles:
+//   - Leading "./" is stripped (./foo/bar.txt -> foo/bar.txt)
+//   - Leading "/" is stripped (/abs/path/file.txt -> abs/path/file.txt)
+//   - Parent traversal is resolved (../sibling/file.txt -> sibling/file.txt)
+//   - Multiple slashes are collapsed
+//   - Backslashes are converted to forward slashes (Windows)
+func NormalizeLocalToRemotePath(localPath string) string {
+	// Convert to forward slashes (Windows compatibility)
+	path := filepath.ToSlash(localPath)
+
+	// Clean the path (resolves . and .. segments)
+	path = filepath.Clean(path)
+
+	// Convert back to forward slashes after Clean (Clean uses OS separator)
+	path = filepath.ToSlash(path)
+
+	// Strip leading "./"
+	path = strings.TrimPrefix(path, "./")
+
+	// Strip leading "/" (absolute paths)
+	path = strings.TrimPrefix(path, "/")
+
+	// Handle edge case where Clean might produce ".."
+	// Keep stripping leading "../" segments
+	for strings.HasPrefix(path, "../") {
+		path = strings.TrimPrefix(path, "../")
+	}
+
+	// Handle edge case where path is just ".." or "."
+	if path == ".." || path == "." {
+		return ""
+	}
+
+	return path
+}
+
 // detectContentType returns MIME type based on file extension.
 func detectContentType(path string) string {
 	ext := filepath.Ext(path)

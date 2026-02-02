@@ -402,3 +402,34 @@ func TestHasDeleteErrors(t *testing.T) {
 		assert.False(t, clientcli.HasDeleteErrors(results))
 	})
 }
+
+func TestNormalizeLocalToRemotePath(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"simple file", "file.txt", "file.txt"},
+		{"with leading dot slash", "./file.txt", "file.txt"},
+		{"nested with dot slash", "./images/photo.jpg", "images/photo.jpg"},
+		{"absolute path", "/abs/path/file.txt", "abs/path/file.txt"},
+		{"parent traversal", "../sibling/file.txt", "sibling/file.txt"},
+		{"multiple parent traversal", "../../other/file.txt", "other/file.txt"},
+		{"mixed traversal", "./foo/../bar/file.txt", "bar/file.txt"},
+		{"deep nested", "./a/b/c/d/file.txt", "a/b/c/d/file.txt"},
+		{"just dot", ".", ""},
+		{"just double dot", "..", ""},
+		{"trailing slash directory", "./images/", "images"},
+		{"nested directory no slash", "./path/to/dir", "path/to/dir"},
+		{"absolute with trailing slash", "/abs/path/", "abs/path"},
+		{"parent then nested", "../foo/bar/baz.txt", "foo/bar/baz.txt"},
+		{"current dir reference", "./foo/./bar/file.txt", "foo/bar/file.txt"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := clientcli.NormalizeLocalToRemotePath(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
