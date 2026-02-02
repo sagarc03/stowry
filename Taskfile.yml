@@ -16,6 +16,12 @@ tasks:
     cmds:
       - go build -o bin/stowry ./cmd/stowry
 
+  run:
+    desc: Run the stowry server
+    deps: [build]
+    cmds:
+      - ./bin/stowry serve --config config.local.yaml
+
   test:
     desc: Run all tests
     cmds:
