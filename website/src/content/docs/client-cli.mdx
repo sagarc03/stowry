@@ -1,0 +1,443 @@
+---
+title: Client CLI Reference
+description: Command-line client for interacting with Stowry object storage servers.
+---
+
+# Client CLI Reference
+
+The `stowry-cli` is a command-line client for interacting with Stowry servers. It provides a simple interface for uploading, downloading, listing, and deleting objects without writing code.
+
+## Overview
+
+Stowry provides two separate binaries:
+
+| Binary | Purpose |
+|--------|---------|
+| `stowry` | Server-side CLI for running and managing the Stowry server |
+| `stowry-cli` | Client-side CLI for interacting with a running Stowry server |
+
+### Server Mode Awareness
+
+Commands behave differently depending on the server's mode:
+
+| Command | Store Mode | Static Mode | SPA Mode |
+|---------|------------|-------------|----------|
+| `upload` | Works | Works | Works |
+| `download` | Returns file or 404 | Returns file, tries `path/index.html`, or 404 | Returns file or falls back to `/index.html` |
+| `delete` | Works | Works | Works |
+| `list` | Works | 404 error | 404 error |
+
+---
+
+## Installation
+
+### Binary Download
+
+Download pre-built binaries from the [GitHub Releases](https://github.com/sagarc03/stowry/releases) page.
+
+#### Linux
+
+```bash
+# amd64
+curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli-linux-amd64
+chmod +x stowry-cli-linux-amd64
+sudo mv stowry-cli-linux-amd64 /usr/local/bin/stowry-cli
+
+# arm64
+curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli-linux-arm64
+chmod +x stowry-cli-linux-arm64
+sudo mv stowry-cli-linux-arm64 /usr/local/bin/stowry-cli
+```
+
+#### macOS
+
+```bash
+# Apple Silicon (M1/M2/M3)
+curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli-darwin-arm64
+chmod +x stowry-cli-darwin-arm64
+sudo mv stowry-cli-darwin-arm64 /usr/local/bin/stowry-cli
+
+# Intel
+curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli-darwin-amd64
+chmod +x stowry-cli-darwin-amd64
+sudo mv stowry-cli-darwin-amd64 /usr/local/bin/stowry-cli
+```
+
+#### Windows
+
+Download `stowry-cli-windows-amd64.exe` from the releases page and add it to your PATH.
+
+### Build from Source
+
+```bash
+go install github.com/sagarc03/stowry/cmd/stowry-cli@latest
+```
+
+---
+
+## Configuration
+
+The client can be configured through multiple sources, with the following priority (highest to lowest):
+
+1. **Command-line flags** (highest priority)
+2. **Environment variables**
+3. **Configuration file** (lowest priority)
+
+### Configuration File
+
+Create `~/.stowry/config.yaml`:
+
+```yaml
+server: http://localhost:5708
+access_key: YOUR_ACCESS_KEY
+secret_key: YOUR_SECRET_KEY
+```
+
+### Environment Variables
+
+```bash
+export STOWRY_SERVER=http://localhost:5708
+export STOWRY_ACCESS_KEY=YOUR_ACCESS_KEY
+export STOWRY_SECRET_KEY=YOUR_SECRET_KEY
+```
+
+### Command-line Flags
+
+```bash
+stowry-cli --server http://localhost:5708 \
+           --access-key YOUR_ACCESS_KEY \
+           --secret-key YOUR_SECRET_KEY \
+           upload ./file.txt
+```
+
+---
+
+## Global Flags
+
+These flags are available for all commands:
+
+| Flag | Short | Env Var | Default | Description |
+|------|-------|---------|---------|-------------|
+| `--config` | `-c` | - | `~/.stowry/config.yaml` | Config file path |
+| `--server` | `-s` | `STOWRY_SERVER` | `http://localhost:5708` | Server URL |
+| `--access-key` | `-a` | `STOWRY_ACCESS_KEY` | - | Access key for authentication |
+| `--secret-key` | `-k` | `STOWRY_SECRET_KEY` | - | Secret key for authentication |
+| `--json` | - | - | `false` | Output results as JSON |
+| `--quiet` | `-q` | - | `false` | Suppress non-essential output |
+| `--help` | `-h` | - | - | Help for the command |
+
+---
+
+## Commands
+
+### upload
+
+Upload files to the server.
+
+```bash
+stowry-cli upload [flags] <local-path> [remote-path]
+```
+
+If `remote-path` is omitted, the local path is used (normalized):
+- `./foo/bar.txt` → `foo/bar.txt`
+- `/abs/path/file.txt` → `abs/path/file.txt`
+- `../sibling/file.txt` → `sibling/file.txt`
+
+**Flags:**
+
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--recursive` | `-r` | `false` | Upload directory recursively |
+| `--content-type` | `-t` | auto-detect | Override content type |
+
+**Examples:**
+
+```bash
+# Upload using local path as remote path
+stowry-cli upload ./document.pdf
+
+# Upload nested file (preserves directory structure)
+stowry-cli upload ./images/photo.jpg
+
+# Upload with explicit remote path
+stowry-cli upload ./document.pdf reports/2024/report.pdf
+
+# Upload with explicit content type
+stowry-cli upload --content-type application/json ./data.json
+
+# Upload a directory recursively
+stowry-cli upload -r ./images/
+
+# Upload directory to different remote prefix
+stowry-cli upload -r ./local/images/ remote/media/
+
+# Upload with JSON output
+stowry-cli upload --json ./file.txt
+```
+
+**Output:**
+
+```
+uploaded path/file.txt (1234 bytes)
+```
+
+With `--json`:
+
+```json
+[
+  {
+    "local_path": "./file.txt",
+    "remote_path": "path/file.txt",
+    "size": 1234,
+    "content_type": "text/plain"
+  }
+]
+```
+
+---
+
+### download
+
+Download a file from the server.
+
+```bash
+stowry-cli download [flags] <remote-path> [local-path]
+```
+
+**Flags:**
+
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--output` | `-o` | - | Output file path |
+| `--stdout` | - | `false` | Write content to stdout |
+
+**Examples:**
+
+```bash
+# Download to current directory (uses remote filename)
+stowry-cli download path/file.txt
+
+# Download to specific local path
+stowry-cli download path/file.txt ./local-copy.txt
+
+# Download using --output flag
+stowry-cli download -o ./local-copy.txt path/file.txt
+
+# Pipe to another command
+stowry-cli download --stdout config.json | jq .
+
+# Download with JSON metadata output
+stowry-cli download --json path/file.txt
+```
+
+**Output:**
+
+```
+downloaded path/file.txt -> ./file.txt (1234 bytes)
+```
+
+With `--stdout`, the file content is written directly to stdout, making it easy to pipe to other commands.
+
+---
+
+### delete
+
+Delete one or more files from the server.
+
+```bash
+stowry-cli delete [flags] <remote-path> [remote-path...]
+```
+
+**Examples:**
+
+```bash
+# Delete a single file
+stowry-cli delete path/file.txt
+
+# Delete multiple files
+stowry-cli delete old/a.txt old/b.txt old/c.txt
+
+# Delete with quiet mode
+stowry-cli delete -q temp/file.txt
+
+# Delete with JSON output
+stowry-cli delete --json path/file.txt
+```
+
+**Output:**
+
+```
+deleted path/file.txt
+```
+
+With `--json`:
+
+```json
+[
+  {
+    "path": "path/file.txt",
+    "deleted": true
+  }
+]
+```
+
+---
+
+### list
+
+List objects on the server.
+
+```bash
+stowry-cli list [flags] [prefix]
+```
+
+**Note:** This command only works when the server is running in `store` mode. In `static` or `spa` modes, this will return a 404 error.
+
+**Flags:**
+
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--prefix` | `-p` | - | Filter by path prefix |
+| `--limit` | `-l` | `100` | Maximum results per page (max: 1000) |
+| `--all` | - | `false` | Fetch all pages |
+| `--cursor` | - | - | Pagination cursor for next page |
+
+**Examples:**
+
+```bash
+# List all objects
+stowry-cli list
+
+# List with prefix (positional argument)
+stowry-cli list images/
+
+# List with prefix (flag)
+stowry-cli list --prefix documents/
+
+# Limit results
+stowry-cli list --limit 10
+
+# Fetch all pages
+stowry-cli list --all
+
+# Continue from cursor
+stowry-cli list --cursor "eyJwYXRoIjoi..."
+
+# JSON output
+stowry-cli list --json --prefix images/
+```
+
+**Output:**
+
+```
+images/photo1.jpg    image/jpeg    102400    2024-01-15T10:00:00Z
+images/photo2.jpg    image/jpeg    204800    2024-01-15T11:00:00Z
+images/photo3.jpg    image/jpeg    153600    2024-01-15T12:00:00Z
+
+Next cursor: eyJwYXRoIjoi...
+```
+
+With `--json`:
+
+```json
+{
+  "items": [
+    {
+      "path": "images/photo1.jpg",
+      "content_type": "image/jpeg",
+      "file_size_bytes": 102400,
+      "created_at": "2024-01-15T10:00:00Z",
+      "updated_at": "2024-01-15T10:00:00Z"
+    }
+  ],
+  "next_cursor": "eyJwYXRoIjoi..."
+}
+```
+
+---
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Error (authentication failed, file not found, server error, etc.) |
+
+---
+
+## Examples
+
+### Basic Workflow
+
+```bash
+# Configure credentials
+export STOWRY_SERVER=http://localhost:5708
+export STOWRY_ACCESS_KEY=your-access-key
+export STOWRY_SECRET_KEY=your-secret-key
+
+# Upload a file (uses local path as remote path)
+stowry-cli upload ./documents/report.pdf
+
+# Upload with explicit remote path
+stowry-cli upload ./report.pdf documents/2024/report.pdf
+
+# List files
+stowry-cli list documents/
+
+# Download a file
+stowry-cli download documents/report.pdf ./downloaded-report.pdf
+
+# Delete when done
+stowry-cli delete documents/report.pdf
+```
+
+### Batch Operations
+
+```bash
+# Upload entire directory (preserves structure)
+stowry-cli upload -r ./website/
+
+# Upload directory to different prefix
+stowry-cli upload -r ./website/ static/
+
+# Delete multiple files
+stowry-cli delete static/old1.html static/old2.html static/old3.html
+```
+
+### Scripting with JSON Output
+
+```bash
+# Get file count
+stowry-cli list --json --all | jq '.items | length'
+
+# Get total size
+stowry-cli list --json --all | jq '[.items[].file_size_bytes] | add'
+
+# Filter by content type
+stowry-cli list --json --all | jq '.items[] | select(.content_type == "image/jpeg")'
+```
+
+### Using with Config File
+
+Create `~/.stowry/config.yaml`:
+
+```yaml
+server: https://storage.example.com
+access_key: AKIAIOSFODNN7EXAMPLE
+secret_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+```
+
+Then use commands without specifying credentials:
+
+```bash
+stowry-cli upload ./file.txt
+stowry-cli list
+```
+
+---
+
+## See Also
+
+- [Server CLI Reference](cli-reference) - Commands for running and managing the Stowry server
+- [Client SDKs](sdks) - Programmatic access with Go, Python, and JavaScript
+- [Authentication](authentication) - Understanding presigned URLs and authentication

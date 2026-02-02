@@ -27,7 +27,8 @@ export default defineConfig({
           label: 'API Reference',
           items: [
             { label: 'HTTP API', slug: 'api-reference' },
-            { label: 'CLI Commands', slug: 'cli-reference' },
+            { label: 'Server CLI', slug: 'cli-reference' },
+            { label: 'Client CLI', slug: 'client-cli' },
             { label: 'Authentication', slug: 'authentication' },
           ],
         },

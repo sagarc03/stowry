@@ -42,6 +42,37 @@ AWS SDKs (boto3, aws-sdk-go-v2, @aws-sdk/client-s3) also work for generating pre
 
 See [examples](examples) for usage.
 
+## Client CLI
+
+For command-line access without writing code:
+
+```bash
+# Install
+go install github.com/sagarc03/stowry/cmd/stowry-cli@latest
+
+# Configure
+export STOWRY_SERVER=http://localhost:5708
+export STOWRY_ACCESS_KEY=your-access-key
+export STOWRY_SECRET_KEY=your-secret-key
+
+# Upload (uses local path as remote path)
+stowry-cli upload ./images/photo.jpg
+
+# Upload with explicit remote path
+stowry-cli upload ./file.txt custom/path.txt
+
+# Download
+stowry-cli download images/photo.jpg
+
+# List (store mode only)
+stowry-cli list --prefix images/
+
+# Delete
+stowry-cli delete images/photo.jpg
+```
+
+See [Client CLI Reference](https://stowry.dev/client-cli) for full documentation.
+
 ## Installation
 
 ### Docker

@@ -156,6 +156,13 @@ curl -X PUT \
   http://localhost:5708/hello.txt
 ```
 
+**Using stowry-cli:**
+
+```bash
+echo "Hello, Stowry!" > hello.txt
+stowry-cli upload hello.txt
+```
+
 Response:
 
 ```json
@@ -174,6 +181,12 @@ Response:
 
 ```bash
 curl http://localhost:5708/hello.txt
+```
+
+**Using stowry-cli:**
+
+```bash
+stowry-cli download hello.txt
 ```
 
 Output:
