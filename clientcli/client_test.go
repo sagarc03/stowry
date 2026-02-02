@@ -398,7 +398,7 @@ func TestHasDeleteErrors(t *testing.T) {
 	})
 
 	t.Run("empty results", func(t *testing.T) {
-		results := []clientcli.DeleteResult{}
+		var results []clientcli.DeleteResult
 		assert.False(t, clientcli.HasDeleteErrors(results))
 	})
 }
