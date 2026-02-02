@@ -183,9 +183,16 @@ stowry-cli configure <subcommand>
 |------------|-------------|
 | `list` | List all configured profiles |
 | `add <name>` | Add a new profile interactively |
+| `update <name>` | Update an existing profile interactively |
 | `remove <name>` | Remove a profile |
 | `set-default <name>` | Set the default profile |
 | `show [name]` | Show profile details (default profile if name omitted) |
+
+**Flags for `add` and `update`:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--skip-test` | `false` | Skip connection test before saving |
 
 **Examples:**
 
@@ -195,6 +202,15 @@ stowry-cli configure list
 
 # Add a new profile interactively
 stowry-cli configure add production
+
+# Add profile without testing connection
+stowry-cli configure add staging --skip-test
+
+# Update an existing profile
+stowry-cli configure update production
+
+# Update profile without testing connection
+stowry-cli configure update production --skip-test
 
 # Show profile details (secrets hidden)
 stowry-cli configure show production

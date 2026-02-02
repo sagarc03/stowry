@@ -1,7 +1,6 @@
 package clientcli
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,13 +10,6 @@ import (
 
 // DefaultEndpoint is the default server endpoint URL.
 const DefaultEndpoint = "http://localhost:5708"
-
-// Errors for profile operations.
-var (
-	ErrProfileNotFound = errors.New("profile not found")
-	ErrNoProfiles      = errors.New("no profiles configured")
-	ErrProfileExists   = errors.New("profile already exists")
-)
 
 // Profile holds configuration for a single server profile.
 type Profile struct {
@@ -71,19 +63,28 @@ func (c *ConfigFile) GetDefaultProfile() (*Profile, error) {
 	return &c.Profiles[0], nil
 }
 
-// AddProfile adds a new profile or updates an existing one with the same name.
-func (c *ConfigFile) AddProfile(p Profile) {
-	// Check if profile with same name exists
+// AddProfile adds a new profile. Returns ErrProfileExists if a profile
+// with the same name already exists. Use UpdateProfile to modify an existing profile.
+func (c *ConfigFile) AddProfile(p Profile) error {
 	for i := range c.Profiles {
 		if c.Profiles[i].Name == p.Name {
-			// Update existing profile
-			c.Profiles[i] = p
-			return
+			return fmt.Errorf("%w: %s", ErrProfileExists, p.Name)
 		}
 	}
-
-	// Add new profile
 	c.Profiles = append(c.Profiles, p)
+	return nil
+}
+
+// UpdateProfile updates an existing profile. Returns ErrProfileNotFound
+// if the profile doesn't exist. Use AddProfile to create a new profile.
+func (c *ConfigFile) UpdateProfile(p Profile) error {
+	for i := range c.Profiles {
+		if c.Profiles[i].Name == p.Name {
+			c.Profiles[i] = p
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: %s", ErrProfileNotFound, p.Name)
 }
 
 // RemoveProfile removes a profile by name.
@@ -201,10 +202,10 @@ func (c *Config) WithDefaults() *Config {
 // ValidateWithAuth checks if required fields including credentials are set.
 func (c *Config) ValidateWithAuth() error {
 	if c.AccessKey == "" {
-		return errors.New("access key is required")
+		return ErrAccessKeyRequired
 	}
 	if c.SecretKey == "" {
-		return errors.New("secret key is required")
+		return ErrSecretKeyRequired
 	}
 	return nil
 }

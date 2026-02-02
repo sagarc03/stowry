@@ -86,10 +86,11 @@ func TestConfigFile_AddProfile(t *testing.T) {
 			},
 		}
 
-		cfg.AddProfile(clientcli.Profile{
+		err := cfg.AddProfile(clientcli.Profile{
 			Name:     "production",
 			Endpoint: "https://prod.example.com",
 		})
+		require.NoError(t, err)
 		assert.Len(t, cfg.Profiles, 2)
 
 		p, err := cfg.GetProfile("production")
@@ -97,6 +98,36 @@ func TestConfigFile_AddProfile(t *testing.T) {
 		assert.Equal(t, "https://prod.example.com", p.Endpoint)
 	})
 
+	t.Run("add existing profile fails", func(t *testing.T) {
+		cfg := &clientcli.ConfigFile{
+			Profiles: []clientcli.Profile{
+				{Name: "local", Endpoint: "http://localhost:5708"},
+			},
+		}
+
+		err := cfg.AddProfile(clientcli.Profile{
+			Name:     "local",
+			Endpoint: "http://localhost:9999",
+		})
+		assert.ErrorIs(t, err, clientcli.ErrProfileExists)
+		assert.Len(t, cfg.Profiles, 1)
+		// Original unchanged
+		assert.Equal(t, "http://localhost:5708", cfg.Profiles[0].Endpoint)
+	})
+
+	t.Run("add to empty config", func(t *testing.T) {
+		cfg := &clientcli.ConfigFile{}
+
+		err := cfg.AddProfile(clientcli.Profile{
+			Name:     "local",
+			Endpoint: "http://localhost:5708",
+		})
+		require.NoError(t, err)
+		assert.Len(t, cfg.Profiles, 1)
+	})
+}
+
+func TestConfigFile_UpdateProfile(t *testing.T) {
 	t.Run("update existing profile", func(t *testing.T) {
 		cfg := &clientcli.ConfigFile{
 			Profiles: []clientcli.Profile{
@@ -104,15 +135,47 @@ func TestConfigFile_AddProfile(t *testing.T) {
 			},
 		}
 
-		cfg.AddProfile(clientcli.Profile{
+		err := cfg.UpdateProfile(clientcli.Profile{
 			Name:     "local",
 			Endpoint: "http://localhost:9999",
 		})
-		assert.Len(t, cfg.Profiles, 1) // still 1 profile
-
-		p, err := cfg.GetProfile("local")
 		require.NoError(t, err)
-		assert.Equal(t, "http://localhost:9999", p.Endpoint)
+		assert.Len(t, cfg.Profiles, 1)
+		assert.Equal(t, "http://localhost:9999", cfg.Profiles[0].Endpoint)
+	})
+
+	t.Run("update nonexistent profile fails", func(t *testing.T) {
+		cfg := &clientcli.ConfigFile{
+			Profiles: []clientcli.Profile{
+				{Name: "local", Endpoint: "http://localhost:5708"},
+			},
+		}
+
+		err := cfg.UpdateProfile(clientcli.Profile{
+			Name:     "production",
+			Endpoint: "https://prod.example.com",
+		})
+		assert.ErrorIs(t, err, clientcli.ErrProfileNotFound)
+		assert.Len(t, cfg.Profiles, 1)
+	})
+
+	t.Run("update preserves other fields", func(t *testing.T) {
+		cfg := &clientcli.ConfigFile{
+			Profiles: []clientcli.Profile{
+				{Name: "local", Endpoint: "http://localhost:5708", AccessKey: "old-key"},
+			},
+		}
+
+		err := cfg.UpdateProfile(clientcli.Profile{
+			Name:      "local",
+			Endpoint:  "http://localhost:9999",
+			AccessKey: "new-key",
+			SecretKey: "new-secret",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "http://localhost:9999", cfg.Profiles[0].Endpoint)
+		assert.Equal(t, "new-key", cfg.Profiles[0].AccessKey)
+		assert.Equal(t, "new-secret", cfg.Profiles[0].SecretKey)
 	})
 }
 

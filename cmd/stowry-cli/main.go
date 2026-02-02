@@ -1,6 +1,9 @@
 package main
 
 import (
+	"errors"
+	"fmt"
+	"io"
 	"os"
 
 	"github.com/sagarc03/stowry/clientcli"
@@ -150,4 +153,29 @@ func getConfigPath() string {
 		return envPath
 	}
 	return clientcli.DefaultConfigPath()
+}
+
+// handleError formats and outputs an error with user-friendly messages for common cases.
+// It writes to the provided writer and returns the original error.
+func handleError(w io.Writer, err error) error {
+	if err == nil {
+		return nil
+	}
+
+	formatter := getFormatter()
+
+	// Provide helpful messages for auth errors
+	switch {
+	case errors.Is(err, clientcli.ErrUnauthorized):
+		_, _ = fmt.Fprintln(w, "Authentication failed: invalid or missing credentials")
+		_, _ = fmt.Fprintln(w, "Check your access key and secret key, or run 'stowry-cli configure add' to set up a profile")
+	case errors.Is(err, clientcli.ErrForbidden):
+		_, _ = fmt.Fprintln(w, "Access denied: you don't have permission to perform this operation")
+	case errors.Is(err, clientcli.ErrNotFound):
+		_ = formatter.FormatError(w, err)
+	default:
+		_ = formatter.FormatError(w, err)
+	}
+
+	return err
 }

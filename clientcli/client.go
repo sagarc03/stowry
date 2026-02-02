@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	stowry "github.com/sagarc03/stowry-go"
+	"github.com/sagarc03/stowry-go"
 )
 
 const (
@@ -54,7 +54,7 @@ func WithTimeout(timeout time.Duration) Option {
 // New creates a new Client with the given config and options.
 func New(cfg *Config, opts ...Option) (*Client, error) {
 	if cfg == nil {
-		return nil, errors.New("config is required")
+		return nil, ErrConfigRequired
 	}
 
 	// Apply defaults
@@ -623,7 +623,8 @@ func (e *APIError) Error() string {
 // Is reports whether target matches this error.
 // It matches if target is an *APIError with the same StatusCode.
 func (e *APIError) Is(target error) bool {
-	t, ok := target.(*APIError)
+	var t *APIError
+	ok := errors.As(target, &t)
 	if !ok {
 		return false
 	}
@@ -636,22 +637,16 @@ func (e *APIError) IsNotFound() bool {
 }
 
 // Sentinel errors for common API error conditions.
+// Use errors.Is() to check for these conditions.
 var (
-	// ErrNotFound is returned when the requested resource does not exist.
+	// ErrNotFound is returned when the requested resource does not exist (404).
 	ErrNotFound = &APIError{StatusCode: http.StatusNotFound}
 
-	// ErrUnauthorized is returned when authentication fails.
+	// ErrUnauthorized is returned when authentication fails (401).
+	// This typically means invalid or missing credentials.
 	ErrUnauthorized = &APIError{StatusCode: http.StatusUnauthorized}
 
-	// ErrForbidden is returned when the request is not permitted.
+	// ErrForbidden is returned when the request is not permitted (403).
+	// This typically means the credentials are valid but lack permission.
 	ErrForbidden = &APIError{StatusCode: http.StatusForbidden}
-)
-
-// Sentinel errors for input validation.
-var (
-	// ErrNoPaths is returned when no paths are provided to an operation.
-	ErrNoPaths = errors.New("no paths provided")
-
-	// ErrEmptyPath is returned when a required path is empty.
-	ErrEmptyPath = errors.New("path is required")
 )

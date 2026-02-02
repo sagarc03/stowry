@@ -475,6 +475,16 @@ func TestAPIError_Is(t *testing.T) {
 		err := &clientcli.APIError{StatusCode: 404, Body: "not found"}
 		assert.NotErrorIs(t, err, io.EOF)
 	})
+
+	t.Run("401 matches ErrUnauthorized", func(t *testing.T) {
+		err := &clientcli.APIError{StatusCode: 401, Body: "invalid credentials"}
+		assert.ErrorIs(t, err, clientcli.ErrUnauthorized)
+	})
+
+	t.Run("403 matches ErrForbidden", func(t *testing.T) {
+		err := &clientcli.APIError{StatusCode: 403, Body: "access denied"}
+		assert.ErrorIs(t, err, clientcli.ErrForbidden)
+	})
 }
 
 func TestClient_Upload_Validation(t *testing.T) {

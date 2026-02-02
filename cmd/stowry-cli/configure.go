@@ -46,9 +46,31 @@ You will be prompted for:
   - Secret key
   - Whether to set as default
 
-The endpoint connection will be tested before saving.`,
+The endpoint connection will be tested before saving (use --skip-test to skip).
+
+Use 'configure update' to modify an existing profile.`,
 	Args: cobra.ExactArgs(1),
 	RunE: runConfigureAdd,
+}
+
+var configureUpdateCmd = &cobra.Command{
+	Use:   "update <name>",
+	Short: "Update an existing profile",
+	Long: `Update an existing profile interactively.
+
+Current values are shown as defaults. Press Enter to keep the current value.
+
+You will be prompted for:
+  - Endpoint URL
+  - Access key
+  - Secret key
+  - Whether to set as default
+
+The endpoint connection will be tested before saving (use --skip-test to skip).
+
+Use 'configure add' to create a new profile.`,
+	Args: cobra.ExactArgs(1),
+	RunE: runConfigureUpdate,
 }
 
 var configureRemoveCmd = &cobra.Command{
@@ -77,17 +99,23 @@ Secrets are hidden by default; use --show-secrets to reveal them.`,
 	RunE: runConfigureShow,
 }
 
-var showSecrets bool
+var (
+	showSecrets bool
+	skipTest    bool
+)
 
 func init() {
 	configureCmd.AddCommand(configureListCmd)
 	configureCmd.AddCommand(configureAddCmd)
+	configureCmd.AddCommand(configureUpdateCmd)
 	configureCmd.AddCommand(configureRemoveCmd)
 	configureCmd.AddCommand(configureSetDefaultCmd)
 	configureCmd.AddCommand(configureShowCmd)
 
 	configureShowCmd.Flags().BoolVar(&showSecrets, "show-secrets", false, "show secret values")
 	configureListCmd.Flags().BoolVar(&showSecrets, "show-secrets", false, "show secret values")
+	configureAddCmd.Flags().BoolVar(&skipTest, "skip-test", false, "skip connection test")
+	configureUpdateCmd.Flags().BoolVar(&skipTest, "skip-test", false, "skip connection test")
 }
 
 func runConfigureList(_ *cobra.Command, _ []string) error {
@@ -140,35 +168,16 @@ func runConfigureAdd(_ *cobra.Command, args []string) error {
 	}
 
 	// Check if profile already exists
-	existingProfile, _ := cfg.GetProfile(name)
-	if existingProfile != nil {
-		prompt := promptui.Prompt{
-			Label:     fmt.Sprintf("Profile '%s' already exists. Update it", name),
-			IsConfirm: true,
-		}
-		if _, promptErr := prompt.Run(); promptErr != nil {
-			fmt.Println("Cancelled.")
-			return nil //nolint:nilerr // User cancelled, not an error
-		}
+	if existingProfile, _ := cfg.GetProfile(name); existingProfile != nil {
+		fmt.Printf("Profile '%s' already exists. Use 'stowry-cli configure update %s' to modify it.\n", name, name)
+		return nil
 	}
 
 	// Prompt for endpoint URL
 	endpointPrompt := promptui.Prompt{
-		Label:   "Endpoint URL",
-		Default: clientcli.DefaultEndpoint,
-		Validate: func(input string) error {
-			if input == "" {
-				return errors.New("endpoint URL is required")
-			}
-			parsedURL, parseErr := url.Parse(input)
-			if parseErr != nil {
-				return fmt.Errorf("invalid URL: %w", parseErr)
-			}
-			if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-				return errors.New("URL must start with http:// or https://")
-			}
-			return nil
-		},
+		Label:    "Endpoint URL",
+		Default:  clientcli.DefaultEndpoint,
+		Validate: validateEndpointURL,
 	}
 	endpointURL, err := endpointPrompt.Run()
 	if err != nil {
@@ -208,22 +217,24 @@ func runConfigureAdd(_ *cobra.Command, args []string) error {
 		}
 	}
 
-	// Test connection
-	fmt.Print("Testing connection... ")
-	if connErr := testServerConnection(endpointURL); connErr != nil {
-		fmt.Println("FAILED")
-		fmt.Printf("Warning: Could not connect to server: %v\n", connErr)
+	// Test connection (unless skipped)
+	if !skipTest {
+		fmt.Print("Testing connection... ")
+		if connErr := testServerConnection(endpointURL); connErr != nil {
+			fmt.Println("FAILED")
+			fmt.Printf("Warning: Could not connect to server: %v\n", connErr)
 
-		continuePrompt := promptui.Prompt{
-			Label:     "Save profile anyway",
-			IsConfirm: true,
+			continuePrompt := promptui.Prompt{
+				Label:     "Save profile anyway",
+				IsConfirm: true,
+			}
+			if _, promptErr := continuePrompt.Run(); promptErr != nil {
+				fmt.Println("Cancelled.")
+				return nil //nolint:nilerr // User cancelled, not an error
+			}
+		} else {
+			fmt.Println("OK")
 		}
-		if _, promptErr := continuePrompt.Run(); promptErr != nil {
-			fmt.Println("Cancelled.")
-			return nil //nolint:nilerr // User cancelled, not an error
-		}
-	} else {
-		fmt.Println("OK")
 	}
 
 	// Create profile
@@ -242,20 +253,17 @@ func runConfigureAdd(_ *cobra.Command, args []string) error {
 		}
 	}
 
-	// Add or update profile
-	cfg.AddProfile(newProfile)
+	// Add profile
+	if err := cfg.AddProfile(newProfile); err != nil {
+		return fmt.Errorf("add profile: %w", err)
+	}
 
 	// Save config
 	if err := cfg.Save(configPath); err != nil {
 		return fmt.Errorf("save config: %w", err)
 	}
 
-	if existingProfile != nil {
-		fmt.Printf("Profile '%s' updated.\n", name)
-	} else {
-		fmt.Printf("Profile '%s' added.\n", name)
-	}
-
+	fmt.Printf("Profile '%s' added.\n", name)
 	if setAsDefault {
 		fmt.Printf("Set as default profile.\n")
 	}
@@ -385,4 +393,155 @@ func handlePromptError(err error) error {
 		return nil
 	}
 	return err
+}
+
+// validateEndpointURL validates an endpoint URL.
+func validateEndpointURL(input string) error {
+	if input == "" {
+		return errors.New("endpoint URL is required")
+	}
+	parsedURL, parseErr := url.Parse(input)
+	if parseErr != nil {
+		return fmt.Errorf("invalid URL: %w", parseErr)
+	}
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return errors.New("URL must start with http:// or https://")
+	}
+	return nil
+}
+
+// maskSecretForPrompt masks a secret for display in prompts.
+func maskSecretForPrompt(secret string) string {
+	if secret == "" {
+		return "(not set)"
+	}
+	if len(secret) <= 8 {
+		return "********"
+	}
+	return secret[:4] + "..." + secret[len(secret)-4:]
+}
+
+func runConfigureUpdate(_ *cobra.Command, args []string) error {
+	name := args[0]
+	configPath := getConfigPath()
+
+	// Load existing config
+	cfg, err := clientcli.LoadConfigFile(configPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			fmt.Printf("Profile '%s' not found. Use 'stowry-cli configure add %s' to create it.\n", name, name)
+			return nil
+		}
+		return fmt.Errorf("load config: %w", err)
+	}
+
+	// Get existing profile
+	existingProfile, err := cfg.GetProfile(name)
+	if err != nil {
+		if errors.Is(err, clientcli.ErrProfileNotFound) {
+			fmt.Printf("Profile '%s' not found. Use 'stowry-cli configure add %s' to create it.\n", name, name)
+			return nil
+		}
+		return err
+	}
+
+	// Prompt for endpoint URL (show current value as default)
+	endpointPrompt := promptui.Prompt{
+		Label:    "Endpoint URL",
+		Default:  existingProfile.Endpoint,
+		Validate: validateEndpointURL,
+	}
+	endpointURL, err := endpointPrompt.Run()
+	if err != nil {
+		return handlePromptError(err)
+	}
+
+	// Prompt for access key (show current value as default)
+	accessKeyPrompt := promptui.Prompt{
+		Label:   "Access Key",
+		Default: existingProfile.AccessKey,
+	}
+	accessKeyVal, err := accessKeyPrompt.Run()
+	if err != nil {
+		return handlePromptError(err)
+	}
+
+	// Prompt for secret key (show masked current value, empty keeps current)
+	secretKeyPrompt := promptui.Prompt{
+		Label: fmt.Sprintf("Secret Key [%s]", maskSecretForPrompt(existingProfile.SecretKey)),
+		Mask:  '*',
+	}
+	secretKeyVal, err := secretKeyPrompt.Run()
+	if err != nil {
+		return handlePromptError(err)
+	}
+	// Keep existing secret if user didn't enter a new one
+	if secretKeyVal == "" {
+		secretKeyVal = existingProfile.SecretKey
+	}
+
+	// Prompt for default (only if not already default)
+	setAsDefault := existingProfile.Default
+	if !existingProfile.Default {
+		defaultPrompt := promptui.Prompt{
+			Label:     "Set as default profile",
+			IsConfirm: true,
+		}
+		if _, promptErr := defaultPrompt.Run(); promptErr == nil {
+			setAsDefault = true
+		}
+	}
+
+	// Test connection (unless skipped)
+	if !skipTest {
+		fmt.Print("Testing connection... ")
+		if connErr := testServerConnection(endpointURL); connErr != nil {
+			fmt.Println("FAILED")
+			fmt.Printf("Warning: Could not connect to server: %v\n", connErr)
+
+			continuePrompt := promptui.Prompt{
+				Label:     "Save profile anyway",
+				IsConfirm: true,
+			}
+			if _, promptErr := continuePrompt.Run(); promptErr != nil {
+				fmt.Println("Cancelled.")
+				return nil //nolint:nilerr // User cancelled, not an error
+			}
+		} else {
+			fmt.Println("OK")
+		}
+	}
+
+	// Update profile
+	updatedProfile := clientcli.Profile{
+		Name:      name,
+		Endpoint:  strings.TrimSuffix(endpointURL, "/"),
+		AccessKey: accessKeyVal,
+		SecretKey: secretKeyVal,
+		Default:   setAsDefault,
+	}
+
+	// If setting as default, clear default from others
+	if setAsDefault && !existingProfile.Default {
+		for i := range cfg.Profiles {
+			cfg.Profiles[i].Default = false
+		}
+	}
+
+	// Update profile
+	if err := cfg.UpdateProfile(updatedProfile); err != nil {
+		return fmt.Errorf("update profile: %w", err)
+	}
+
+	// Save config
+	if err := cfg.Save(configPath); err != nil {
+		return fmt.Errorf("save config: %w", err)
+	}
+
+	fmt.Printf("Profile '%s' updated.\n", name)
+	if setAsDefault && !existingProfile.Default {
+		fmt.Printf("Set as default profile.\n")
+	}
+
+	return nil
 }

@@ -61,9 +61,7 @@ func runList(_ *cobra.Command, args []string) error {
 
 	result, err := client.List(context.Background(), opts)
 	if err != nil {
-		formatter := getFormatter()
-		_ = formatter.FormatError(os.Stderr, err)
-		return err
+		return handleError(os.Stderr, err)
 	}
 
 	formatter := getFormatter()
