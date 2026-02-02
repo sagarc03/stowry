@@ -34,7 +34,7 @@ Examples:
 }
 
 func init() {
-	listCmd.Flags().StringVarP(&listPrefix, "prefix", "p", "", "filter by path prefix")
+	listCmd.Flags().StringVar(&listPrefix, "prefix", "", "filter by path prefix")
 	listCmd.Flags().IntVarP(&listLimit, "limit", "l", 100, "max results per page (max: 1000)")
 	listCmd.Flags().BoolVar(&listAll, "all", false, "fetch all pages")
 	listCmd.Flags().StringVar(&listCursor, "cursor", "", "pagination cursor")
