@@ -241,3 +241,147 @@ func TestJSONFormatter_FormatError(t *testing.T) {
 
 	assert.Equal(t, "test error", output["error"])
 }
+
+func TestHumanFormatter_FormatProfileList(t *testing.T) {
+	formatter := &clientcli.HumanFormatter{}
+	profiles := []clientcli.Profile{
+		{Name: "local", Endpoint: "http://localhost:5708", AccessKey: "AKIAIOSFODNN7EXAMPLE"},
+		{Name: "production", Endpoint: "https://prod.example.com", AccessKey: "PRODACCESSKEY123"},
+	}
+
+	t.Run("without secrets", func(t *testing.T) {
+		var buf bytes.Buffer
+		err := formatter.FormatProfileList(&buf, profiles, "local", false)
+		require.NoError(t, err)
+
+		output := buf.String()
+		assert.Contains(t, output, "NAME")
+		assert.Contains(t, output, "ENDPOINT")
+		assert.Contains(t, output, "ACCESS KEY")
+		assert.Contains(t, output, "local")
+		assert.Contains(t, output, "production")
+		assert.Contains(t, output, "*")                       // default marker
+		assert.Contains(t, output, "AKIA...MPLE")             // masked
+		assert.NotContains(t, output, "AKIAIOSFODNN7EXAMPLE") // full key not shown
+	})
+
+	t.Run("with secrets", func(t *testing.T) {
+		var buf bytes.Buffer
+		err := formatter.FormatProfileList(&buf, profiles, "local", true)
+		require.NoError(t, err)
+
+		output := buf.String()
+		assert.Contains(t, output, "AKIAIOSFODNN7EXAMPLE") // full key shown
+	})
+}
+
+func TestHumanFormatter_FormatProfileShow(t *testing.T) {
+	formatter := &clientcli.HumanFormatter{}
+	profile := clientcli.Profile{
+		Name:      "production",
+		Endpoint:  "https://prod.example.com",
+		AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		SecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+	}
+
+	t.Run("without secrets", func(t *testing.T) {
+		var buf bytes.Buffer
+		err := formatter.FormatProfileShow(&buf, profile, true, false)
+		require.NoError(t, err)
+
+		output := buf.String()
+		assert.Contains(t, output, "Name:       production (default)")
+		assert.Contains(t, output, "Endpoint:   https://prod.example.com")
+		assert.Contains(t, output, "Access Key: AKIA...MPLE")
+		assert.Contains(t, output, "Secret Key: wJal...EKEY")
+		assert.NotContains(t, output, "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+	})
+
+	t.Run("with secrets", func(t *testing.T) {
+		var buf bytes.Buffer
+		err := formatter.FormatProfileShow(&buf, profile, false, true)
+		require.NoError(t, err)
+
+		output := buf.String()
+		assert.Contains(t, output, "Name:       production")
+		assert.NotContains(t, output, "(default)")
+		assert.Contains(t, output, "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
+	})
+}
+
+func TestJSONFormatter_FormatProfileList(t *testing.T) {
+	formatter := &clientcli.JSONFormatter{}
+	profiles := []clientcli.Profile{
+		{Name: "local", Endpoint: "http://localhost:5708", AccessKey: "AKIAIOSFODNN7EXAMPLE", SecretKey: "secretkey123"},
+		{Name: "production", Endpoint: "https://prod.example.com", AccessKey: "PRODKEY", SecretKey: "prodsecret"},
+	}
+
+	t.Run("without secrets", func(t *testing.T) {
+		var buf bytes.Buffer
+		err := formatter.FormatProfileList(&buf, profiles, "local", false)
+		require.NoError(t, err)
+
+		var output map[string][]map[string]any
+		err = json.Unmarshal(buf.Bytes(), &output)
+		require.NoError(t, err)
+
+		assert.Len(t, output["profiles"], 2)
+		assert.Equal(t, "local", output["profiles"][0]["name"])
+		assert.Equal(t, true, output["profiles"][0]["default"])
+		assert.Equal(t, "AKIA...MPLE", output["profiles"][0]["access_key"])
+		assert.Equal(t, "secr...y123", output["profiles"][0]["secret_key"])
+	})
+
+	t.Run("with secrets", func(t *testing.T) {
+		var buf bytes.Buffer
+		err := formatter.FormatProfileList(&buf, profiles, "local", true)
+		require.NoError(t, err)
+
+		var output map[string][]map[string]any
+		err = json.Unmarshal(buf.Bytes(), &output)
+		require.NoError(t, err)
+
+		assert.Equal(t, "AKIAIOSFODNN7EXAMPLE", output["profiles"][0]["access_key"])
+		assert.Equal(t, "secretkey123", output["profiles"][0]["secret_key"])
+	})
+}
+
+func TestJSONFormatter_FormatProfileShow(t *testing.T) {
+	formatter := &clientcli.JSONFormatter{}
+	profile := clientcli.Profile{
+		Name:      "production",
+		Endpoint:  "https://prod.example.com",
+		AccessKey: "AKIAIOSFODNN7EXAMPLE",
+		SecretKey: "secretkey123456789",
+	}
+
+	t.Run("without secrets", func(t *testing.T) {
+		var buf bytes.Buffer
+		err := formatter.FormatProfileShow(&buf, profile, true, false)
+		require.NoError(t, err)
+
+		var output map[string]any
+		err = json.Unmarshal(buf.Bytes(), &output)
+		require.NoError(t, err)
+
+		assert.Equal(t, "production", output["name"])
+		assert.Equal(t, "https://prod.example.com", output["endpoint"])
+		assert.Equal(t, true, output["default"])
+		assert.Equal(t, "AKIA...MPLE", output["access_key"])
+		assert.Equal(t, "secr...6789", output["secret_key"])
+	})
+
+	t.Run("with secrets", func(t *testing.T) {
+		var buf bytes.Buffer
+		err := formatter.FormatProfileShow(&buf, profile, false, true)
+		require.NoError(t, err)
+
+		var output map[string]any
+		err = json.Unmarshal(buf.Bytes(), &output)
+		require.NoError(t, err)
+
+		assert.Equal(t, false, output["default"])
+		assert.Equal(t, "AKIAIOSFODNN7EXAMPLE", output["access_key"])
+		assert.Equal(t, "secretkey123456789", output["secret_key"])
+	})
+}

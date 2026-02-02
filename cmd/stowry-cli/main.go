@@ -11,7 +11,8 @@ var (
 	version = "dev"
 
 	cfgFile    string
-	server     string
+	profile    string
+	endpoint   string
 	accessKey  string
 	secretKey  string
 	jsonOutput bool
@@ -23,6 +24,10 @@ var rootCmd = &cobra.Command{
 	Version: version,
 	Short:   "Client for Stowry object storage",
 	Long: `Stowry CLI - Client for Stowry object storage server
+
+Configuration:
+  Profiles are configured in ~/.stowry/config.yaml
+  Use 'stowry-cli configure' to manage profiles
 
 Commands work differently depending on server mode:
   - upload:   Works in all modes (store, static, spa)
@@ -37,10 +42,11 @@ Download behavior by server mode:
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (default: ~/.stowry/config.yaml)")
-	rootCmd.PersistentFlags().StringVarP(&server, "server", "s", "", "server URL (default: http://localhost:5708, env: STOWRY_SERVER)")
-	rootCmd.PersistentFlags().StringVarP(&accessKey, "access-key", "a", "", "access key (env: STOWRY_ACCESS_KEY)")
-	rootCmd.PersistentFlags().StringVarP(&secretKey, "secret-key", "k", "", "secret key (env: STOWRY_SECRET_KEY)")
+	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config", "c", "", "config file (env: STOWRY_CONFIG, default: ~/.stowry/config.yaml)")
+	rootCmd.PersistentFlags().StringVarP(&profile, "profile", "p", "", "use named profile (env: STOWRY_PROFILE)")
+	rootCmd.PersistentFlags().StringVarP(&endpoint, "endpoint", "e", "", "endpoint URL override (env: STOWRY_ENDPOINT)")
+	rootCmd.PersistentFlags().StringVarP(&accessKey, "access-key", "a", "", "access key override (env: STOWRY_ACCESS_KEY)")
+	rootCmd.PersistentFlags().StringVarP(&secretKey, "secret-key", "k", "", "secret key override (env: STOWRY_SECRET_KEY)")
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "output as JSON")
 	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "suppress non-essential output")
 
@@ -48,6 +54,7 @@ func init() {
 	rootCmd.AddCommand(downloadCmd)
 	rootCmd.AddCommand(deleteCmd)
 	rootCmd.AddCommand(listCmd)
+	rootCmd.AddCommand(configureCmd)
 }
 
 func main() {
@@ -56,28 +63,50 @@ func main() {
 	}
 }
 
-// buildConfig merges config from file, env vars, and flags (flags take precedence).
+// buildConfig resolves configuration from profiles, env vars, and flags.
+// Precedence (highest to lowest):
+// 1. CLI flags (--endpoint, --access-key, --secret-key)
+// 2. Environment variables (STOWRY_ENDPOINT, STOWRY_ACCESS_KEY, STOWRY_SECRET_KEY)
+// 3. Selected profile (--profile or STOWRY_PROFILE)
+// 4. Default profile from config file
 func buildConfig() (*clientcli.Config, error) {
 	var configs []*clientcli.Config
 
-	// 1. Load from config file
+	// 1. Load profile from config file
+	// Priority: --config flag > STOWRY_CONFIG env > default path
 	configPath := cfgFile
+	if configPath == "" {
+		configPath = clientcli.ConfigPathFromEnv()
+	}
 	if configPath == "" {
 		configPath = clientcli.DefaultConfigPath()
 	}
 
+	// Determine which profile to use
+	profileName := profile
+	if profileName == "" {
+		profileName = clientcli.ProfileFromEnv()
+	}
+
 	if configPath != "" {
-		fileCfg, err := clientcli.LoadConfigFromFile(configPath)
-		if err != nil {
-			// Only error if user explicitly specified a config file
-			if cfgFile != "" {
-				return nil, err
+		configFile, loadErr := clientcli.LoadConfigFile(configPath)
+		if loadErr == nil {
+			// Get profile (by name or default)
+			p, profileErr := configFile.GetProfile(profileName)
+			if profileErr != nil {
+				// Only error if user explicitly requested a profile
+				if profileName != "" {
+					return nil, profileErr
+				}
+				// No profiles configured, that's ok - continue with env/flags
+			} else {
+				configs = append(configs, clientcli.ConfigFromProfile(p))
 			}
-			// Ignore file not found for default config path
-			// Other errors are also ignored since this is a default path
-		} else {
-			configs = append(configs, fileCfg)
+		} else if cfgFile != "" {
+			// Only error if user explicitly specified a config file
+			return nil, loadErr
 		}
+		// Ignore file not found for default config path
 	}
 
 	// 2. Load from environment variables
@@ -86,7 +115,7 @@ func buildConfig() (*clientcli.Config, error) {
 
 	// 3. Load from flags
 	flagCfg := &clientcli.Config{
-		Server:    server,
+		Endpoint:  endpoint,
 		AccessKey: accessKey,
 		SecretKey: secretKey,
 	}
@@ -109,4 +138,16 @@ func getClient() (*clientcli.Client, error) {
 	}
 
 	return clientcli.New(cfg)
+}
+
+// getConfigPath returns the config file path to use.
+// Priority: --config flag > STOWRY_CONFIG env > default path
+func getConfigPath() string {
+	if cfgFile != "" {
+		return cfgFile
+	}
+	if envPath := clientcli.ConfigPathFromEnv(); envPath != "" {
+		return envPath
+	}
+	return clientcli.DefaultConfigPath()
 }

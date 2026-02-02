@@ -20,7 +20,7 @@ import (
 func TestNew(t *testing.T) {
 	t.Run("valid config", func(t *testing.T) {
 		cfg := &clientcli.Config{
-			Server:    "http://localhost:5708",
+			Endpoint:  "http://localhost:5708",
 			AccessKey: "test-key",
 			SecretKey: "test-secret",
 		}
@@ -30,7 +30,7 @@ func TestNew(t *testing.T) {
 		assert.NotNil(t, client)
 	})
 
-	t.Run("empty server uses default", func(t *testing.T) {
+	t.Run("empty endpoint uses default", func(t *testing.T) {
 		cfg := &clientcli.Config{}
 
 		client, err := clientcli.New(cfg)
@@ -38,9 +38,9 @@ func TestNew(t *testing.T) {
 		assert.NotNil(t, client)
 	})
 
-	t.Run("trailing slash removed", func(t *testing.T) {
+	t.Run("trailing slash removed from endpoint", func(t *testing.T) {
 		cfg := &clientcli.Config{
-			Server: "http://localhost:5708/",
+			Endpoint: "http://localhost:5708/",
 		}
 
 		client, err := clientcli.New(cfg)
@@ -86,7 +86,7 @@ func TestClient_Upload(t *testing.T) {
 
 		// Create client
 		cfg := &clientcli.Config{
-			Server:    server.URL,
+			Endpoint:  server.URL,
 			AccessKey: "test-key",
 			SecretKey: "test-secret",
 		}
@@ -123,7 +123,7 @@ func TestClient_Upload(t *testing.T) {
 		require.NoError(t, err)
 
 		cfg := &clientcli.Config{
-			Server:    server.URL,
+			Endpoint:  server.URL,
 			AccessKey: "test-key",
 			SecretKey: "test-secret",
 		}
@@ -150,7 +150,7 @@ func TestClient_Download(t *testing.T) {
 		defer server.Close()
 
 		cfg := &clientcli.Config{
-			Server:    server.URL,
+			Endpoint:  server.URL,
 			AccessKey: "test-key",
 			SecretKey: "test-secret",
 		}
@@ -184,7 +184,7 @@ func TestClient_Download(t *testing.T) {
 		defer server.Close()
 
 		cfg := &clientcli.Config{
-			Server:    server.URL,
+			Endpoint:  server.URL,
 			AccessKey: "test-key",
 			SecretKey: "test-secret",
 		}
@@ -214,7 +214,7 @@ func TestClient_Download(t *testing.T) {
 		defer server.Close()
 
 		cfg := &clientcli.Config{
-			Server:    server.URL,
+			Endpoint:  server.URL,
 			AccessKey: "test-key",
 			SecretKey: "test-secret",
 		}
@@ -238,7 +238,7 @@ func TestClient_Delete(t *testing.T) {
 		defer server.Close()
 
 		cfg := &clientcli.Config{
-			Server:    server.URL,
+			Endpoint:  server.URL,
 			AccessKey: "test-key",
 			SecretKey: "test-secret",
 		}
@@ -264,7 +264,7 @@ func TestClient_Delete(t *testing.T) {
 		defer server.Close()
 
 		cfg := &clientcli.Config{
-			Server:    server.URL,
+			Endpoint:  server.URL,
 			AccessKey: "test-key",
 			SecretKey: "test-secret",
 		}
@@ -283,7 +283,7 @@ func TestClient_Delete(t *testing.T) {
 
 	t.Run("empty paths error", func(t *testing.T) {
 		cfg := &clientcli.Config{
-			Server:    "http://localhost",
+			Endpoint:  "http://localhost",
 			AccessKey: "test-key",
 			SecretKey: "test-secret",
 		}
@@ -334,7 +334,7 @@ func TestClient_List(t *testing.T) {
 		defer server.Close()
 
 		cfg := &clientcli.Config{
-			Server:    server.URL,
+			Endpoint:  server.URL,
 			AccessKey: "test-key",
 			SecretKey: "test-secret",
 		}
@@ -366,7 +366,7 @@ func TestClient_List(t *testing.T) {
 		defer server.Close()
 
 		cfg := &clientcli.Config{
-			Server:    server.URL,
+			Endpoint:  server.URL,
 			AccessKey: "test-key",
 			SecretKey: "test-secret",
 		}

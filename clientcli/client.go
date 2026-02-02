@@ -40,17 +40,17 @@ func New(cfg *Config) (*Client, error) {
 		return nil, err
 	}
 
-	// Normalize server URL (remove trailing slash)
-	server := strings.TrimSuffix(cfg.Server, "/")
+	// Normalize endpoint URL (remove trailing slash)
+	endpoint := strings.TrimSuffix(cfg.Endpoint, "/")
 
 	return &Client{
 		config: &Config{
-			Server:    server,
+			Endpoint:  endpoint,
 			AccessKey: cfg.AccessKey,
 			SecretKey: cfg.SecretKey,
 		},
 		httpClient: &http.Client{Timeout: DefaultTimeout},
-		signer:     stowry.NewClient(server, cfg.AccessKey, cfg.SecretKey),
+		signer:     stowry.NewClient(endpoint, cfg.AccessKey, cfg.SecretKey),
 	}, nil
 }
 
@@ -517,7 +517,7 @@ func (c *Client) presignList(prefix string, limit int, cursor string, expires in
 		query.Set("cursor", cursor)
 	}
 
-	return c.config.Server + path + "?" + query.Encode()
+	return c.config.Endpoint + path + "?" + query.Encode()
 }
 
 // normalizePath ensures path has leading slash and no trailing slash.

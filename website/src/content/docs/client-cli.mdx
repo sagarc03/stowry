@@ -79,37 +79,73 @@ go install github.com/sagarc03/stowry/cmd/stowry-cli@latest
 
 ## Configuration
 
-The client can be configured through multiple sources, with the following priority (highest to lowest):
+The client supports multiple server profiles, allowing you to easily switch between different Stowry servers.
 
-1. **Command-line flags** (highest priority)
-2. **Environment variables**
-3. **Configuration file** (lowest priority)
+### Configuration Priority
+
+Settings are resolved in this order (highest to lowest priority):
+
+1. **Command-line flags** (`--endpoint`, `--access-key`, `--secret-key`)
+2. **Environment variables** (`STOWRY_ENDPOINT`, `STOWRY_ACCESS_KEY`, `STOWRY_SECRET_KEY`)
+3. **Selected profile** (`--profile` flag or `STOWRY_PROFILE` env var)
+4. **Default profile** from config file
 
 ### Configuration File
 
-Create `~/.stowry/config.yaml`:
+Create `~/.stowry/config.yaml` with one or more profiles:
 
 ```yaml
-server: http://localhost:5708
-access_key: YOUR_ACCESS_KEY
-secret_key: YOUR_SECRET_KEY
+profiles:
+  - name: local
+    endpoint: http://localhost:5708
+    access_key: YOUR_LOCAL_ACCESS_KEY
+    secret_key: YOUR_LOCAL_SECRET_KEY
+    default: true
+
+  - name: production
+    endpoint: https://storage.example.com
+    access_key: YOUR_PROD_ACCESS_KEY
+    secret_key: YOUR_PROD_SECRET_KEY
+
+  - name: staging
+    endpoint: https://staging.example.com
+    access_key: YOUR_STAGING_ACCESS_KEY
+    secret_key: YOUR_STAGING_SECRET_KEY
+```
+
+The first profile is used as default, unless one is marked with `default: true`.
+
+### Using Profiles
+
+```bash
+# Uses default profile
+stowry-cli upload ./file.txt
+
+# Use a specific profile
+stowry-cli --profile production upload ./file.txt
+stowry-cli -p staging list
+
+# Set profile via environment variable
+export STOWRY_PROFILE=production
+stowry-cli upload ./file.txt
 ```
 
 ### Environment Variables
 
 ```bash
-export STOWRY_SERVER=http://localhost:5708
-export STOWRY_ACCESS_KEY=YOUR_ACCESS_KEY
-export STOWRY_SECRET_KEY=YOUR_SECRET_KEY
+export STOWRY_PROFILE=production            # Select profile by name
+export STOWRY_CONFIG=~/.stowry/config.yaml  # Custom config file path
+export STOWRY_ENDPOINT=http://localhost:5708 # Override server URL
+export STOWRY_ACCESS_KEY=YOUR_ACCESS_KEY    # Override access key
+export STOWRY_SECRET_KEY=YOUR_SECRET_KEY    # Override secret key
 ```
 
-### Command-line Flags
+### Command-line Overrides
+
+Flags override both profile and environment settings:
 
 ```bash
-stowry-cli --server http://localhost:5708 \
-           --access-key YOUR_ACCESS_KEY \
-           --secret-key YOUR_SECRET_KEY \
-           upload ./file.txt
+stowry-cli --profile production --endpoint https://backup.example.com upload ./file.txt
 ```
 
 ---
@@ -120,10 +156,11 @@ These flags are available for all commands:
 
 | Flag | Short | Env Var | Default | Description |
 |------|-------|---------|---------|-------------|
-| `--config` | `-c` | - | `~/.stowry/config.yaml` | Config file path |
-| `--server` | `-s` | `STOWRY_SERVER` | `http://localhost:5708` | Server URL |
-| `--access-key` | `-a` | `STOWRY_ACCESS_KEY` | - | Access key for authentication |
-| `--secret-key` | `-k` | `STOWRY_SECRET_KEY` | - | Secret key for authentication |
+| `--config` | `-c` | `STOWRY_CONFIG` | `~/.stowry/config.yaml` | Config file path |
+| `--profile` | `-p` | `STOWRY_PROFILE` | - | Use named profile from config |
+| `--endpoint` | `-e` | `STOWRY_ENDPOINT` | `http://localhost:5708` | Endpoint URL override |
+| `--access-key` | `-a` | `STOWRY_ACCESS_KEY` | - | Access key override |
+| `--secret-key` | `-k` | `STOWRY_SECRET_KEY` | - | Secret key override |
 | `--json` | - | - | `false` | Output results as JSON |
 | `--quiet` | `-q` | - | `false` | Suppress non-essential output |
 | `--help` | `-h` | - | - | Help for the command |
@@ -131,6 +168,57 @@ These flags are available for all commands:
 ---
 
 ## Commands
+
+### configure
+
+Manage server profiles in the configuration file.
+
+```bash
+stowry-cli configure <subcommand>
+```
+
+**Subcommands:**
+
+| Subcommand | Description |
+|------------|-------------|
+| `list` | List all configured profiles |
+| `add <name>` | Add a new profile interactively |
+| `remove <name>` | Remove a profile |
+| `set-default <name>` | Set the default profile |
+| `show [name]` | Show profile details (default profile if name omitted) |
+
+**Examples:**
+
+```bash
+# List all profiles (* marks default)
+stowry-cli configure list
+
+# Add a new profile interactively
+stowry-cli configure add production
+
+# Show profile details (secrets hidden)
+stowry-cli configure show production
+
+# Show profile with secrets revealed
+stowry-cli configure show production --show-secrets
+
+# Set default profile
+stowry-cli configure set-default production
+
+# Remove a profile
+stowry-cli configure remove old-server
+```
+
+**Output of `configure list`:**
+
+```
+  NAME        ENDPOINT                     ACCESS KEY
+  ----------  ---------------------------  --------------------
+* local       http://localhost:5708        AKIA...MPLE
+  production  https://storage.example.com  PROD...KEY
+```
+
+---
 
 ### upload
 
@@ -373,7 +461,7 @@ With `--json`:
 
 ```bash
 # Configure credentials
-export STOWRY_SERVER=http://localhost:5708
+export STOWRY_ENDPOINT=http://localhost:5708
 export STOWRY_ACCESS_KEY=your-access-key
 export STOWRY_SECRET_KEY=your-secret-key
 
@@ -419,21 +507,26 @@ stowry-cli list --json --all | jq '[.items[].file_size_bytes] | add'
 stowry-cli list --json --all | jq '.items[] | select(.content_type == "image/jpeg")'
 ```
 
-### Using with Config File
-
-Create `~/.stowry/config.yaml`:
-
-```yaml
-server: https://storage.example.com
-access_key: AKIAIOSFODNN7EXAMPLE
-secret_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-```
-
-Then use commands without specifying credentials:
+### Using Profiles
 
 ```bash
+# Set up profiles interactively
+stowry-cli configure add local
+stowry-cli configure add production
+stowry-cli configure add staging
+
+# Set production as default
+stowry-cli configure set-default production
+
+# Use default profile (production)
 stowry-cli upload ./file.txt
-stowry-cli list
+
+# Use specific profile
+stowry-cli -p staging upload ./file.txt
+
+# CI/CD: Set profile via environment
+export STOWRY_PROFILE=production
+stowry-cli upload ./dist/
 ```
 
 ---

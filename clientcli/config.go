@@ -9,21 +9,184 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// DefaultServer is the default server URL.
-const DefaultServer = "http://localhost:5708"
+// DefaultEndpoint is the default server endpoint URL.
+const DefaultEndpoint = "http://localhost:5708"
 
-// Config holds client configuration.
+// Errors for profile operations.
+var (
+	ErrProfileNotFound = errors.New("profile not found")
+	ErrNoProfiles      = errors.New("no profiles configured")
+	ErrProfileExists   = errors.New("profile already exists")
+)
+
+// Profile holds configuration for a single server profile.
+type Profile struct {
+	Name      string `yaml:"name"`
+	Endpoint  string `yaml:"endpoint"`
+	AccessKey string `yaml:"access_key,omitempty"`
+	SecretKey string `yaml:"secret_key,omitempty"`
+	Default   bool   `yaml:"default,omitempty"`
+}
+
+// ConfigFile holds the full config file structure with multiple profiles.
+type ConfigFile struct {
+	Profiles []Profile `yaml:"profiles"`
+}
+
+// GetProfile returns the profile by name.
+// If name is empty, returns the default profile.
+func (c *ConfigFile) GetProfile(name string) (*Profile, error) {
+	if len(c.Profiles) == 0 {
+		return nil, ErrNoProfiles
+	}
+
+	if name == "" {
+		return c.GetDefaultProfile()
+	}
+
+	for i := range c.Profiles {
+		if c.Profiles[i].Name == name {
+			return &c.Profiles[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("%w: %s", ErrProfileNotFound, name)
+}
+
+// GetDefaultProfile returns the default profile.
+// If no profile is marked as default, returns the first profile.
+func (c *ConfigFile) GetDefaultProfile() (*Profile, error) {
+	if len(c.Profiles) == 0 {
+		return nil, ErrNoProfiles
+	}
+
+	// Look for profile marked as default
+	for i := range c.Profiles {
+		if c.Profiles[i].Default {
+			return &c.Profiles[i], nil
+		}
+	}
+
+	// Return first profile if none marked as default
+	return &c.Profiles[0], nil
+}
+
+// AddProfile adds a new profile or updates an existing one.
+func (c *ConfigFile) AddProfile(p Profile) error {
+	// Check if profile with same name exists
+	for i := range c.Profiles {
+		if c.Profiles[i].Name == p.Name {
+			// Update existing profile
+			c.Profiles[i] = p
+			return nil
+		}
+	}
+
+	// Add new profile
+	c.Profiles = append(c.Profiles, p)
+	return nil
+}
+
+// RemoveProfile removes a profile by name.
+func (c *ConfigFile) RemoveProfile(name string) error {
+	for i := range c.Profiles {
+		if c.Profiles[i].Name == name {
+			c.Profiles = append(c.Profiles[:i], c.Profiles[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: %s", ErrProfileNotFound, name)
+}
+
+// SetDefault sets the default profile by name.
+// Clears the default flag from all other profiles.
+func (c *ConfigFile) SetDefault(name string) error {
+	found := false
+	for i := range c.Profiles {
+		if c.Profiles[i].Name == name {
+			c.Profiles[i].Default = true
+			found = true
+		} else {
+			c.Profiles[i].Default = false
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("%w: %s", ErrProfileNotFound, name)
+	}
+	return nil
+}
+
+// ProfileNames returns a list of all profile names.
+func (c *ConfigFile) ProfileNames() []string {
+	names := make([]string, len(c.Profiles))
+	for i := range c.Profiles {
+		names[i] = c.Profiles[i].Name
+	}
+	return names
+}
+
+// Save writes the config to the specified path.
+// Creates the parent directory if it doesn't exist.
+func (c *ConfigFile) Save(path string) error {
+	cleanPath := filepath.Clean(path)
+
+	// Create parent directory if needed
+	dir := filepath.Dir(cleanPath)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return fmt.Errorf("create config directory: %w", err)
+	}
+
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return fmt.Errorf("marshal config: %w", err)
+	}
+
+	if err := os.WriteFile(cleanPath, data, 0o600); err != nil {
+		return fmt.Errorf("write config file: %w", err)
+	}
+
+	return nil
+}
+
+// LoadConfigFile loads the config file from the specified path.
+func LoadConfigFile(path string) (*ConfigFile, error) {
+	cleanPath := filepath.Clean(path)
+	data, err := os.ReadFile(cleanPath) //#nosec G304 -- path is user-provided config file
+	if err != nil {
+		return nil, fmt.Errorf("read config file: %w", err)
+	}
+
+	var cfg ConfigFile
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("parse config file: %w", err)
+	}
+
+	return &cfg, nil
+}
+
+// DefaultConfigPath returns the default config file path (~/.stowry/config.yaml).
+func DefaultConfigPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(home, ".stowry", "config.yaml")
+}
+
+// Config holds resolved client configuration for a single server.
+// This is what the Client uses after profile resolution.
 type Config struct {
-	Server    string `yaml:"server" mapstructure:"server"`
-	AccessKey string `yaml:"access_key" mapstructure:"access_key"`
-	SecretKey string `yaml:"secret_key" mapstructure:"secret_key"`
+	Endpoint  string
+	AccessKey string
+	SecretKey string
 }
 
 // Validate checks if required fields are set.
-// If Server is empty, it defaults to DefaultServer.
+// If Endpoint is empty, it defaults to DefaultEndpoint.
 func (c *Config) Validate() error {
-	if c.Server == "" {
-		c.Server = DefaultServer
+	if c.Endpoint == "" {
+		c.Endpoint = DefaultEndpoint
 	}
 	return nil
 }
@@ -42,29 +205,35 @@ func (c *Config) ValidateWithAuth() error {
 	return nil
 }
 
-// LoadConfigFromFile loads config from a YAML file.
-func LoadConfigFromFile(path string) (*Config, error) {
-	cleanPath := filepath.Clean(path)
-	data, err := os.ReadFile(cleanPath) //#nosec G304 -- path is user-provided config file
-	if err != nil {
-		return nil, fmt.Errorf("read config file: %w", err)
+// ConfigFromProfile creates a Config from a Profile.
+func ConfigFromProfile(p *Profile) *Config {
+	if p == nil {
+		return &Config{}
 	}
-
-	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("parse config file: %w", err)
+	return &Config{
+		Endpoint:  p.Endpoint,
+		AccessKey: p.AccessKey,
+		SecretKey: p.SecretKey,
 	}
-
-	return &cfg, nil
 }
 
-// DefaultConfigPath returns the default config file path (~/.stowry/config.yaml).
-func DefaultConfigPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
+// ConfigFromEnv loads config from environment variables.
+func ConfigFromEnv() *Config {
+	return &Config{
+		Endpoint:  os.Getenv("STOWRY_ENDPOINT"),
+		AccessKey: os.Getenv("STOWRY_ACCESS_KEY"),
+		SecretKey: os.Getenv("STOWRY_SECRET_KEY"),
 	}
-	return filepath.Join(home, ".stowry", "config.yaml")
+}
+
+// ProfileFromEnv returns the profile name from STOWRY_PROFILE environment variable.
+func ProfileFromEnv() string {
+	return os.Getenv("STOWRY_PROFILE")
+}
+
+// ConfigPathFromEnv returns the config file path from STOWRY_CONFIG environment variable.
+func ConfigPathFromEnv() string {
+	return os.Getenv("STOWRY_CONFIG")
 }
 
 // MergeConfig merges multiple configs, with later configs taking precedence.
@@ -75,8 +244,8 @@ func MergeConfig(configs ...*Config) *Config {
 		if cfg == nil {
 			continue
 		}
-		if cfg.Server != "" {
-			result.Server = cfg.Server
+		if cfg.Endpoint != "" {
+			result.Endpoint = cfg.Endpoint
 		}
 		if cfg.AccessKey != "" {
 			result.AccessKey = cfg.AccessKey
@@ -86,13 +255,4 @@ func MergeConfig(configs ...*Config) *Config {
 		}
 	}
 	return result
-}
-
-// ConfigFromEnv loads config from environment variables.
-func ConfigFromEnv() *Config {
-	return &Config{
-		Server:    os.Getenv("STOWRY_SERVER"),
-		AccessKey: os.Getenv("STOWRY_ACCESS_KEY"),
-		SecretKey: os.Getenv("STOWRY_SECRET_KEY"),
-	}
 }
