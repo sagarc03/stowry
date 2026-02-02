@@ -433,3 +433,251 @@ func TestNormalizeLocalToRemotePath(t *testing.T) {
 		})
 	}
 }
+
+func TestNew_Options(t *testing.T) {
+	t.Run("nil config returns error", func(t *testing.T) {
+		client, err := clientcli.New(nil)
+		assert.Error(t, err)
+		assert.Nil(t, client)
+		assert.Contains(t, err.Error(), "config is required")
+	})
+
+	t.Run("with custom http client", func(t *testing.T) {
+		cfg := &clientcli.Config{Endpoint: "http://localhost:5708"}
+		customClient := &http.Client{Timeout: 60 * time.Second}
+
+		client, err := clientcli.New(cfg, clientcli.WithHTTPClient(customClient))
+		require.NoError(t, err)
+		assert.NotNil(t, client)
+	})
+
+	t.Run("with custom timeout", func(t *testing.T) {
+		cfg := &clientcli.Config{Endpoint: "http://localhost:5708"}
+
+		client, err := clientcli.New(cfg, clientcli.WithTimeout(60*time.Second))
+		require.NoError(t, err)
+		assert.NotNil(t, client)
+	})
+}
+
+func TestAPIError_Is(t *testing.T) {
+	t.Run("matches same status code", func(t *testing.T) {
+		err := &clientcli.APIError{StatusCode: 404, Body: "not found"}
+		assert.ErrorIs(t, err, clientcli.ErrNotFound)
+	})
+
+	t.Run("does not match different status code", func(t *testing.T) {
+		err := &clientcli.APIError{StatusCode: 500, Body: "server error"}
+		assert.NotErrorIs(t, err, clientcli.ErrNotFound)
+	})
+
+	t.Run("does not match non-APIError", func(t *testing.T) {
+		err := &clientcli.APIError{StatusCode: 404, Body: "not found"}
+		assert.NotErrorIs(t, err, io.EOF)
+	})
+}
+
+func TestClient_Upload_Validation(t *testing.T) {
+	t.Run("empty local path returns error", func(t *testing.T) {
+		cfg := &clientcli.Config{Endpoint: "http://localhost:5708"}
+		client, err := clientcli.New(cfg)
+		require.NoError(t, err)
+
+		_, err = client.Upload(context.Background(), clientcli.UploadOptions{
+			LocalPath: "",
+		})
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, clientcli.ErrEmptyPath)
+	})
+}
+
+func TestClient_Download_Validation(t *testing.T) {
+	t.Run("empty remote path returns error", func(t *testing.T) {
+		cfg := &clientcli.Config{Endpoint: "http://localhost:5708"}
+		client, err := clientcli.New(cfg)
+		require.NoError(t, err)
+
+		_, _, err = client.Download(context.Background(), clientcli.DownloadOptions{
+			RemotePath: "",
+		})
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, clientcli.ErrEmptyPath)
+	})
+}
+
+func TestClient_Delete_Validation(t *testing.T) {
+	t.Run("empty paths returns error", func(t *testing.T) {
+		cfg := &clientcli.Config{Endpoint: "http://localhost:5708"}
+		client, err := clientcli.New(cfg)
+		require.NoError(t, err)
+
+		_, err = client.Delete(context.Background(), clientcli.DeleteOptions{
+			Paths: []string{},
+		})
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, clientcli.ErrNoPaths)
+	})
+}
+
+func TestAPIError_Error(t *testing.T) {
+	err := &clientcli.APIError{StatusCode: 404, Body: "not found"}
+	assert.Equal(t, "server error: 404 - not found", err.Error())
+}
+
+func TestAPIError_IsNotFound(t *testing.T) {
+	t.Run("404 is not found", func(t *testing.T) {
+		err := &clientcli.APIError{StatusCode: 404, Body: "not found"}
+		assert.True(t, err.IsNotFound())
+	})
+
+	t.Run("500 is not not found", func(t *testing.T) {
+		err := &clientcli.APIError{StatusCode: 500, Body: "server error"}
+		assert.False(t, err.IsNotFound())
+	})
+}
+
+func TestClient_List_All(t *testing.T) {
+	t.Run("fetches all pages", func(t *testing.T) {
+		callCount := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			var resp map[string]any
+
+			if callCount == 1 {
+				resp = map[string]any{
+					"items": []map[string]any{
+						{
+							"id":              uuid.New().String(),
+							"path":            "file1.txt",
+							"content_type":    "text/plain",
+							"etag":            "etag1",
+							"file_size_bytes": 100,
+							"created_at":      time.Now().Format(time.RFC3339),
+							"updated_at":      time.Now().Format(time.RFC3339),
+						},
+					},
+					"next_cursor": "cursor123",
+				}
+			} else {
+				resp = map[string]any{
+					"items": []map[string]any{
+						{
+							"id":              uuid.New().String(),
+							"path":            "file2.txt",
+							"content_type":    "text/plain",
+							"etag":            "etag2",
+							"file_size_bytes": 200,
+							"created_at":      time.Now().Format(time.RFC3339),
+							"updated_at":      time.Now().Format(time.RFC3339),
+						},
+					},
+				}
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		cfg := &clientcli.Config{
+			Endpoint:  server.URL,
+			AccessKey: "test-key",
+			SecretKey: "test-secret",
+		}
+		client, err := clientcli.New(cfg)
+		require.NoError(t, err)
+
+		result, err := client.List(context.Background(), clientcli.ListOptions{
+			All: true,
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, 2, callCount)
+		assert.Len(t, result.Items, 2)
+		assert.Equal(t, "file1.txt", result.Items[0].Path)
+		assert.Equal(t, "file2.txt", result.Items[1].Path)
+		assert.Empty(t, result.NextCursor)
+	})
+}
+
+func TestClient_Upload_Recursive(t *testing.T) {
+	t.Run("uploads directory recursively", func(t *testing.T) {
+		uploadedFiles := make(map[string]bool)
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			uploadedFiles[r.URL.Path] = true
+
+			resp := map[string]any{
+				"id":              uuid.New().String(),
+				"path":            r.URL.Path,
+				"content_type":    "text/plain",
+				"etag":            "etag",
+				"file_size_bytes": 100,
+				"created_at":      time.Now().Format(time.RFC3339),
+				"updated_at":      time.Now().Format(time.RFC3339),
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		// Create temp directory with files
+		tmpDir := t.TempDir()
+		subDir := filepath.Join(tmpDir, "subdir")
+		require.NoError(t, os.MkdirAll(subDir, 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte("content1"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(subDir, "file2.txt"), []byte("content2"), 0o600))
+
+		cfg := &clientcli.Config{
+			Endpoint:  server.URL,
+			AccessKey: "test-key",
+			SecretKey: "test-secret",
+		}
+		client, err := clientcli.New(cfg)
+		require.NoError(t, err)
+
+		results, err := client.Upload(context.Background(), clientcli.UploadOptions{
+			LocalPath:  tmpDir,
+			RemotePath: "uploads",
+			Recursive:  true,
+		})
+		require.NoError(t, err)
+		assert.Len(t, results, 2)
+	})
+
+	t.Run("recursive on single file uploads single file", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			resp := map[string]any{
+				"id":              uuid.New().String(),
+				"path":            r.URL.Path,
+				"content_type":    "text/plain",
+				"etag":            "etag",
+				"file_size_bytes": 100,
+				"created_at":      time.Now().Format(time.RFC3339),
+				"updated_at":      time.Now().Format(time.RFC3339),
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		tmpDir := t.TempDir()
+		filePath := filepath.Join(tmpDir, "file.txt")
+		require.NoError(t, os.WriteFile(filePath, []byte("content"), 0o600))
+
+		cfg := &clientcli.Config{
+			Endpoint:  server.URL,
+			AccessKey: "test-key",
+			SecretKey: "test-secret",
+		}
+		client, err := clientcli.New(cfg)
+		require.NoError(t, err)
+
+		results, err := client.Upload(context.Background(), clientcli.UploadOptions{
+			LocalPath:  filePath,
+			RemotePath: "file.txt",
+			Recursive:  true,
+		})
+		require.NoError(t, err)
+		assert.Len(t, results, 1)
+	})
+}

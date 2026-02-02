@@ -71,20 +71,19 @@ func (c *ConfigFile) GetDefaultProfile() (*Profile, error) {
 	return &c.Profiles[0], nil
 }
 
-// AddProfile adds a new profile or updates an existing one.
-func (c *ConfigFile) AddProfile(p Profile) error {
+// AddProfile adds a new profile or updates an existing one with the same name.
+func (c *ConfigFile) AddProfile(p Profile) {
 	// Check if profile with same name exists
 	for i := range c.Profiles {
 		if c.Profiles[i].Name == p.Name {
 			// Update existing profile
 			c.Profiles[i] = p
-			return nil
+			return
 		}
 	}
 
 	// Add new profile
 	c.Profiles = append(c.Profiles, p)
-	return nil
 }
 
 // RemoveProfile removes a profile by name.
@@ -183,19 +182,24 @@ type Config struct {
 }
 
 // Validate checks if required fields are set.
-// If Endpoint is empty, it defaults to DefaultEndpoint.
+// Use WithDefaults() to get a config with default values applied.
 func (c *Config) Validate() error {
-	if c.Endpoint == "" {
-		c.Endpoint = DefaultEndpoint
-	}
+	// Validation only - no mutation
 	return nil
+}
+
+// WithDefaults returns a copy of the config with default values applied.
+// If Endpoint is empty, it defaults to DefaultEndpoint.
+func (c *Config) WithDefaults() *Config {
+	cfg := *c
+	if cfg.Endpoint == "" {
+		cfg.Endpoint = DefaultEndpoint
+	}
+	return &cfg
 }
 
 // ValidateWithAuth checks if required fields including credentials are set.
 func (c *Config) ValidateWithAuth() error {
-	if err := c.Validate(); err != nil {
-		return err
-	}
 	if c.AccessKey == "" {
 		return errors.New("access key is required")
 	}

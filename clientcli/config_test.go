@@ -86,11 +86,10 @@ func TestConfigFile_AddProfile(t *testing.T) {
 			},
 		}
 
-		err := cfg.AddProfile(clientcli.Profile{
+		cfg.AddProfile(clientcli.Profile{
 			Name:     "production",
 			Endpoint: "https://prod.example.com",
 		})
-		require.NoError(t, err)
 		assert.Len(t, cfg.Profiles, 2)
 
 		p, err := cfg.GetProfile("production")
@@ -105,11 +104,10 @@ func TestConfigFile_AddProfile(t *testing.T) {
 			},
 		}
 
-		err := cfg.AddProfile(clientcli.Profile{
+		cfg.AddProfile(clientcli.Profile{
 			Name:     "local",
 			Endpoint: "http://localhost:9999",
 		})
-		require.NoError(t, err)
 		assert.Len(t, cfg.Profiles, 1) // still 1 profile
 
 		p, err := cfg.GetProfile("local")
@@ -258,11 +256,38 @@ func TestConfig_Validate(t *testing.T) {
 		assert.Equal(t, "http://localhost:5708", cfg.Endpoint)
 	})
 
-	t.Run("empty endpoint gets default", func(t *testing.T) {
+	t.Run("empty endpoint does not mutate", func(t *testing.T) {
 		cfg := &clientcli.Config{}
 		err := cfg.Validate()
 		assert.NoError(t, err)
-		assert.Equal(t, clientcli.DefaultEndpoint, cfg.Endpoint)
+		assert.Equal(t, "", cfg.Endpoint) // Validate no longer mutates
+	})
+}
+
+func TestConfig_WithDefaults(t *testing.T) {
+	t.Run("applies default endpoint", func(t *testing.T) {
+		cfg := &clientcli.Config{}
+		result := cfg.WithDefaults()
+		assert.Equal(t, clientcli.DefaultEndpoint, result.Endpoint)
+		assert.Equal(t, "", cfg.Endpoint) // Original unchanged
+	})
+
+	t.Run("preserves existing endpoint", func(t *testing.T) {
+		cfg := &clientcli.Config{Endpoint: "http://custom:8080"}
+		result := cfg.WithDefaults()
+		assert.Equal(t, "http://custom:8080", result.Endpoint)
+	})
+
+	t.Run("copies all fields", func(t *testing.T) {
+		cfg := &clientcli.Config{
+			Endpoint:  "http://localhost:5708",
+			AccessKey: "key",
+			SecretKey: "secret",
+		}
+		result := cfg.WithDefaults()
+		assert.Equal(t, cfg.Endpoint, result.Endpoint)
+		assert.Equal(t, cfg.AccessKey, result.AccessKey)
+		assert.Equal(t, cfg.SecretKey, result.SecretKey)
 	})
 }
 
@@ -277,16 +302,6 @@ func TestConfig_ValidateWithAuth(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("empty endpoint gets default with auth", func(t *testing.T) {
-		cfg := &clientcli.Config{
-			AccessKey: "test-access-key",
-			SecretKey: "test-secret-key",
-		}
-		err := cfg.ValidateWithAuth()
-		assert.NoError(t, err)
-		assert.Equal(t, clientcli.DefaultEndpoint, cfg.Endpoint)
-	})
-
 	t.Run("missing access key", func(t *testing.T) {
 		cfg := &clientcli.Config{
 			Endpoint:  "http://localhost:5708",
@@ -294,6 +309,7 @@ func TestConfig_ValidateWithAuth(t *testing.T) {
 		}
 		err := cfg.ValidateWithAuth()
 		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "access key")
 	})
 
 	t.Run("missing secret key", func(t *testing.T) {
@@ -303,6 +319,7 @@ func TestConfig_ValidateWithAuth(t *testing.T) {
 		}
 		err := cfg.ValidateWithAuth()
 		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "secret key")
 	})
 }
 

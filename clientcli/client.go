@@ -1,9 +1,9 @@
 package clientcli
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -34,16 +34,36 @@ type Client struct {
 	signer     *stowry.Client
 }
 
-// New creates a new Client with the given config.
-func New(cfg *Config) (*Client, error) {
-	if err := cfg.Validate(); err != nil {
-		return nil, err
+// Option configures a Client.
+type Option func(*Client)
+
+// WithHTTPClient sets a custom HTTP client.
+func WithHTTPClient(client *http.Client) Option {
+	return func(c *Client) {
+		c.httpClient = client
 	}
+}
+
+// WithTimeout sets the HTTP client timeout.
+func WithTimeout(timeout time.Duration) Option {
+	return func(c *Client) {
+		c.httpClient.Timeout = timeout
+	}
+}
+
+// New creates a new Client with the given config and options.
+func New(cfg *Config, opts ...Option) (*Client, error) {
+	if cfg == nil {
+		return nil, errors.New("config is required")
+	}
+
+	// Apply defaults
+	cfg = cfg.WithDefaults()
 
 	// Normalize endpoint URL (remove trailing slash)
 	endpoint := strings.TrimSuffix(cfg.Endpoint, "/")
 
-	return &Client{
+	c := &Client{
 		config: &Config{
 			Endpoint:  endpoint,
 			AccessKey: cfg.AccessKey,
@@ -51,17 +71,22 @@ func New(cfg *Config) (*Client, error) {
 		},
 		httpClient: &http.Client{Timeout: DefaultTimeout},
 		signer:     stowry.NewClient(endpoint, cfg.AccessKey, cfg.SecretKey),
-	}, nil
-}
+	}
 
-// SetHTTPClient allows setting a custom HTTP client (useful for testing).
-func (c *Client) SetHTTPClient(client *http.Client) {
-	c.httpClient = client
+	// Apply options
+	for _, opt := range opts {
+		opt(c)
+	}
+
+	return c, nil
 }
 
 // Upload uploads file(s) to the server.
 // For recursive uploads, walks directory and preserves relative paths.
 func (c *Client) Upload(ctx context.Context, opts UploadOptions) ([]UploadResult, error) {
+	if opts.LocalPath == "" {
+		return nil, fmt.Errorf("upload: %w", ErrEmptyPath)
+	}
 	if opts.Recursive {
 		return c.uploadRecursive(ctx, opts)
 	}
@@ -166,14 +191,8 @@ func (c *Client) uploadSingle(ctx context.Context, localPath, remotePath, conten
 	// Generate presigned URL
 	presignURL := c.signer.PresignPut(remotePath, DefaultExpires)
 
-	// Read file content
-	content, err := io.ReadAll(file)
-	if err != nil {
-		return UploadResult{}, fmt.Errorf("read file: %w", err)
-	}
-
-	// Create request
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, presignURL, bytes.NewReader(content))
+	// Create request with file as body (streaming, no memory copy)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, presignURL, file)
 	if err != nil {
 		return UploadResult{}, fmt.Errorf("create request: %w", err)
 	}
@@ -218,6 +237,9 @@ func (c *Client) uploadSingle(ctx context.Context, localPath, remotePath, conten
 // If opts.LocalPath is "-", the content is returned via the io.ReadCloser and must be closed by the caller.
 // Otherwise, the content is written to the file and the io.ReadCloser is nil.
 func (c *Client) Download(ctx context.Context, opts DownloadOptions) (*DownloadResult, io.ReadCloser, error) {
+	if opts.RemotePath == "" {
+		return nil, nil, fmt.Errorf("download: %w", ErrEmptyPath)
+	}
 	remotePath := normalizePath(opts.RemotePath)
 
 	// Generate presigned URL
@@ -302,7 +324,7 @@ func (c *Client) Download(ctx context.Context, opts DownloadOptions) (*DownloadR
 // Continues on error, collecting results for all paths.
 func (c *Client) Delete(ctx context.Context, opts DeleteOptions) ([]DeleteResult, error) {
 	if len(opts.Paths) == 0 {
-		return nil, fmt.Errorf("no paths provided")
+		return nil, ErrNoPaths
 	}
 
 	results := make([]DeleteResult, 0, len(opts.Paths))
@@ -598,7 +620,38 @@ func (e *APIError) Error() string {
 	return "server error: " + strconv.Itoa(e.StatusCode) + " - " + e.Body
 }
 
+// Is reports whether target matches this error.
+// It matches if target is an *APIError with the same StatusCode.
+func (e *APIError) Is(target error) bool {
+	t, ok := target.(*APIError)
+	if !ok {
+		return false
+	}
+	return t.StatusCode == e.StatusCode
+}
+
 // IsNotFound returns true if the error is a 404.
 func (e *APIError) IsNotFound() bool {
 	return e.StatusCode == http.StatusNotFound
 }
+
+// Sentinel errors for common API error conditions.
+var (
+	// ErrNotFound is returned when the requested resource does not exist.
+	ErrNotFound = &APIError{StatusCode: http.StatusNotFound}
+
+	// ErrUnauthorized is returned when authentication fails.
+	ErrUnauthorized = &APIError{StatusCode: http.StatusUnauthorized}
+
+	// ErrForbidden is returned when the request is not permitted.
+	ErrForbidden = &APIError{StatusCode: http.StatusForbidden}
+)
+
+// Sentinel errors for input validation.
+var (
+	// ErrNoPaths is returned when no paths are provided to an operation.
+	ErrNoPaths = errors.New("no paths provided")
+
+	// ErrEmptyPath is returned when a required path is empty.
+	ErrEmptyPath = errors.New("path is required")
+)

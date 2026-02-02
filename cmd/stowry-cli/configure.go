@@ -243,9 +243,7 @@ func runConfigureAdd(_ *cobra.Command, args []string) error {
 	}
 
 	// Add or update profile
-	if err := cfg.AddProfile(newProfile); err != nil {
-		return fmt.Errorf("add profile: %w", err)
-	}
+	cfg.AddProfile(newProfile)
 
 	// Save config
 	if err := cfg.Save(configPath); err != nil {

@@ -74,7 +74,7 @@ type ObjectInfo struct {
 	Path        string    `json:"path"`
 	ContentType string    `json:"content_type"`
 	ETag        string    `json:"etag"`
-	Size        int64     `json:"file_size_bytes"`
+	Size        int64     `json:"size_bytes"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
