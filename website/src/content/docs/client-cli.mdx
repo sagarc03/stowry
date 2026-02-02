@@ -39,33 +39,35 @@ Download pre-built binaries from the [GitHub Releases](https://github.com/sagarc
 
 ```bash
 # amd64
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli-linux-amd64
-chmod +x stowry-cli-linux-amd64
-sudo mv stowry-cli-linux-amd64 /usr/local/bin/stowry-cli
+curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli_VERSION_linux_amd64.tar.gz
+tar xzf stowry-cli_VERSION_linux_amd64.tar.gz
+sudo mv stowry-cli /usr/local/bin/
 
 # arm64
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli-linux-arm64
-chmod +x stowry-cli-linux-arm64
-sudo mv stowry-cli-linux-arm64 /usr/local/bin/stowry-cli
+curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli_VERSION_linux_arm64.tar.gz
+tar xzf stowry-cli_VERSION_linux_arm64.tar.gz
+sudo mv stowry-cli /usr/local/bin/
 ```
+
+Replace `VERSION` with the desired version (e.g., `1.0.0`). Check the [releases page](https://github.com/sagarc03/stowry/releases) for available versions.
 
 #### macOS
 
 ```bash
 # Apple Silicon (M1/M2/M3)
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli-darwin-arm64
-chmod +x stowry-cli-darwin-arm64
-sudo mv stowry-cli-darwin-arm64 /usr/local/bin/stowry-cli
+curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli_VERSION_darwin_arm64.tar.gz
+tar xzf stowry-cli_VERSION_darwin_arm64.tar.gz
+sudo mv stowry-cli /usr/local/bin/
 
 # Intel
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli-darwin-amd64
-chmod +x stowry-cli-darwin-amd64
-sudo mv stowry-cli-darwin-amd64 /usr/local/bin/stowry-cli
+curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli_VERSION_darwin_amd64.tar.gz
+tar xzf stowry-cli_VERSION_darwin_amd64.tar.gz
+sudo mv stowry-cli /usr/local/bin/
 ```
 
 #### Windows
 
-Download `stowry-cli-windows-amd64.exe` from the releases page and add it to your PATH.
+Download `stowry-cli_VERSION_windows_amd64.zip` from the [releases page](https://github.com/sagarc03/stowry/releases), extract the archive, and add the binary to your PATH.
 
 ### Build from Source
 
