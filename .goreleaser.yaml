@@ -24,8 +24,29 @@ builds:
       - -s -w
       - -X main.version={{.Version}}
 
+  - id: stowry-cli
+    main: ./cmd/stowry-cli
+    binary: stowry-cli
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+
 archives:
-  - id: default
+  - id: stowry
+    builds:
+      - stowry
     formats:
       - tar.gz
     format_overrides:
@@ -34,6 +55,21 @@ archives:
           - zip
     name_template: >-
       {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- .Arch }}
+
+  - id: stowry-cli
+    builds:
+      - stowry-cli
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      stowry-cli_
       {{- .Version }}_
       {{- .Os }}_
       {{- .Arch }}
