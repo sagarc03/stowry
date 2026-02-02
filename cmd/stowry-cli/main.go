@@ -8,6 +8,8 @@ import (
 )
 
 var (
+	version = "dev"
+
 	cfgFile    string
 	server     string
 	accessKey  string
@@ -17,8 +19,9 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "stowry-cli",
-	Short: "Client for Stowry object storage",
+	Use:     "stowry-cli",
+	Version: version,
+	Short:   "Client for Stowry object storage",
 	Long: `Stowry CLI - Client for Stowry object storage server
 
 Commands work differently depending on server mode:
