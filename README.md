@@ -86,6 +86,12 @@ go install github.com/sagarc03/stowry/cmd/stowry@latest
 # Start the server
 stowry serve [--port 5708] [--mode store|static|spa]
 
+# Import files into storage
+stowry add [--dest prefix/] [--recursive] <file1> [file2] ...
+
+# Remove files from storage (soft-delete)
+stowry remove [--prefix] <path1> [path2] ...
+
 # Initialize metadata from existing files
 stowry init [--storage ./data]
 

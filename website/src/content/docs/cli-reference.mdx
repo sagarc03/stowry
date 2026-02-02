@@ -1,6 +1,6 @@
 ---
 title: CLI Reference
-description: Command-line interface reference for stowry serve, init, and cleanup commands.
+description: Command-line interface reference for stowry serve, add, remove, init, and cleanup commands.
 ---
 
 # CLI Reference
@@ -65,6 +65,107 @@ stowry serve
 - Default read timeout: 30 seconds
 - Default write timeout: 30 seconds
 - Default idle timeout: 120 seconds
+
+---
+
+### add
+
+Import files from external paths into stowry storage.
+
+```bash
+stowry add [flags] <file1> [file2] ...
+```
+
+**Flags:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--dest`, `-d` | string | | Destination path prefix in storage |
+| `--recursive`, `-r` | bool | false | Recursively add directories |
+| `--no-clobber`, `-n` | bool | false | Skip existing files instead of overwriting |
+| `--quiet`, `-q` | bool | false | Suppress per-file output |
+
+**Examples:**
+
+```bash
+# Add a single file
+stowry add /path/to/file.txt
+
+# Add with a destination prefix
+stowry add --dest images/ /path/to/photo.jpg
+
+# Add a directory recursively
+stowry add -r /path/to/assets
+
+# Add files to a specific prefix without overwriting existing
+stowry add --dest uploads/ --no-clobber /path/to/file.txt
+
+# Quiet mode for scripting
+stowry add -q -r /path/to/assets
+```
+
+**Behavior:**
+
+1. Copies files from the source path to the storage directory
+2. Registers metadata in the database (path, content type, hash, size)
+3. Content type is detected from file extension
+4. Existing files are overwritten by default (use `--no-clobber` to skip)
+5. For directories, requires `--recursive` flag
+
+**Output:**
+
+```
+INFO added path=photo.jpg content_type=image/jpeg
+INFO add complete added=5 skipped=2
+```
+
+---
+
+### remove
+
+Soft-delete files from stowry storage.
+
+```bash
+stowry remove [flags] <path1> [path2] ...
+```
+
+**Flags:**
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--prefix`, `-p` | bool | false | Treat paths as prefixes and remove all matching files |
+| `--quiet`, `-q` | bool | false | Suppress per-file output |
+
+**Examples:**
+
+```bash
+# Remove a single file
+stowry remove myfile.txt
+
+# Remove multiple files
+stowry remove file1.txt file2.txt file3.txt
+
+# Remove all files with a prefix (e.g., a directory)
+stowry remove --prefix images/
+
+# Quiet mode for scripting
+stowry remove -q file.txt
+```
+
+**Behavior:**
+
+1. Marks files as deleted by setting `deleted_at` timestamp in metadata
+2. Physical files remain on disk until `stowry cleanup` runs
+3. Deleted files are no longer accessible via the API
+4. With `--prefix`, removes all files matching the prefix (paginated internally)
+5. Non-existent paths are logged as warnings, not errors
+
+**Output:**
+
+```
+INFO removed path=myfile.txt
+INFO remove complete removed=3 not_found=1
+```
 
 ---
 
