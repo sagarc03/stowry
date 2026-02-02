@@ -23,7 +23,7 @@ Examples:
 	RunE: runDelete,
 }
 
-func runDelete(cmd *cobra.Command, args []string) error {
+func runDelete(_ *cobra.Command, args []string) error {
 	client, err := getClient()
 	if err != nil {
 		return err

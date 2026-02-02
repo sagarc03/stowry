@@ -40,7 +40,7 @@ func init() {
 	listCmd.Flags().StringVar(&listCursor, "cursor", "", "pagination cursor")
 }
 
-func runList(cmd *cobra.Command, args []string) error {
+func runList(_ *cobra.Command, args []string) error {
 	// Prefix can come from positional arg or flag
 	prefix := listPrefix
 	if len(args) > 0 {

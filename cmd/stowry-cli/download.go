@@ -39,7 +39,7 @@ func init() {
 	downloadCmd.Flags().BoolVar(&downloadStdout, "stdout", false, "write to stdout")
 }
 
-func runDownload(cmd *cobra.Command, args []string) error {
+func runDownload(_ *cobra.Command, args []string) error {
 	remotePath := args[0]
 
 	// Determine local path

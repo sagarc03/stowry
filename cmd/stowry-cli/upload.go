@@ -33,7 +33,7 @@ func init() {
 	uploadCmd.Flags().StringVarP(&uploadContentType, "content-type", "t", "", "override content-type")
 }
 
-func runUpload(cmd *cobra.Command, args []string) error {
+func runUpload(_ *cobra.Command, args []string) error {
 	localPath := args[0]
 	remotePath := args[1]
 
