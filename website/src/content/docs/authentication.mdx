@@ -224,6 +224,8 @@ curl -X DELETE "http://localhost:5708/photos/vacation.jpg?X-Stowry-AccessKey=...
 
 For development or public content, you can disable authentication:
 
+> **Note:** In `static` and `spa` modes, all access is always public regardless of auth configuration. Auth settings only apply in `store` mode.
+
 ```yaml
 auth:
   read: public    # Anyone can download
