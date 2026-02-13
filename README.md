@@ -177,9 +177,13 @@ log:
   level: info  # debug | info | warn | error
 ```
 
+> **Note:** In `static` and `spa` modes, auth settings are ignored — all access is public. The `max_upload_size` setting only applies in `store` mode.
+
 Environment variables use `STOWRY_` prefix: `STOWRY_SERVER_PORT=8080`
 
 ## API
+
+> **Note:** Upload (PUT) and Delete are only available in `store` mode. Static and SPA modes return `405 Method Not Allowed`.
 
 ### Upload
 
@@ -268,17 +272,21 @@ You can use S3 SDKs to generate presigned URL signatures, but note that Stowry's
 
 ### Store (default)
 
-Object storage API. Returns 404 for missing paths.
+Object storage API with full CRUD. Returns 404 for missing paths.
 
 ### Static
 
-Static file server. Serves `index.html` for directory paths:
+Read-only static file server (public access). Serves `index.html` for directory paths:
 
 - `/docs` → `/docs/index.html`
 
+Use `stowry add` or store mode to populate content.
+
 ### SPA
 
-Single Page Application mode. Returns `/index.html` for all 404s, enabling client-side routing.
+Read-only Single Page Application host (public access). Returns `/index.html` for all 404s, enabling client-side routing.
+
+Use `stowry add` or store mode to populate content.
 
 ## Kubernetes
 
