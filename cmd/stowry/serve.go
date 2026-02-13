@@ -100,11 +100,13 @@ func runServe(cmd *cobra.Command, args []string) error {
 	verifier := stowry.NewSignatureVerifier(authCfg, store)
 
 	var readVerifier, writeVerifier stowryhttp.RequestVerifier
-	if cfg.Auth.Read != "public" {
-		readVerifier = verifier
-	}
-	if cfg.Auth.Write != "public" {
-		writeVerifier = verifier
+	if mode == stowry.ModeStore {
+		if cfg.Auth.Read != "public" {
+			readVerifier = verifier
+		}
+		if cfg.Auth.Write != "public" {
+			writeVerifier = verifier
+		}
 	}
 
 	handlerConfig := stowryhttp.HandlerConfig{
