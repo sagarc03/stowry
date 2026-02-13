@@ -73,7 +73,9 @@ server:
 - `GET /{path}` - Returns file, or tries `{path}/index.html`
 - `GET /` - Returns `/index.html`
 - Suitable for static websites
-- PUT and DELETE still work for content management
+- Read-only: PUT and DELETE return `405 Method Not Allowed`
+- Always public access (auth settings are ignored)
+- Use `stowry add` or store mode to populate content
 
 ### Fallback Logic
 
@@ -114,21 +116,6 @@ GET /assets/style.css → data/assets/style.css
 GET /missing       → 404 (no index.html in missing/)
 ```
 
-### Configuration
-
-```yaml
-server:
-  mode: static
-  port: 80
-
-storage:
-  path: /var/www/html
-
-access:
-  public_read: true
-  public_write: false
-```
-
 ---
 
 ## SPA Mode
@@ -144,7 +131,9 @@ server:
 
 - `GET /{path}` - Returns file if exists, otherwise `/index.html`
 - Enables client-side routing (React Router, Vue Router, etc.)
-- PUT and DELETE still work for content management
+- Read-only: PUT and DELETE return `405 Method Not Allowed`
+- Always public access (auth settings are ignored)
+- Use `stowry add` or store mode to populate content
 
 ### Fallback Logic
 
@@ -178,21 +167,6 @@ GET /dashboard     → dist/index.html (SPA handles route)
 GET /users/123     → dist/index.html (SPA handles route)
 GET /assets/main.js → dist/assets/main.js
 GET /favicon.ico   → dist/favicon.ico
-```
-
-### Configuration
-
-```yaml
-server:
-  mode: spa
-  port: 3000
-
-storage:
-  path: ./dist
-
-access:
-  public_read: true
-  public_write: false
 ```
 
 ### Client-Side Router Setup
@@ -243,6 +217,14 @@ const router = createRouter({
 | `GET /file.txt` | Exact file or 404 | Exact file or 404 | Exact file or 404 |
 | `GET /missing` | 404 | 404 | `/index.html` |
 
+### Write Operation Availability
+
+| Operation | Store | Static | SPA |
+|-----------|-------|--------|-----|
+| `PUT /{path}` | Allowed | 405 | 405 |
+| `DELETE /{path}` | Allowed | 405 | 405 |
+| `GET /` (list) | JSON list | index.html | index.html |
+
 ### When to Use Each
 
 **Use Store when:**
@@ -264,6 +246,19 @@ const router = createRouter({
 - Deep linking should work for all routes
 
 ---
+
+## Populating Content
+
+Since static and SPA modes are read-only, use one of these methods to add files:
+
+```bash
+# Using the add command (recommended)
+stowry add -r ./dist
+
+# Using store mode temporarily
+stowry serve --mode store
+# Upload files via PUT, then restart in static/spa mode
+```
 
 ## Switching Modes
 
