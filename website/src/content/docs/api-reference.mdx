@@ -106,9 +106,6 @@ GET /{path}
 ```bash
 # Download object
 curl -O http://localhost:5708/photos/vacation.jpg
-
-# Get with headers
-curl -I http://localhost:5708/photos/vacation.jpg
 ```
 
 **Server Mode Behavior:**
@@ -116,6 +113,68 @@ curl -I http://localhost:5708/photos/vacation.jpg
 - **Store:** Returns exact path or 404
 - **Static:** Falls back to `{path}/index.html` if path not found
 - **SPA:** Falls back to `/index.html` for client-side routing
+
+---
+
+### Head Object
+
+Retrieve object metadata without downloading the file body.
+
+```
+HEAD /{path}
+```
+
+**Path Parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `path` | Object path (e.g., `photos/vacation.jpg`) |
+
+**Response Headers:**
+
+| Header | Description |
+|--------|-------------|
+| `Content-Type` | MIME type of the object |
+| `ETag` | Object hash (SHA256), quoted |
+| `Content-Length` | Object size in bytes |
+| `Last-Modified` | Last modification time |
+| `Accept-Ranges` | Indicates byte-range support |
+
+**Conditional Headers:**
+
+| Header | Description |
+|--------|-------------|
+| `If-None-Match` | Returns `304 Not Modified` if ETag matches (weak comparison per RFC 9110) |
+| `If-Modified-Since` | Returns `304 Not Modified` if object hasn't changed since the given time |
+
+`If-None-Match` takes precedence over `If-Modified-Since` per RFC 7232.
+
+**Response:** `200 OK` (empty body)
+
+**Errors:**
+
+| Status | Error Code | Description |
+|--------|------------|-------------|
+| 304 | - | Not modified (conditional request) |
+| 400 | `invalid_path` | Invalid path format |
+| 404 | `not_found` | Object not found |
+
+**Example:**
+
+```bash
+# Get metadata
+curl -I http://localhost:5708/photos/vacation.jpg
+
+# Conditional request (ETag)
+curl -I -H 'If-None-Match: "a591a6d..."' http://localhost:5708/photos/vacation.jpg
+
+# Conditional request (time)
+curl -I -H "If-Modified-Since: Wed, 15 Jan 2024 10:30:00 GMT" http://localhost:5708/photos/vacation.jpg
+```
+
+**Server Mode Behavior:**
+
+Same fallback logic as GET — applies static and SPA mode path resolution.
 
 ---
 
@@ -138,7 +197,7 @@ PUT /{path}
 | Header | Required | Description |
 |--------|----------|-------------|
 | `Content-Type` | No | MIME type (auto-detected if not provided) |
-| `If-Match` | No | Conditional update (ETag must match) |
+| `If-Match` | No | Conditional update — ETag must match; returns `412` if object doesn't exist (per RFC 9110 §13.1.1) |
 
 **Request Body:** Raw file content
 

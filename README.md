@@ -195,6 +195,14 @@ curl -X PUT http://localhost:5708/path/to/file.txt \
 curl http://localhost:5708/path/to/file.txt
 ```
 
+### Head (Metadata Only)
+
+```bash
+curl -I http://localhost:5708/path/to/file.txt
+```
+
+Returns `Content-Type`, `Content-Length`, `ETag`, and `Last-Modified` headers without the file body. Supports `If-None-Match` and `If-Modified-Since` conditional headers.
+
 ### Delete
 
 ```bash

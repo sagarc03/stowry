@@ -84,6 +84,7 @@ type StowryService struct {
 
 func (s *StowryService) Create(ctx context.Context, obj CreateObject, content io.Reader) (MetaData, error)
 func (s *StowryService) Get(ctx context.Context, path string) (MetaData, io.ReadSeekCloser, error)
+func (s *StowryService) Info(ctx context.Context, path string) (MetaData, error)
 func (s *StowryService) Delete(ctx context.Context, path string) error
 func (s *StowryService) List(ctx context.Context, query ListQuery) (ListResult, error)
 func (s *StowryService) Populate(ctx context.Context) error
@@ -270,6 +271,7 @@ r.Group(func(r chi.Router) {
     r.Use(AuthMiddleware(readConfig))
     r.Get("/", h.handleList)
     r.Get("/*", h.handleGet)
+    r.Head("/*", h.handleHead)
 })
 
 r.Group(func(r chi.Router) {
