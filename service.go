@@ -313,16 +313,15 @@ func (s *StowryService) Create(ctx context.Context, obj CreateObject, content io
 	return metaData, nil
 }
 
-func (s *StowryService) Get(ctx context.Context, path string) (MetaData, io.ReadSeekCloser, error) {
-	if err := ctx.Err(); err != nil {
-		return MetaData{}, nil, fmt.Errorf("get object: %w", err)
-	}
-
-	// Handle root path based on mode
+// resolveMetadata resolves the metadata for a path, applying mode-based fallback logic.
+// In store mode, empty paths return ErrNotFound and no fallback is attempted.
+// In static mode, it falls back to {path}/index.html.
+// In SPA mode, it falls back to /index.html.
+func (s *StowryService) resolveMetadata(ctx context.Context, path string) (MetaData, error) {
 	if path == "" {
 		switch s.mode {
 		case ModeStore:
-			return MetaData{}, nil, fmt.Errorf("get object: %w", ErrNotFound)
+			return MetaData{}, ErrNotFound
 		case ModeStatic, ModeSPA:
 			path = "index.html"
 		}
@@ -341,6 +340,15 @@ func (s *StowryService) Get(ctx context.Context, path string) (MetaData, io.Read
 		}
 	}
 
+	return m, err
+}
+
+func (s *StowryService) Get(ctx context.Context, path string) (MetaData, io.ReadSeekCloser, error) {
+	if err := ctx.Err(); err != nil {
+		return MetaData{}, nil, fmt.Errorf("get object: %w", err)
+	}
+
+	m, err := s.resolveMetadata(ctx, path)
 	if err != nil {
 		return MetaData{}, nil, fmt.Errorf("get object: %w", err)
 	}
@@ -351,6 +359,19 @@ func (s *StowryService) Get(ctx context.Context, path string) (MetaData, io.Read
 	}
 
 	return m, f, nil
+}
+
+func (s *StowryService) Info(ctx context.Context, path string) (MetaData, error) {
+	if err := ctx.Err(); err != nil {
+		return MetaData{}, fmt.Errorf("info object: %w", err)
+	}
+
+	m, err := s.resolveMetadata(ctx, path)
+	if err != nil {
+		return MetaData{}, fmt.Errorf("info object: %w", err)
+	}
+
+	return m, nil
 }
 
 func (s *StowryService) Delete(ctx context.Context, path string) error {

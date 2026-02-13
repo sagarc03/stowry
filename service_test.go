@@ -1022,6 +1022,182 @@ func TestStowryService_List(t *testing.T) {
 	})
 }
 
+func TestStowryService_Info(t *testing.T) {
+	t.Run("success - get metadata in store mode", func(t *testing.T) {
+		service, repo, _ := NewStowryServiceWithMode(t, stowry.ModeStore)
+		ctx := context.Background()
+
+		expectedMetadata := stowry.MetaData{
+			Path:          "documents/test.txt",
+			ContentType:   "text/plain",
+			FileSizeBytes: 12,
+			Etag:          "abc123",
+		}
+
+		repo.On("Get", ctx, "documents/test.txt").Return(expectedMetadata, nil)
+
+		metadata, err := service.Info(ctx, "documents/test.txt")
+		assert.NoError(t, err)
+		assert.Equal(t, "documents/test.txt", metadata.Path)
+		assert.Equal(t, "text/plain", metadata.ContentType)
+		assert.Equal(t, int64(12), metadata.FileSizeBytes)
+		assert.Equal(t, "abc123", metadata.Etag)
+
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("success - static mode fallback to index.html", func(t *testing.T) {
+		service, repo, _ := NewStowryServiceWithMode(t, stowry.ModeStatic)
+		ctx := context.Background()
+
+		indexMetadata := stowry.MetaData{
+			Path:          "documents/index.html",
+			ContentType:   "text/html",
+			FileSizeBytes: 100,
+			Etag:          "xyz789",
+		}
+
+		repo.On("Get", ctx, "documents").Return(stowry.MetaData{}, stowry.ErrNotFound)
+		repo.On("Get", ctx, "documents/index.html").Return(indexMetadata, nil)
+
+		metadata, err := service.Info(ctx, "documents")
+		assert.NoError(t, err)
+		assert.Equal(t, "documents/index.html", metadata.Path)
+
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("success - spa mode fallback to index.html", func(t *testing.T) {
+		service, repo, _ := NewStowryServiceWithMode(t, stowry.ModeSPA)
+		ctx := context.Background()
+
+		indexMetadata := stowry.MetaData{
+			Path:          "index.html",
+			ContentType:   "text/html",
+			FileSizeBytes: 100,
+			Etag:          "xyz789",
+		}
+
+		repo.On("Get", ctx, "non-existent-route").Return(stowry.MetaData{}, stowry.ErrNotFound)
+		repo.On("Get", ctx, "index.html").Return(indexMetadata, nil)
+
+		metadata, err := service.Info(ctx, "non-existent-route")
+		assert.NoError(t, err)
+		assert.Equal(t, "index.html", metadata.Path)
+
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("error - context cancelled before operation", func(t *testing.T) {
+		service, repo, _ := NewStowryServiceWithMode(t, stowry.ModeStore)
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+
+		_, err := service.Info(ctx, "test.txt")
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, context.Canceled)
+
+		repo.AssertNotCalled(t, "Get")
+	})
+
+	t.Run("error - metadata not found in store mode", func(t *testing.T) {
+		service, repo, _ := NewStowryServiceWithMode(t, stowry.ModeStore)
+		ctx := context.Background()
+
+		repo.On("Get", ctx, "nonexistent.txt").Return(stowry.MetaData{}, stowry.ErrNotFound)
+
+		_, err := service.Info(ctx, "nonexistent.txt")
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, stowry.ErrNotFound)
+
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("error - empty path returns not found in store mode", func(t *testing.T) {
+		service, repo, _ := NewStowryServiceWithMode(t, stowry.ModeStore)
+		ctx := context.Background()
+
+		_, err := service.Info(ctx, "")
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, stowry.ErrNotFound)
+
+		repo.AssertNotCalled(t, "Get")
+	})
+
+	t.Run("success - empty path serves index.html in static mode", func(t *testing.T) {
+		service, repo, _ := NewStowryServiceWithMode(t, stowry.ModeStatic)
+		ctx := context.Background()
+
+		indexMetadata := stowry.MetaData{
+			Path:          "index.html",
+			ContentType:   "text/html",
+			FileSizeBytes: 100,
+			Etag:          "xyz789",
+		}
+
+		repo.On("Get", ctx, "index.html").Return(indexMetadata, nil)
+
+		metadata, err := service.Info(ctx, "")
+		assert.NoError(t, err)
+		assert.Equal(t, "index.html", metadata.Path)
+
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("success - empty path serves index.html in spa mode", func(t *testing.T) {
+		service, repo, _ := NewStowryServiceWithMode(t, stowry.ModeSPA)
+		ctx := context.Background()
+
+		indexMetadata := stowry.MetaData{
+			Path:          "index.html",
+			ContentType:   "text/html",
+			FileSizeBytes: 100,
+			Etag:          "xyz789",
+		}
+
+		repo.On("Get", ctx, "index.html").Return(indexMetadata, nil)
+
+		metadata, err := service.Info(ctx, "")
+		assert.NoError(t, err)
+		assert.Equal(t, "index.html", metadata.Path)
+
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("error - repo returns non-NotFound error", func(t *testing.T) {
+		service, repo, _ := NewStowryServiceWithMode(t, stowry.ModeStore)
+		ctx := context.Background()
+
+		dbErr := errors.New("database error")
+		repo.On("Get", ctx, "test.txt").Return(stowry.MetaData{}, dbErr)
+
+		_, err := service.Info(ctx, "test.txt")
+		assert.Error(t, err)
+
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("no file storage access", func(t *testing.T) {
+		service, repo, storage := NewStowryServiceWithMode(t, stowry.ModeStore)
+		ctx := context.Background()
+
+		expectedMetadata := stowry.MetaData{
+			Path:          "test.txt",
+			ContentType:   "text/plain",
+			FileSizeBytes: 50,
+			Etag:          "abc123",
+		}
+
+		repo.On("Get", ctx, "test.txt").Return(expectedMetadata, nil)
+
+		_, err := service.Info(ctx, "test.txt")
+		assert.NoError(t, err)
+
+		repo.AssertExpectations(t)
+		storage.AssertNotCalled(t, "Get")
+	})
+}
+
 func TestStowryService_Tombstone(t *testing.T) {
 	t.Run("success - tombstone multiple files", func(t *testing.T) {
 		service, repo, storage := NewStowryService(t)

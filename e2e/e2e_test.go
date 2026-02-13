@@ -91,6 +91,26 @@ func runBasicCRUDTests(t *testing.T, baseURL string) {
 		assert.Equal(t, "Hello, World!", string(body))
 	})
 
+	t.Run("HEAD returns metadata for test.txt", func(t *testing.T) {
+		req, err := http.NewRequest("HEAD", baseURL+"/test.txt", nil)
+		require.NoError(t, err)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, "text/plain", resp.Header.Get("Content-Type"))
+		assert.NotEmpty(t, resp.Header.Get("ETag"))
+		assert.Equal(t, "13", resp.Header.Get("Content-Length"))
+		assert.Equal(t, "bytes", resp.Header.Get("Accept-Ranges"))
+		assert.NotEmpty(t, resp.Header.Get("Last-Modified"))
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Empty(t, body)
+	})
+
 	t.Run("DELETE removes test.txt", func(t *testing.T) {
 		req, err := http.NewRequest("DELETE", baseURL+"/test.txt", nil)
 		require.NoError(t, err)
@@ -104,6 +124,28 @@ func runBasicCRUDTests(t *testing.T, baseURL string) {
 
 	t.Run("GET returns 404 after delete", func(t *testing.T) {
 		resp, err := client.Get(baseURL + "/test.txt")
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	})
+
+	t.Run("HEAD returns 404 after delete", func(t *testing.T) {
+		req, err := http.NewRequest("HEAD", baseURL+"/test.txt", nil)
+		require.NoError(t, err)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	})
+
+	t.Run("HEAD returns 404 for nonexistent file", func(t *testing.T) {
+		req, err := http.NewRequest("HEAD", baseURL+"/does-not-exist.txt", nil)
+		require.NoError(t, err)
+
+		resp, err := client.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
@@ -286,6 +328,57 @@ func runConditionalRequestsTests(t *testing.T, baseURL string) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+
+	t.Run("HEAD with matching If-None-Match returns 304", func(t *testing.T) {
+		req, err := http.NewRequest("HEAD", baseURL+"/conditional.txt", nil)
+		require.NoError(t, err)
+		req.Header.Set("If-None-Match", `"`+etag+`"`)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusNotModified, resp.StatusCode)
+		assert.Equal(t, `"`+etag+`"`, resp.Header.Get("ETag"))
+	})
+
+	t.Run("HEAD with non-matching If-None-Match returns 200", func(t *testing.T) {
+		req, err := http.NewRequest("HEAD", baseURL+"/conditional.txt", nil)
+		require.NoError(t, err)
+		req.Header.Set("If-None-Match", `"different-etag"`)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+
+	t.Run("PUT with If-Match on nonexistent file returns 412", func(t *testing.T) {
+		req, err := http.NewRequest("PUT", baseURL+"/no-such-file.txt", bytes.NewReader([]byte("content")))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "text/plain")
+		req.Header.Set("If-Match", `"any-etag"`)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusPreconditionFailed, resp.StatusCode)
+	})
+
+	t.Run("PUT with If-Match wildcard on nonexistent file returns 412", func(t *testing.T) {
+		req, err := http.NewRequest("PUT", baseURL+"/no-such-file.txt", bytes.NewReader([]byte("content")))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "text/plain")
+		req.Header.Set("If-Match", `*`)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusPreconditionFailed, resp.StatusCode)
 	})
 }
 
@@ -570,6 +663,17 @@ func TestE2E_Auth_PrivateRead(t *testing.T) {
 
 	t.Run("GET without auth returns 401", func(t *testing.T) {
 		resp, err := httpClient.Get(baseURL + "/private-file.txt")
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("HEAD without auth returns 401", func(t *testing.T) {
+		req, err := http.NewRequest("HEAD", baseURL+"/private-file.txt", nil)
+		require.NoError(t, err)
+
+		resp, err := httpClient.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
