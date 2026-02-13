@@ -175,6 +175,8 @@ The storage directory is created automatically with `0o700` permissions (owner-o
 | `keys.inline` | list | [] | Inline list of access key pairs |
 | `keys.file` | string | - | Path to JSON file containing keys |
 
+> **Note:** The access control matrix below applies to `store` mode only. In `static` and `spa` modes, all access is public and write operations return `405 Method Not Allowed`.
+
 **Access Control Matrix:**
 
 | read | write | GET | PUT | DELETE |
@@ -345,7 +347,7 @@ storage:
 
 auth:
   read: public
-  write: private
+  write: public   # Auth settings are ignored in static mode (always public)
 ```
 
 ### SPA Hosting
@@ -366,5 +368,5 @@ storage:
 
 auth:
   read: public
-  write: private
+  write: public   # Auth settings are ignored in spa mode (always public)
 ```
