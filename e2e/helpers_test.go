@@ -16,6 +16,40 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// seedFile creates a temporary file with the given content and adds it to storage
+// using the stowry add CLI command. This works independently of server mode.
+func seedFile(t *testing.T, cfg ServerConfig, destPath string, content []byte) {
+	t.Helper()
+
+	binary := buildBinary(t)
+
+	// Write content to a temp file named to match the destination basename
+	base := filepath.Base(destPath)
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, base)
+	err := os.WriteFile(tmpFile, content, 0o600)
+	require.NoError(t, err, "write seed file")
+
+	// Create config for the add command
+	addConfig := fmt.Sprintf("database:\n  type: %s\n  dsn: \"%s\"\nstorage:\n  path: \"%s\"\nlog:\n  level: error\n",
+		cfg.DBType, cfg.DBDSN, cfg.StoragePath)
+
+	configPath := filepath.Join(tmpDir, "seed-config.yaml")
+	err = os.WriteFile(configPath, []byte(addConfig), 0o600)
+	require.NoError(t, err, "write seed config")
+
+	dir := filepath.Dir(destPath)
+	var cmd *exec.Cmd
+	if dir == "." {
+		cmd = exec.Command(binary, "add", "--config", configPath, tmpFile)
+	} else {
+		cmd = exec.Command(binary, "add", "--config", configPath, "--dest", dir+"/", tmpFile)
+	}
+
+	output, err := cmd.CombinedOutput()
+	require.NoError(t, err, "seed file %s: %s", destPath, output)
+}
+
 var (
 	binaryPath     string
 	binaryBuildErr error

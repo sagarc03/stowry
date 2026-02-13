@@ -387,7 +387,7 @@ func TestE2E_StaticMode_SQLite(t *testing.T) {
 	storageDir := t.TempDir()
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 
-	baseURL, cleanup := startServer(t, ServerConfig{
+	cfg := ServerConfig{
 		Port:        getOpenPort(t),
 		Mode:        "static",
 		DBType:      "sqlite",
@@ -395,38 +395,31 @@ func TestE2E_StaticMode_SQLite(t *testing.T) {
 		StoragePath: storageDir,
 		AuthRead:    "public",
 		AuthWrite:   "public",
-	})
+	}
+
+	// Seed files before starting server (PUT not available in static mode)
+	initDatabase(t, cfg)
+	indexContent := []byte("<html><body>Hello from index.html</body></html>")
+	seedFile(t, cfg, "docs/index.html", indexContent)
+
+	baseURL, cleanup := startServer(t, cfg)
 	defer cleanup()
 
-	runStaticModeTests(t, baseURL)
+	runStaticModeTests(t, baseURL, indexContent)
 }
 
 // runStaticModeTests contains the shared static mode test logic.
-func runStaticModeTests(t *testing.T, baseURL string) {
+func runStaticModeTests(t *testing.T, baseURL string, indexContent []byte) {
 	t.Helper()
 	client := &http.Client{}
 
-	indexContent := []byte("<html><body>Hello from index.html</body></html>")
-	t.Run("PUT dir/index.html creates file", func(t *testing.T) {
-		req, err := http.NewRequest("PUT", baseURL+"/docs/index.html", bytes.NewReader(indexContent))
-		require.NoError(t, err)
-		req.Header.Set("Content-Type", "text/html")
-
-		resp, err := client.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-	})
-
 	t.Run("GET /docs returns index.html content", func(t *testing.T) {
-		// Note: trailing slash is not valid - use /docs not /docs/
 		resp, err := client.Get(baseURL + "/docs")
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Equal(t, "text/html", resp.Header.Get("Content-Type"))
+		assert.Contains(t, resp.Header.Get("Content-Type"), "text/html")
 
 		body, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
@@ -443,6 +436,29 @@ func runStaticModeTests(t *testing.T, baseURL string) {
 		require.NoError(t, err)
 		assert.Equal(t, string(indexContent), string(body))
 	})
+
+	t.Run("PUT returns 405", func(t *testing.T) {
+		req, err := http.NewRequest("PUT", baseURL+"/new.txt", bytes.NewReader([]byte("content")))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "text/plain")
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
+	})
+
+	t.Run("DELETE returns 405", func(t *testing.T) {
+		req, err := http.NewRequest("DELETE", baseURL+"/docs/index.html", nil)
+		require.NoError(t, err)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
+	})
 }
 
 // TestE2E_SPAMode_SQLite tests SPA (single page app) mode.
@@ -450,7 +466,7 @@ func TestE2E_SPAMode_SQLite(t *testing.T) {
 	storageDir := t.TempDir()
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 
-	baseURL, cleanup := startServer(t, ServerConfig{
+	cfg := ServerConfig{
 		Port:        getOpenPort(t),
 		Mode:        "spa",
 		DBType:      "sqlite",
@@ -458,29 +474,25 @@ func TestE2E_SPAMode_SQLite(t *testing.T) {
 		StoragePath: storageDir,
 		AuthRead:    "public",
 		AuthWrite:   "public",
-	})
+	}
+
+	// Seed files before starting server (PUT not available in SPA mode)
+	initDatabase(t, cfg)
+	indexContent := []byte("<html><body>SPA Root</body></html>")
+	realContent := []byte("real file content")
+	seedFile(t, cfg, "index.html", indexContent)
+	seedFile(t, cfg, "real.txt", realContent)
+
+	baseURL, cleanup := startServer(t, cfg)
 	defer cleanup()
 
-	runSPAModeTests(t, baseURL)
+	runSPAModeTests(t, baseURL, indexContent, realContent)
 }
 
 // runSPAModeTests contains the shared SPA mode test logic.
-func runSPAModeTests(t *testing.T, baseURL string) {
+func runSPAModeTests(t *testing.T, baseURL string, indexContent, realContent []byte) {
 	t.Helper()
 	client := &http.Client{}
-
-	indexContent := []byte("<html><body>SPA Root</body></html>")
-	t.Run("PUT /index.html creates file", func(t *testing.T) {
-		req, err := http.NewRequest("PUT", baseURL+"/index.html", bytes.NewReader(indexContent))
-		require.NoError(t, err)
-		req.Header.Set("Content-Type", "text/html")
-
-		resp, err := client.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-
-		require.Equal(t, http.StatusOK, resp.StatusCode)
-	})
 
 	t.Run("GET /nonexistent returns /index.html content", func(t *testing.T) {
 		resp, err := client.Get(baseURL + "/nonexistent/path")
@@ -488,7 +500,7 @@ func runSPAModeTests(t *testing.T, baseURL string) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Equal(t, "text/html", resp.Header.Get("Content-Type"))
+		assert.Contains(t, resp.Header.Get("Content-Type"), "text/html")
 
 		body, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
@@ -506,9 +518,21 @@ func runSPAModeTests(t *testing.T, baseURL string) {
 		assert.Equal(t, string(indexContent), string(body))
 	})
 
-	realContent := []byte("real file content")
-	t.Run("PUT /real.txt creates file", func(t *testing.T) {
-		req, err := http.NewRequest("PUT", baseURL+"/real.txt", bytes.NewReader(realContent))
+	t.Run("GET /real.txt returns actual file content", func(t *testing.T) {
+		resp, err := client.Get(baseURL + "/real.txt")
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Contains(t, resp.Header.Get("Content-Type"), "text/plain")
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, string(realContent), string(body))
+	})
+
+	t.Run("PUT returns 405", func(t *testing.T) {
+		req, err := http.NewRequest("PUT", baseURL+"/new.txt", bytes.NewReader([]byte("content")))
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "text/plain")
 
@@ -516,20 +540,18 @@ func runSPAModeTests(t *testing.T, baseURL string) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
-		require.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
 	})
 
-	t.Run("GET /real.txt returns actual file content", func(t *testing.T) {
-		resp, err := client.Get(baseURL + "/real.txt")
+	t.Run("DELETE returns 405", func(t *testing.T) {
+		req, err := http.NewRequest("DELETE", baseURL+"/real.txt", nil)
+		require.NoError(t, err)
+
+		resp, err := client.Do(req)
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
-		assert.Equal(t, "text/plain", resp.Header.Get("Content-Type"))
-
-		body, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		assert.Equal(t, string(realContent), string(body))
+		assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
 	})
 }
 
