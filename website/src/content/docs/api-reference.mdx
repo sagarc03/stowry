@@ -21,6 +21,8 @@ Requests require presigned URL authentication unless `public_read` or `public_wr
 
 ### List Objects
 
+> **Store mode only.** Not available in static or SPA modes.
+
 List objects with optional prefix filtering and pagination.
 
 ```
@@ -180,6 +182,8 @@ Same fallback logic as GET — applies static and SPA mode path resolution.
 
 ### Upload Object
 
+> **Store mode only.** Returns `405 Method Not Allowed` in static and SPA modes.
+
 Upload or overwrite an object.
 
 ```
@@ -242,6 +246,8 @@ curl -X PUT \
 ---
 
 ### Delete Object
+
+> **Store mode only.** Returns `405 Method Not Allowed` in static and SPA modes.
 
 Soft delete an object (marks for deletion but doesn't remove immediately).
 
