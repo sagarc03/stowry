@@ -12,13 +12,22 @@ tasks:
       - task --list
 
   build:
-    desc: Build the CLI binary
+    desc: Build all binaries
+    deps: [build:server, build:cli]
+
+  build:server:
+    desc: Build the stowry server binary
     cmds:
       - go build -o bin/stowry ./cmd/stowry
 
+  build:cli:
+    desc: Build the stowry-cli binary
+    cmds:
+      - go build -o bin/stowry-cli ./cmd/stowry-cli
+
   run:
     desc: Run the stowry server
-    deps: [build]
+    deps: [build:server]
     cmds:
       - ./bin/stowry serve --config config.local.yaml
 
