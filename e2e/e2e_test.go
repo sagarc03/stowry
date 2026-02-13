@@ -382,7 +382,7 @@ func runConditionalRequestsTests(t *testing.T, baseURL string) {
 	})
 }
 
-// TestE2E_StaticMode_SQLite tests static file serving mode.
+// TestE2E_StaticMode_SQLite tests static file serving mode with S3+CloudFront-style resolution.
 func TestE2E_StaticMode_SQLite(t *testing.T) {
 	storageDir := t.TempDir()
 	dbPath := filepath.Join(t.TempDir(), "test.db")
@@ -400,21 +400,27 @@ func TestE2E_StaticMode_SQLite(t *testing.T) {
 	// Seed files before starting server (PUT not available in static mode)
 	initDatabase(t, cfg)
 	indexContent := []byte("<html><body>Hello from index.html</body></html>")
+	pageContent := []byte("<html><body>About page</body></html>")
 	seedFile(t, cfg, "docs/index.html", indexContent)
+	seedFile(t, cfg, "about.html", pageContent)
 
 	baseURL, cleanup := startServer(t, cfg)
 	defer cleanup()
 
-	runStaticModeTests(t, baseURL, indexContent)
+	runStaticModeTests(t, baseURL, indexContent, pageContent)
 }
 
 // runStaticModeTests contains the shared static mode test logic.
-func runStaticModeTests(t *testing.T, baseURL string, indexContent []byte) {
+func runStaticModeTests(t *testing.T, baseURL string, indexContent, pageContent []byte) {
 	t.Helper()
-	client := &http.Client{}
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 
-	t.Run("GET /docs returns index.html content", func(t *testing.T) {
-		resp, err := client.Get(baseURL + "/docs")
+	t.Run("GET /docs/ returns index.html content (trailing slash)", func(t *testing.T) {
+		resp, err := client.Get(baseURL + "/docs/")
 		require.NoError(t, err)
 		defer resp.Body.Close()
 
@@ -435,6 +441,33 @@ func runStaticModeTests(t *testing.T, baseURL string, indexContent []byte) {
 		body, err := io.ReadAll(resp.Body)
 		require.NoError(t, err)
 		assert.Equal(t, string(indexContent), string(body))
+	})
+
+	t.Run("GET /about resolves to about.html (clean URL)", func(t *testing.T) {
+		resp, err := client.Get(baseURL + "/about")
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Contains(t, resp.Header.Get("Content-Type"), "text/html")
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, string(pageContent), string(body))
+	})
+
+	t.Run("GET /nonexistent returns HTML 404 with stowry branding", func(t *testing.T) {
+		resp, err := client.Get(baseURL + "/nonexistent")
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+		assert.Contains(t, resp.Header.Get("Content-Type"), "text/html")
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Contains(t, string(body), "stowry")
+		assert.Contains(t, string(body), "404 Not Found")
 	})
 
 	t.Run("PUT returns 405", func(t *testing.T) {
@@ -458,6 +491,47 @@ func runStaticModeTests(t *testing.T, baseURL string, indexContent []byte) {
 		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusMethodNotAllowed, resp.StatusCode)
+	})
+}
+
+// TestE2E_StaticMode_CustomErrorPage_SQLite tests custom error document in static mode.
+func TestE2E_StaticMode_CustomErrorPage_SQLite(t *testing.T) {
+	storageDir := t.TempDir()
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+
+	cfg := ServerConfig{
+		Port:          getOpenPort(t),
+		Mode:          "static",
+		DBType:        "sqlite",
+		DBDSN:         dbPath,
+		StoragePath:   storageDir,
+		AuthRead:      "public",
+		AuthWrite:     "public",
+		ErrorDocument: "404.html",
+	}
+
+	// Seed files
+	initDatabase(t, cfg)
+	errorContent := []byte("<html><body>Custom Not Found Page</body></html>")
+	seedFile(t, cfg, "index.html", []byte("<html><body>Home</body></html>"))
+	seedFile(t, cfg, "404.html", errorContent)
+
+	baseURL, cleanup := startServer(t, cfg)
+	defer cleanup()
+
+	client := &http.Client{}
+
+	t.Run("GET /nonexistent returns custom error page with 404 status", func(t *testing.T) {
+		resp, err := client.Get(baseURL + "/nonexistent")
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+		assert.Contains(t, resp.Header.Get("Content-Type"), "text/html")
+
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Contains(t, string(body), "Custom Not Found Page")
 	})
 }
 

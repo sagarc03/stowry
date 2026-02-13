@@ -148,6 +148,7 @@ server:
   port: 5708
   mode: store  # store | static | spa
   max_upload_size: 0  # Maximum upload size in bytes (0 = unlimited)
+  error_document: ""  # Custom 404 page path for static mode (default: built-in HTML)
 
 service:
   cleanup_timeout: 30  # Cleanup operation timeout in seconds
@@ -276,9 +277,12 @@ Object storage API with full CRUD. Returns 404 for missing paths.
 
 ### Static
 
-Read-only static file server (public access). Serves `index.html` for directory paths:
+Read-only static file server with S3+CloudFront-style path resolution (public access):
 
-- `/docs` → `/docs/index.html`
+- `/about` → `about` (exact) → `about.html` → `about/index.html`
+- `/docs/` → `docs/index.html`
+- `/` → `index.html`
+- Missing paths return an HTML 404 page (configurable via `error_document`)
 
 Use `stowry add` or store mode to populate content.
 

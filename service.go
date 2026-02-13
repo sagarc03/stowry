@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -315,7 +316,10 @@ func (s *StowryService) Create(ctx context.Context, obj CreateObject, content io
 
 // resolveMetadata resolves the metadata for a path, applying mode-based fallback logic.
 // In store mode, empty paths return ErrNotFound and no fallback is attempted.
-// In static mode, it falls back to {path}/index.html.
+// In static mode (S3+CloudFront behavior):
+//   - Trailing slash (/foo/): tries {path}index.html
+//   - No trailing slash (/foo): tries exact → {path}.html → {path}/index.html
+//
 // In SPA mode, it falls back to /index.html.
 func (s *StowryService) resolveMetadata(ctx context.Context, path string) (MetaData, error) {
 	if path == "" {
@@ -334,7 +338,16 @@ func (s *StowryService) resolveMetadata(ctx context.Context, path string) (MetaD
 		case ModeStore:
 			// No fallback in store mode
 		case ModeStatic:
-			m, err = s.repo.Get(ctx, filepath.Join(path, "index.html"))
+			if strings.HasSuffix(path, "/") {
+				// Trailing slash: only try directory index
+				m, err = s.repo.Get(ctx, path+"index.html")
+			} else {
+				// Clean URL chain: foo.html → foo/index.html
+				m, err = s.repo.Get(ctx, path+".html")
+				if errors.Is(err, ErrNotFound) {
+					m, err = s.repo.Get(ctx, filepath.Join(path, "index.html"))
+				}
+			}
 		case ModeSPA:
 			m, err = s.repo.Get(ctx, "index.html")
 		}

@@ -24,6 +24,7 @@ server:
   port: 5708              # HTTP server port (default: 5708)
   mode: store             # Server mode: store, static, spa (default: store)
   max_upload_size: 0      # Max upload size in bytes, 0 = unlimited (default: 0)
+  error_document: ""        # Custom 404 page path for static mode (default: built-in)
 
 # Service configuration
 service:
@@ -67,6 +68,7 @@ log:
 | `port` | int | 5708 | HTTP server port |
 | `mode` | string | store | Server mode (`store`, `static`, `spa`) |
 | `max_upload_size` | int | 0 | Maximum upload size in bytes (0 = unlimited) |
+| `error_document` | string | `""` | Custom 404 page path for static/SPA modes (empty = built-in HTML) |
 
 ### Service
 

@@ -84,14 +84,15 @@ type AuthKey struct {
 
 // ServerConfig holds configuration for starting the stowry server.
 type ServerConfig struct {
-	Port        int
-	Mode        string // store, static, spa
-	DBType      string // sqlite, postgres
-	DBDSN       string
-	StoragePath string
-	AuthRead    string    // public, private
-	AuthWrite   string    // public, private
-	AuthKeys    []AuthKey // Access keys for private auth
+	Port          int
+	Mode          string // store, static, spa
+	DBType        string // sqlite, postgres
+	DBDSN         string
+	StoragePath   string
+	AuthRead      string    // public, private
+	AuthWrite     string    // public, private
+	AuthKeys      []AuthKey // Access keys for private auth
+	ErrorDocument string    // Custom error page path (optional)
 }
 
 // buildBinary compiles the stowry binary once per test run.
@@ -172,6 +173,7 @@ func createConfigFile(t *testing.T, cfg ServerConfig) string {
 	fmt.Fprintf(&sb, `server:
   port: %d
   mode: %s
+  error_document: "%s"
 
 database:
   type: %s
@@ -189,6 +191,7 @@ auth:
 `,
 		cfg.Port,
 		cfg.Mode,
+		cfg.ErrorDocument,
 		cfg.DBType,
 		cfg.DBDSN,
 		cfg.StoragePath,

@@ -12,7 +12,7 @@ Stowry supports three server modes that change how requests are handled. Choose 
 | Mode | Use Case | Path Fallback |
 |------|----------|---------------|
 | `store` | Object storage API | None (404 if not found) |
-| `static` | Static file server | `{path}/index.html` |
+| `static` | Static file server | `{path}.html` → `{path}/index.html` |
 | `spa` | Single-page application | `/index.html` |
 
 ## Store Mode (Default)
@@ -61,27 +61,56 @@ curl http://localhost:5708/  # JSON response
 
 ## Static Mode
 
-Serves static files with automatic `index.html` resolution.
+Serves static files with S3+CloudFront-style path resolution and clean URLs.
 
 ```yaml
 server:
   mode: static
+  error_document: 404.html  # optional custom error page
 ```
 
 ### Behavior
 
-- `GET /{path}` - Returns file, or tries `{path}/index.html`
+- `GET /{path}` - Tries exact match → `{path}.html` → `{path}/index.html`
+- `GET /{path}/` - Tries `{path}/index.html` (trailing slash = directory index)
 - `GET /` - Returns `/index.html`
-- Suitable for static websites
+- Missing paths return an HTML 404 page (default Stowry-branded, or custom via `error_document`)
 - Read-only: PUT and DELETE return `405 Method Not Allowed`
 - Always public access (auth settings are ignored)
 - Use `stowry add` or store mode to populate content
 
 ### Fallback Logic
 
-1. Try exact path
-2. If not found and path has no extension, try `{path}/index.html`
-3. Return 404 if neither exists
+For `/foo` (no trailing slash):
+1. Try exact path `foo`
+2. Try `foo.html` (clean URLs)
+3. Try `foo/index.html` (directory index)
+4. Return 404 error page
+
+For `/foo/` (trailing slash):
+1. Try `foo/index.html` (directory index)
+2. Return 404 error page
+
+### Error Pages
+
+By default, Stowry serves a minimal HTML 404 page:
+```html
+<html>
+<head><title>404 Not Found</title></head>
+<body>
+<center><h1>404 Not Found</h1></center>
+<hr><center>stowry</center>
+</body>
+</html>
+```
+
+Configure a custom error page:
+```yaml
+server:
+  error_document: 404.html
+```
+
+The custom error document is served from storage with a 404 status code. If the custom document is not found, the default page is used.
 
 ### Use Cases
 
@@ -96,7 +125,8 @@ Given this storage structure:
 ```
 data/
 ├── index.html
-├── about/
+├── about.html
+├── docs/
 │   └── index.html
 ├── blog/
 │   ├── index.html
@@ -108,12 +138,13 @@ data/
 Request handling:
 ```
 GET /              → data/index.html
-GET /about         → data/about/index.html
-GET /about/        → data/about/index.html
-GET /blog          → data/blog/index.html
+GET /about         → data/about.html (clean URL)
+GET /about.html    → data/about.html (direct)
+GET /docs/         → data/docs/index.html (trailing slash)
+GET /docs          → data/docs/index.html (fallback chain)
 GET /blog/post-1.html → data/blog/post-1.html
 GET /assets/style.css → data/assets/style.css
-GET /missing       → 404 (no index.html in missing/)
+GET /missing       → 404 HTML page
 ```
 
 ---
@@ -213,9 +244,10 @@ const router = createRouter({
 | Request | Store | Static | SPA |
 |---------|-------|--------|-----|
 | `GET /` | List objects (JSON) | `/index.html` | `/index.html` |
-| `GET /about` | Exact file or 404 | `/about/index.html` | `/index.html` |
+| `GET /about` | Exact file or 404 | `about` → `about.html` → `about/index.html` | `/index.html` |
+| `GET /about/` | Exact file or 404 | `about/index.html` | `/index.html` |
 | `GET /file.txt` | Exact file or 404 | Exact file or 404 | Exact file or 404 |
-| `GET /missing` | 404 | 404 | `/index.html` |
+| `GET /missing` | 404 (JSON) | 404 (HTML) | `/index.html` |
 
 ### Write Operation Availability
 

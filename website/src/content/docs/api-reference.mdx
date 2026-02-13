@@ -112,8 +112,8 @@ curl -O http://localhost:5708/photos/vacation.jpg
 
 **Server Mode Behavior:**
 
-- **Store:** Returns exact path or 404
-- **Static:** Falls back to `{path}/index.html` if path not found
+- **Store:** Returns exact path or 404 (JSON)
+- **Static:** Tries exact → `{path}.html` → `{path}/index.html` → 404 (HTML)
 - **SPA:** Falls back to `/index.html` for client-side routing
 
 ---
@@ -176,7 +176,7 @@ curl -I -H "If-Modified-Since: Wed, 15 Jan 2024 10:30:00 GMT" http://localhost:5
 
 **Server Mode Behavior:**
 
-Same fallback logic as GET — applies static and SPA mode path resolution.
+Same fallback logic as GET — applies static and SPA mode path resolution. Returns 404 HTML in static mode.
 
 ---
 

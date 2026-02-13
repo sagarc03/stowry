@@ -115,6 +115,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 		WriteVerifier: writeVerifier,
 		CORS:          cfg.CORS,
 		MaxUploadSize: cfg.Server.MaxUploadSize,
+		ErrorDocument: cfg.Server.ErrorDocument,
 	}
 
 	handler := stowryhttp.NewHandler(&handlerConfig, service)

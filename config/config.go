@@ -51,6 +51,7 @@ type ServerConfig struct {
 	Port          int    `mapstructure:"port" validate:"required,min=1,max=65535"`
 	Mode          string `mapstructure:"mode" validate:"required,oneof=store static spa"`
 	MaxUploadSize int64  `mapstructure:"max_upload_size" validate:"min=0"`
+	ErrorDocument string `mapstructure:"error_document"`
 }
 
 // ServiceConfig holds service-level configuration.

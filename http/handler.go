@@ -38,7 +38,8 @@ type HandlerConfig struct {
 	ReadVerifier  RequestVerifier
 	WriteVerifier RequestVerifier
 	CORS          CORSConfig
-	MaxUploadSize int64 // Maximum upload size in bytes. 0 means no limit.
+	MaxUploadSize int64  // Maximum upload size in bytes. 0 means no limit.
+	ErrorDocument string // Path to custom error page in storage. Empty uses default.
 }
 
 // Handler provides HTTP handlers for object storage operations.
@@ -125,7 +126,7 @@ func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/")
 
-	if path != "" && !stowry.IsValidPath(path) {
+	if path != "" && !h.isValidRequestPath(path) {
 		WriteError(w, http.StatusBadRequest, "invalid_path", "Invalid path")
 		return
 	}
@@ -133,7 +134,7 @@ func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) {
 	obj, content, err := h.service.Get(r.Context(), path)
 	if err != nil {
 		if errors.Is(err, stowry.ErrNotFound) {
-			WriteError(w, http.StatusNotFound, "not_found", "Object not found")
+			h.handleNotFound(w, r)
 		} else {
 			HandleError(w, err)
 		}
@@ -150,7 +151,7 @@ func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) handleHead(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/")
 
-	if path != "" && !stowry.IsValidPath(path) {
+	if path != "" && !h.isValidRequestPath(path) {
 		WriteError(w, http.StatusBadRequest, "invalid_path", "Invalid path")
 		return
 	}
@@ -158,7 +159,7 @@ func (h *Handler) handleHead(w http.ResponseWriter, r *http.Request) {
 	obj, err := h.service.Info(r.Context(), path)
 	if err != nil {
 		if errors.Is(err, stowry.ErrNotFound) {
-			WriteError(w, http.StatusNotFound, "not_found", "Object not found")
+			h.handleNotFound(w, r)
 		} else {
 			HandleError(w, err)
 		}
@@ -258,6 +259,46 @@ func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// isValidRequestPath validates the request path, allowing trailing slashes in static/SPA modes
+// for directory-style URLs (e.g., /docs/).
+func (h *Handler) isValidRequestPath(path string) bool {
+	// In static/SPA modes, allow trailing slashes for directory index resolution.
+	// Validate the path without the trailing slash.
+	if h.config.Mode != stowry.ModeStore && strings.HasSuffix(path, "/") {
+		trimmed := strings.TrimSuffix(path, "/")
+		if trimmed == "" {
+			return true
+		}
+		return stowry.IsValidPath(trimmed)
+	}
+	return stowry.IsValidPath(path)
+}
+
+// handleNotFound serves the appropriate 404 response based on server mode.
+// In store mode, returns a JSON error. In static/SPA modes, tries the custom
+// error document first, then falls back to a default HTML 404 page.
+func (h *Handler) handleNotFound(w http.ResponseWriter, r *http.Request) {
+	if h.config.Mode == stowry.ModeStore {
+		WriteError(w, http.StatusNotFound, "not_found", "Object not found")
+		return
+	}
+
+	// Try custom error document if configured
+	if h.config.ErrorDocument != "" {
+		obj, content, err := h.service.Get(r.Context(), h.config.ErrorDocument)
+		if err == nil {
+			defer func() { _ = content.Close() }()
+			w.Header().Set("Content-Type", obj.ContentType)
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = io.Copy(w, content)
+			return
+		}
+	}
+
+	// Default HTML 404
+	writeDefaultNotFound(w)
 }
 
 // etagStrongMatch checks if the If-Match header value matches the given ETag

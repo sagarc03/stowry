@@ -495,6 +495,7 @@ func TestStowryService_Get(t *testing.T) {
 		mockFile := &mockReadSeekCloser{content: []byte("<html></html>")}
 
 		repo.On("Get", ctx, "documents").Return(stowry.MetaData{}, stowry.ErrNotFound)
+		repo.On("Get", ctx, "documents.html").Return(stowry.MetaData{}, stowry.ErrNotFound)
 		repo.On("Get", ctx, "documents/index.html").Return(indexMetadata, nil)
 		storage.On("Get", ctx, "documents/index.html").Return(mockFile, nil)
 
@@ -565,6 +566,7 @@ func TestStowryService_Get(t *testing.T) {
 		ctx := context.Background()
 
 		repo.On("Get", ctx, "documents").Return(stowry.MetaData{}, stowry.ErrNotFound)
+		repo.On("Get", ctx, "documents.html").Return(stowry.MetaData{}, stowry.ErrNotFound)
 		repo.On("Get", ctx, "documents/index.html").Return(stowry.MetaData{}, stowry.ErrNotFound)
 
 		_, _, err := service.Get(ctx, "documents")
@@ -744,7 +746,9 @@ func TestStowryService_Get(t *testing.T) {
 
 		// First call: index.html (from empty path conversion)
 		repo.On("Get", ctx, "index.html").Return(stowry.MetaData{}, stowry.ErrNotFound).Once()
-		// Fallback call: index.html/index.html (static mode fallback)
+		// Clean URL fallback: index.html.html
+		repo.On("Get", ctx, "index.html.html").Return(stowry.MetaData{}, stowry.ErrNotFound).Once()
+		// Directory index fallback: index.html/index.html
 		repo.On("Get", ctx, "index.html/index.html").Return(stowry.MetaData{}, stowry.ErrNotFound).Once()
 
 		_, _, err := service.Get(ctx, "")
@@ -769,6 +773,98 @@ func TestStowryService_Get(t *testing.T) {
 
 		repo.AssertExpectations(t)
 		storage.AssertNotCalled(t, "Get")
+	})
+
+	t.Run("success - static mode clean URL resolves foo.html", func(t *testing.T) {
+		service, repo, storage := NewStowryServiceWithMode(t, stowry.ModeStatic)
+		ctx := context.Background()
+
+		htmlMetadata := stowry.MetaData{
+			Path:          "about.html",
+			ContentType:   "text/html",
+			FileSizeBytes: 200,
+			Etag:          "html123",
+		}
+
+		mockFile := &mockReadSeekCloser{content: []byte("<html>About</html>")}
+
+		repo.On("Get", ctx, "about").Return(stowry.MetaData{}, stowry.ErrNotFound)
+		repo.On("Get", ctx, "about.html").Return(htmlMetadata, nil)
+		storage.On("Get", ctx, "about.html").Return(mockFile, nil)
+
+		metadata, file, err := service.Get(ctx, "about")
+		assert.NoError(t, err)
+		assert.Equal(t, "about.html", metadata.Path)
+		assert.Same(t, mockFile, file)
+
+		repo.AssertExpectations(t)
+		storage.AssertExpectations(t)
+	})
+
+	t.Run("success - static mode trailing slash resolves to directory index", func(t *testing.T) {
+		service, repo, storage := NewStowryServiceWithMode(t, stowry.ModeStatic)
+		ctx := context.Background()
+
+		indexMetadata := stowry.MetaData{
+			Path:          "docs/index.html",
+			ContentType:   "text/html",
+			FileSizeBytes: 100,
+			Etag:          "idx123",
+		}
+
+		mockFile := &mockReadSeekCloser{content: []byte("<html>Docs</html>")}
+
+		repo.On("Get", ctx, "docs/").Return(stowry.MetaData{}, stowry.ErrNotFound)
+		repo.On("Get", ctx, "docs/index.html").Return(indexMetadata, nil)
+		storage.On("Get", ctx, "docs/index.html").Return(mockFile, nil)
+
+		metadata, file, err := service.Get(ctx, "docs/")
+		assert.NoError(t, err)
+		assert.Equal(t, "docs/index.html", metadata.Path)
+		assert.Same(t, mockFile, file)
+
+		repo.AssertExpectations(t)
+		storage.AssertExpectations(t)
+	})
+
+	t.Run("error - static mode trailing slash with no index returns not found", func(t *testing.T) {
+		service, repo, storage := NewStowryServiceWithMode(t, stowry.ModeStatic)
+		ctx := context.Background()
+
+		repo.On("Get", ctx, "docs/").Return(stowry.MetaData{}, stowry.ErrNotFound)
+		repo.On("Get", ctx, "docs/index.html").Return(stowry.MetaData{}, stowry.ErrNotFound)
+
+		_, _, err := service.Get(ctx, "docs/")
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, stowry.ErrNotFound)
+
+		repo.AssertExpectations(t)
+		storage.AssertNotCalled(t, "Get")
+	})
+
+	t.Run("success - static mode exact match takes priority over html fallback", func(t *testing.T) {
+		service, repo, storage := NewStowryServiceWithMode(t, stowry.ModeStatic)
+		ctx := context.Background()
+
+		exactMetadata := stowry.MetaData{
+			Path:          "about",
+			ContentType:   "application/octet-stream",
+			FileSizeBytes: 50,
+			Etag:          "exact123",
+		}
+
+		mockFile := &mockReadSeekCloser{content: []byte("exact content")}
+
+		repo.On("Get", ctx, "about").Return(exactMetadata, nil)
+		storage.On("Get", ctx, "about").Return(mockFile, nil)
+
+		metadata, file, err := service.Get(ctx, "about")
+		assert.NoError(t, err)
+		assert.Equal(t, "about", metadata.Path)
+		assert.Same(t, mockFile, file)
+
+		repo.AssertExpectations(t)
+		storage.AssertExpectations(t)
 	})
 }
 
@@ -1058,6 +1154,7 @@ func TestStowryService_Info(t *testing.T) {
 		}
 
 		repo.On("Get", ctx, "documents").Return(stowry.MetaData{}, stowry.ErrNotFound)
+		repo.On("Get", ctx, "documents.html").Return(stowry.MetaData{}, stowry.ErrNotFound)
 		repo.On("Get", ctx, "documents/index.html").Return(indexMetadata, nil)
 
 		metadata, err := service.Info(ctx, "documents")

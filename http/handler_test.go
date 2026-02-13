@@ -1193,3 +1193,130 @@ type mockVerifier struct {
 func (m *mockVerifier) Verify(_ *http.Request) error {
 	return m.err
 }
+
+func TestHandler_HandleGet_NotFound_StoreMode_ReturnsJSON(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	service.On("Get", mock.Anything, "missing.txt").Return(
+		stowry.MetaData{}, nil, stowry.ErrNotFound,
+	)
+
+	req := httptest.NewRequest("GET", "/missing.txt", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "application/json")
+	assert.Contains(t, rec.Body.String(), "not_found")
+
+	service.AssertExpectations(t)
+}
+
+func TestHandler_HandleGet_NotFound_StaticMode_ReturnsDefaultHTML(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStatic}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	service.On("Get", mock.Anything, "missing.txt").Return(
+		stowry.MetaData{}, nil, stowry.ErrNotFound,
+	)
+
+	req := httptest.NewRequest("GET", "/missing.txt", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
+	assert.Contains(t, rec.Body.String(), "stowry")
+	assert.Contains(t, rec.Body.String(), "404 Not Found")
+
+	service.AssertExpectations(t)
+}
+
+func TestHandler_HandleGet_NotFound_StaticMode_CustomErrorDocument(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{
+		Mode:          stowry.ModeStatic,
+		ErrorDocument: "404.html",
+	}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	errorContent := "<html><body>Custom 404</body></html>"
+	errorMetadata := stowry.MetaData{
+		Path:        "404.html",
+		ContentType: "text/html",
+		Etag:        "err123",
+	}
+	mockFile := readSeekNopCloser{strings.NewReader(errorContent)}
+
+	// First call: the missing path
+	service.On("Get", mock.Anything, "missing.txt").Return(
+		stowry.MetaData{}, nil, stowry.ErrNotFound,
+	)
+	// Second call: the error document
+	service.On("Get", mock.Anything, "404.html").Return(
+		errorMetadata, mockFile, nil,
+	)
+
+	req := httptest.NewRequest("GET", "/missing.txt", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
+	assert.Contains(t, rec.Body.String(), "Custom 404")
+
+	service.AssertExpectations(t)
+}
+
+func TestHandler_HandleGet_NotFound_StaticMode_CustomErrorDocument_Missing_FallsBack(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{
+		Mode:          stowry.ModeStatic,
+		ErrorDocument: "404.html",
+	}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	// Both the path and error document are missing
+	service.On("Get", mock.Anything, "missing.txt").Return(
+		stowry.MetaData{}, nil, stowry.ErrNotFound,
+	)
+	service.On("Get", mock.Anything, "404.html").Return(
+		stowry.MetaData{}, nil, stowry.ErrNotFound,
+	)
+
+	req := httptest.NewRequest("GET", "/missing.txt", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
+	assert.Contains(t, rec.Body.String(), "stowry")
+
+	service.AssertExpectations(t)
+}
+
+func TestHandler_HandleHead_NotFound_StaticMode_ReturnsHTML(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStatic}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	service.On("Info", mock.Anything, "missing.txt").Return(
+		stowry.MetaData{}, stowry.ErrNotFound,
+	)
+
+	req := httptest.NewRequest("HEAD", "/missing.txt", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+
+	service.AssertExpectations(t)
+}
