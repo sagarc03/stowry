@@ -1128,6 +1128,64 @@ func TestHandler_HandleHead_IfNoneMatchTakesPrecedence(t *testing.T) {
 	service.AssertExpectations(t)
 }
 
+func TestHandler_StaticMode_PutReturns405(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStatic}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	req := httptest.NewRequest("PUT", "/test.txt", strings.NewReader("content"))
+	req.Header.Set("Content-Type", "text/plain")
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	service.AssertNotCalled(t, "Create")
+}
+
+func TestHandler_StaticMode_DeleteReturns405(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStatic}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	req := httptest.NewRequest("DELETE", "/test.txt", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	service.AssertNotCalled(t, "Delete")
+}
+
+func TestHandler_SPAMode_PutReturns405(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeSPA}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	req := httptest.NewRequest("PUT", "/test.txt", strings.NewReader("content"))
+	req.Header.Set("Content-Type", "text/plain")
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	service.AssertNotCalled(t, "Create")
+}
+
+func TestHandler_SPAMode_DeleteReturns405(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeSPA}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	req := httptest.NewRequest("DELETE", "/test.txt", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
+	service.AssertNotCalled(t, "Delete")
+}
+
 type mockVerifier struct {
 	err error
 }

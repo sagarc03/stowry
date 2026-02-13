@@ -81,11 +81,13 @@ func (h *Handler) Router() http.Handler {
 		r.Head("/*", h.handleHead)
 	})
 
-	r.Group(func(r chi.Router) {
-		r.Use(AuthMiddleware(h.config.WriteVerifier))
-		r.Put("/*", h.handlePut)
-		r.Delete("/*", h.handleDelete)
-	})
+	if h.config.Mode == stowry.ModeStore {
+		r.Group(func(r chi.Router) {
+			r.Use(AuthMiddleware(h.config.WriteVerifier))
+			r.Put("/*", h.handlePut)
+			r.Delete("/*", h.handleDelete)
+		})
+	}
 
 	return r
 }
