@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"net"
 	"sync"
 	"testing"
 
@@ -71,66 +70,12 @@ func getSharedTestDatabase(t *testing.T) *pgxpool.Pool {
 	return testPool
 }
 
-// getIsolatedTestDatabase returns an isolated database pool for tests that need
-// a clean database state. Each call creates a new container.
-func getIsolatedTestDatabase(t *testing.T) (*pgxpool.Pool, func()) {
-	t.Helper()
-	ctx := context.Background()
-
-	pgContainer, err := pgcontainer.Run(ctx,
-		"postgres:18-alpine",
-		pgcontainer.WithDatabase(getRandomString(t)),
-		pgcontainer.WithUsername(getRandomString(t)),
-		pgcontainer.WithPassword(getRandomString(t)),
-		pgcontainer.BasicWaitStrategies(),
-		testcontainers.WithExposedPorts(getOpenPort(t)),
-	)
-	assert.NoError(t, err, "failed to start postgres container")
-
-	cleanup := func() {
-		if err := testcontainers.TerminateContainer(pgContainer); err != nil {
-			t.Logf("failed to terminate container: %s", err)
-		}
-	}
-
-	connectionStr, err := pgContainer.ConnectionString(ctx, "sslmode=disable")
-	if err != nil {
-		cleanup()
-		assert.NoError(t, err, "failed to get connection string")
-	}
-
-	pool, err := pgxpool.New(ctx, connectionStr)
-	if err != nil {
-		cleanup()
-		assert.NoError(t, err, "could not connect to database")
-	}
-
-	return pool, cleanup
-}
-
 // getRandomString generates a random string for unique test identifiers.
 func getRandomString(t *testing.T) string {
 	t.Helper()
 	n, err := rand.Int(rand.Reader, big.NewInt(math.MaxInt64))
 	assert.NoError(t, err, "random string")
 	return fmt.Sprintf("test%x", n.Int64())
-}
-
-// getOpenPort finds an available port for test containers.
-func getOpenPort(t *testing.T) string {
-	t.Helper()
-	l, err := net.Listen("tcp", ":0")
-	assert.NoError(t, err, "could not find an open port")
-
-	addr := l.Addr().String()
-
-	err = l.Close()
-	assert.NoError(t, err, "could not close port")
-
-	_, port, err := net.SplitHostPort(addr)
-	assert.NoError(t, err, "could not parse open port")
-
-	return port
 }
 
 // dropTable drops the specified table for test cleanup.

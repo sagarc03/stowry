@@ -15,7 +15,7 @@ func TestAuthMiddleware_PublicAccess(t *testing.T) {
 	// Handler that just writes OK
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	// Wrap with auth middleware (nil verifier = public access)
