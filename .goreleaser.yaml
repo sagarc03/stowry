@@ -3,6 +3,7 @@ version: 2
 before:
   hooks:
     - go mod tidy
+    - git diff --exit-code go.mod go.sum
 
 builds:
   - id: stowry
@@ -45,7 +46,7 @@ builds:
 
 archives:
   - id: stowry
-    builds:
+    ids:
       - stowry
     formats:
       - tar.gz
@@ -60,7 +61,7 @@ archives:
       {{- .Arch }}
 
   - id: stowry-cli
-    builds:
+    ids:
       - stowry-cli
     formats:
       - tar.gz
@@ -85,18 +86,21 @@ changelog:
       - '^test:'
       - '^chore:'
 
-dockers:
-  - image_templates:
-      - "ghcr.io/sagarc03/stowry:{{ .Tag }}"
-      - "ghcr.io/sagarc03/stowry:v{{ .Major }}"
-      - "ghcr.io/sagarc03/stowry:v{{ .Major }}.{{ .Minor }}"
-      - "ghcr.io/sagarc03/stowry:latest"
+dockers_v2:
+  - id: stowry
+    ids:
+      - stowry
+    images:
+      - "ghcr.io/sagarc03/stowry"
+    tags:
+      - "{{ .Tag }}"
+      - "v{{ .Major }}"
+      - "v{{ .Major }}.{{ .Minor }}"
+      - "latest"
     dockerfile: Dockerfile
-    build_flag_templates:
-      - "--build-arg=VERSION={{.Version}}"
-    use: buildx
-    goos: linux
-    goarch: amd64
+    platforms:
+      - linux/amd64
+      - linux/arm64
 
 release:
   github:
