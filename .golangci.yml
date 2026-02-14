@@ -2,7 +2,6 @@ version: "2"
 
 run:
   timeout: 5m
-  tests: false
 
 linters:
   enable:
@@ -33,6 +32,23 @@ linters:
         - whyNoLint
     exhaustive:
       default-signifies-exhaustive: true
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+      - path: _test\.go
+        linters:
+          - govet
+        text: "shadow"
+      - path: _test\.go
+        linters:
+          - errcheck
+        text: "Close|Remove"
+      - path: _test\.go
+        linters:
+          - gocritic
+        text: "httpNoBody|hugeParam|sprintfQuotedString|unnamedResult"
 
 formatters:
   enable:

@@ -29,11 +29,14 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          version: "v2.3"
 
   test:
-    name: Test
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v6
 
@@ -46,7 +49,8 @@ jobs:
         run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v5
         with:
           files: coverage.txt
         continue-on-error: true
@@ -54,7 +58,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [lint]
     steps:
       - uses: actions/checkout@v6
 
@@ -64,7 +68,11 @@ jobs:
           go-version-file: go.mod
 
       - name: Build
-        run: CGO_ENABLED=0 go build -o bin/stowry ./cmd/stowry
+        run: |
+          CGO_ENABLED=0 go build -o bin/stowry ./cmd/stowry
+          CGO_ENABLED=0 go build -o bin/stowry-cli ./cmd/stowry-cli
 
-      - name: Verify binary
-        run: ./bin/stowry --version
+      - name: Verify binaries
+        run: |
+          ./bin/stowry --version
+          ./bin/stowry-cli --version
