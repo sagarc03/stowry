@@ -29,14 +29,14 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: "v2.3"
+          version: "v2.9"
 
   test:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v6
 
@@ -45,8 +45,19 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # database/postgres and e2e packages use testcontainers-go which requires
+      # Docker. Only GitHub's Ubuntu runners have Docker pre-installed; macOS and
+      # Windows runners do not, so those packages are excluded on non-Linux OSes.
       - name: Run tests
+        if: runner.os == 'Linux'
         run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - name: Run tests (no Docker)
+        if: runner.os != 'Linux'
+        shell: bash
+        run: |
+          packages=$(go list ./... | grep -v -E '(database/postgres|e2e)')
+          go test -race $packages
 
       - name: Upload coverage
         if: matrix.os == 'ubuntu-latest'
@@ -56,9 +67,12 @@ jobs:
         continue-on-error: true
 
   build:
-    name: Build
-    runs-on: ubuntu-latest
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     needs: [lint]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v6
 
@@ -68,11 +82,15 @@ jobs:
           go-version-file: go.mod
 
       - name: Build
+        shell: bash
         run: |
-          CGO_ENABLED=0 go build -o bin/stowry ./cmd/stowry
-          CGO_ENABLED=0 go build -o bin/stowry-cli ./cmd/stowry-cli
+          ext=""; if [ "$RUNNER_OS" = "Windows" ]; then ext=".exe"; fi
+          CGO_ENABLED=0 go build -o bin/stowry${ext} ./cmd/stowry
+          CGO_ENABLED=0 go build -o bin/stowry-cli${ext} ./cmd/stowry-cli
 
       - name: Verify binaries
+        shell: bash
         run: |
-          ./bin/stowry --version
-          ./bin/stowry-cli --version
+          ext=""; if [ "$RUNNER_OS" = "Windows" ]; then ext=".exe"; fi
+          ./bin/stowry${ext} --version
+          ./bin/stowry-cli${ext} --version
