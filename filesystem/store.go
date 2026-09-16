@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"mime"
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/google/uuid"
@@ -32,12 +33,12 @@ func NewFileStorage(root *os.Root) *Store {
 }
 
 // Get opens a file for reading. Returns stowry.ErrNotFound if the file does not exist.
-func (s *Store) Get(ctx context.Context, path string) (io.ReadSeekCloser, error) {
+func (s *Store) Get(ctx context.Context, name string) (io.ReadSeekCloser, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	f, err := s.root.Open(path)
+	f, err := s.root.Open(name)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, stowry.ErrNotFound
@@ -63,7 +64,7 @@ func (r *ctxReader) Read(p []byte) (n int, err error) {
 // Write atomically writes content to the given path using a temp file and rename.
 // It creates intermediate directories as needed and returns a SaveResult containing
 // the number of bytes written and SHA256-based etag. The operation respects context cancellation.
-func (s *Store) Write(ctx context.Context, path string, content io.Reader) (stowry.SaveResult, error) {
+func (s *Store) Write(ctx context.Context, name string, content io.Reader) (stowry.SaveResult, error) {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return stowry.SaveResult{}, ctxErr
 	}
@@ -80,8 +81,10 @@ func (s *Store) Write(ctx context.Context, path string, content io.Reader) (stow
 			slog.Warn("failed to close tmp file", "err", closeErr)
 		}
 		if !success {
-			if rmErr := s.root.Remove(t.Name()); rmErr != nil {
-				slog.Warn("failed to remove tmp file", "err", rmErr)
+			// t.Name() is the absolute path; os.Root rejects anything outside
+			// its own namespace, so the cleanup must use the relative name.
+			if rmErr := s.root.Remove(tmpFile); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+				slog.Warn("failed to remove tmp file", "path", tmpFile, "err", rmErr)
 			}
 		}
 	}()
@@ -99,14 +102,14 @@ func (s *Store) Write(ctx context.Context, path string, content io.Reader) (stow
 		return stowry.SaveResult{}, fmt.Errorf("sync file: %w", err)
 	}
 
-	destDir := filepath.Dir(path)
+	destDir := filepath.Dir(name)
 	if destDir != "." {
 		if err := s.root.MkdirAll(destDir, 0o755); err != nil {
 			return stowry.SaveResult{}, fmt.Errorf("create directories: %w", err)
 		}
 	}
 
-	if renameErr := s.root.Rename(tmpFile, path); renameErr != nil {
+	if renameErr := s.root.Rename(tmpFile, name); renameErr != nil {
 		return stowry.SaveResult{}, fmt.Errorf("rename file: %w", renameErr)
 	}
 
@@ -117,12 +120,12 @@ func (s *Store) Write(ctx context.Context, path string, content io.Reader) (stow
 }
 
 // Delete removes a file. Returns stowry.ErrNotFound if the file does not exist.
-func (s *Store) Delete(ctx context.Context, path string) error {
+func (s *Store) Delete(ctx context.Context, name string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
-	err := s.root.Remove(path)
+	err := s.root.Remove(name)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return stowry.ErrNotFound
@@ -150,12 +153,19 @@ func (s *Store) List(ctx context.Context) ([]stowry.ObjectEntry, error) {
 	return entries, nil
 }
 
-func (s *Store) walkDir(ctx context.Context, path string, entries *[]stowry.ObjectEntry) error {
+// walkDir recurses through dir, which is a slash-separated io/fs path relative
+// to the store root, and appends an entry for every file found.
+//
+// Paths here are deliberately not built with path/filepath: s.root.FS() is an
+// fs.FS, whose paths are always slash-separated, and the entry paths become
+// object keys, which are slash-separated too. Using the OS separator would make
+// both the traversal and the resulting keys wrong on Windows.
+func (s *Store) walkDir(ctx context.Context, dir string, entries *[]stowry.ObjectEntry) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
-	dirEntries, err := fs.ReadDir(s.root.FS(), path)
+	dirEntries, err := fs.ReadDir(s.root.FS(), dir)
 	if err != nil {
 		return err
 	}
@@ -165,7 +175,7 @@ func (s *Store) walkDir(ctx context.Context, path string, entries *[]stowry.Obje
 			return err
 		}
 
-		entryPath := filepath.Join(path, entry.Name())
+		entryPath := path.Join(dir, entry.Name())
 
 		if entry.IsDir() {
 			if err := s.walkDir(ctx, entryPath, entries); err != nil {
@@ -209,8 +219,8 @@ func (s *Store) walkDir(ctx context.Context, path string, entries *[]stowry.Obje
 	return nil
 }
 
-func detectContentType(path string) string {
-	ext := filepath.Ext(path)
+func detectContentType(name string) string {
+	ext := path.Ext(name)
 	contentType := mime.TypeByExtension(ext)
 
 	if contentType == "" {
