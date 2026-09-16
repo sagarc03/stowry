@@ -151,8 +151,8 @@ github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qq
 github.com/rogpeppe/go-internal v1.14.1 h1:UQB4HGPB6osV0SQTLymcB4TgvyWu6ZyliaW0tI/otEQ=
 github.com/rogpeppe/go-internal v1.14.1/go.mod h1:MaRKkUm5W0goXpeCfT7UZI6fk/L7L7so1lCWt35ZSgc=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
-github.com/sagarc03/stowry-go v1.1.0 h1:wcYoTJlJNbVrlTgiEhjtj+IGf1rl9Byrb8UNY4/Ti+M=
-github.com/sagarc03/stowry-go v1.1.0/go.mod h1:9/e581nAv0soJi4Y9d9IyhFPywLXKIki6RmSfo2ccOY=
+github.com/sagarc03/stowry-go v0.1.0 h1:470h73x0G5eXD6/49NXYBCYlMeEOGMnyrgm41c21n1s=
+github.com/sagarc03/stowry-go v0.1.0/go.mod h1:9/e581nAv0soJi4Y9d9IyhFPywLXKIki6RmSfo2ccOY=
 github.com/sagikazarmark/locafero v0.12.0 h1:/NQhBAkUb4+fH1jivKHWusDYFjMOOKU88eegjfxfHb4=
 github.com/sagikazarmark/locafero v0.12.0/go.mod h1:sZh36u/YSZ918v0Io+U9ogLYQJ9tLLBmM4eneO6WwsI=
 github.com/shirou/gopsutil/v4 v4.26.6 h1:Mzr/npDtQC/xpeEuQKHZt8Zo9CmPvhTj8nkR8w5TLDs=
