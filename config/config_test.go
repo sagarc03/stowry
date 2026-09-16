@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -39,7 +40,7 @@ func TestLoad_ConfigFile(t *testing.T) {
 	configContent := `
 server:
   port: 8080
-  mode: static
+  mode: store
 database:
   type: postgres
   dsn: postgres://localhost/test
@@ -63,7 +64,7 @@ log:
 	require.NoError(t, err)
 
 	assert.Equal(t, 8080, cfg.Server.Port)
-	assert.Equal(t, "static", cfg.Server.Mode)
+	assert.Equal(t, "store", cfg.Server.Mode)
 	assert.Equal(t, "postgres", cfg.Database.Type)
 	assert.Equal(t, "postgres://localhost/test", cfg.Database.DSN)
 	assert.Equal(t, "custom_table", cfg.Database.Tables.MetaData)
@@ -423,4 +424,64 @@ log:
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "validate config")
 	assert.Contains(t, err.Error(), "invalid metadata table name")
+}
+
+func TestLoad_ModeAuthCombinations(t *testing.T) {
+	tests := []struct {
+		name      string
+		mode      string
+		read      string
+		write     string
+		expectErr string
+	}{
+		{name: "store mode allows private read", mode: "store", read: "private", write: "private"},
+		{name: "static mode allows public read", mode: "static", read: "public", write: "public"},
+		{name: "spa mode allows public read", mode: "spa", read: "public", write: "public"},
+		{
+			name:      "static mode rejects private read",
+			mode:      "static",
+			read:      "private",
+			write:     "public",
+			expectErr: `auth.read is "private" but server.mode is "static"`,
+		},
+		{
+			name:      "spa mode rejects private read",
+			mode:      "spa",
+			read:      "private",
+			write:     "public",
+			expectErr: `auth.read is "private" but server.mode is "spa"`,
+		},
+		{
+			// Writes are not routed in static mode, so this only warns.
+			name:  "static mode tolerates private write",
+			mode:  "static",
+			read:  "public",
+			write: "private",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			configPath := filepath.Join(t.TempDir(), "config.yaml")
+			configContent := fmt.Sprintf(`
+server:
+  mode: %s
+auth:
+  read: %s
+  write: %s
+`, tt.mode, tt.read, tt.write)
+			require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0o644))
+
+			cfg, err := config.Load([]string{configPath}, nil)
+
+			if tt.expectErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectErr)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.mode, cfg.Server.Mode)
+		})
+	}
 }
