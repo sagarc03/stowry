@@ -19,7 +19,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "astro": "^5.18.2",
+    "astro": "^7.2.8",
     "astro-mermaid": "^1.4.0",
     "mermaid": "^11.17.2",
     "react": "^19.3.0",
