@@ -426,7 +426,7 @@ log:
 	assert.Contains(t, err.Error(), "invalid metadata table name")
 }
 
-func TestLoad_ModeAuthCombinations(t *testing.T) {
+func TestConfig_ValidateForServe(t *testing.T) {
 	tests := []struct {
 		name      string
 		mode      string
@@ -473,6 +473,12 @@ auth:
 			require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0o644))
 
 			cfg, err := config.Load([]string{configPath}, nil)
+			// Load accepts every one of these: the pairing is only meaningful
+			// to the server, so the offline subcommands must stay usable.
+			require.NoError(t, err)
+			assert.Equal(t, tt.mode, cfg.Server.Mode)
+
+			err = cfg.ValidateForServe()
 
 			if tt.expectErr != "" {
 				require.Error(t, err)
@@ -481,7 +487,6 @@ auth:
 			}
 
 			require.NoError(t, err)
-			assert.Equal(t, tt.mode, cfg.Server.Mode)
 		})
 	}
 }

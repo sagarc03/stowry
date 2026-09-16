@@ -189,22 +189,22 @@ func Load(configFiles []string, flags *pflag.FlagSet) (*Config, error) {
 		return nil, fmt.Errorf("validate config: %w", err)
 	}
 
-	// 8. Validate combinations the per-field rules cannot express
-	if err := cfg.validateModeAuth(); err != nil {
-		return nil, fmt.Errorf("validate config: %w", err)
-	}
-
 	return &cfg, nil
 }
 
-// validateModeAuth rejects auth settings that the configured server mode cannot
+// ValidateForServe rejects auth settings that the configured server mode cannot
 // honour.
 //
 // Static and SPA modes serve browsers, which cannot sign their requests, so
 // request verification is not wired up in those modes at all. Accepting
 // auth.read: private there would serve every object publicly while the operator
 // believed the site was protected, so it is a startup error instead.
-func (c *Config) validateModeAuth() error {
+//
+// This is not part of Load: the pairing only means anything to the HTTP server,
+// and failing it in Load would also block init, add, remove and cleanup -
+// offline commands that route no requests, and exactly what an operator reaches
+// for to fix the content or reclaim space on a site they can no longer serve.
+func (c *Config) ValidateForServe() error {
 	if c.Server.Mode == string(stowry.ModeStore) {
 		return nil
 	}
