@@ -87,6 +87,8 @@ changelog:
       - '^chore:'
 
 dockers_v2:
+  # The default image. Additional variants below differ only in base image and
+  # tag suffix; each publishes a multi-platform index covering amd64 and arm64.
   - id: stowry
     ids:
       - stowry
@@ -98,6 +100,51 @@ dockers_v2:
       - "v{{ .Major }}.{{ .Minor }}"
       - "latest"
     dockerfile: Dockerfile
+    platforms:
+      - linux/amd64
+      - linux/arm64
+
+  - id: stowry-alpine
+    ids:
+      - stowry
+    images:
+      - "ghcr.io/sagarc03/stowry"
+    tags:
+      - "{{ .Tag }}-alpine"
+      - "v{{ .Major }}-alpine"
+      - "v{{ .Major }}.{{ .Minor }}-alpine"
+      - "alpine"
+    dockerfile: Dockerfile.alpine
+    platforms:
+      - linux/amd64
+      - linux/arm64
+
+  - id: stowry-debian
+    ids:
+      - stowry
+    images:
+      - "ghcr.io/sagarc03/stowry"
+    tags:
+      - "{{ .Tag }}-debian"
+      - "v{{ .Major }}-debian"
+      - "v{{ .Major }}.{{ .Minor }}-debian"
+      - "debian"
+    dockerfile: Dockerfile.debian
+    platforms:
+      - linux/amd64
+      - linux/arm64
+
+  - id: stowry-distroless
+    ids:
+      - stowry
+    images:
+      - "ghcr.io/sagarc03/stowry"
+    tags:
+      - "{{ .Tag }}-distroless"
+      - "v{{ .Major }}-distroless"
+      - "v{{ .Major }}.{{ .Minor }}-distroless"
+      - "distroless"
+    dockerfile: Dockerfile.distroless
     platforms:
       - linux/amd64
       - linux/arm64

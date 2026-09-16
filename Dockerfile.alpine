@@ -1,0 +1,33 @@
+# Alpine variant: a full userland (busybox shell, apk) for debugging a running
+# container, at the cost of a larger image than the default scratch build.
+#
+# The target stage runs no commands, so cross-platform builds need no emulation:
+# the CA bundle and the data directory come from a build-platform helper stage.
+
+FROM --platform=$BUILDPLATFORM alpine:3.21@sha256:c3f8e73fdb79deaebaa2037150150191b9dcbfba68b4a46d70103204c53f4709 AS base
+RUN apk --no-cache add ca-certificates
+RUN mkdir -p /data
+
+FROM alpine:3.21@sha256:c3f8e73fdb79deaebaa2037150150191b9dcbfba68b4a46d70103204c53f4709
+ARG TARGETPLATFORM
+
+LABEL org.opencontainers.image.source="https://github.com/sagarc03/stowry"
+LABEL org.opencontainers.image.description="Object storage server with pluggable metadata backends"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.base.name="alpine:3.21"
+
+COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=base --chown=65532:65532 /data /data
+COPY $TARGETPLATFORM/stowry /stowry
+
+VOLUME /data
+ENV STOWRY_STORAGE_PATH=/data
+
+# Numeric uid/gid: there is no matching /etc/passwd entry, which the server does
+# not need, and it keeps ownership identical across every image variant.
+USER 65532:65532
+
+EXPOSE 5708
+
+ENTRYPOINT ["/stowry"]
+CMD ["serve"]

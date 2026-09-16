@@ -88,6 +88,26 @@ docker run -d \
   ghcr.io/sagarc03/stowry:latest
 ```
 
+#### Image variants
+
+Every variant ships the same binary at `/stowry`, runs as uid/gid `65532`, stores
+data in `/data` and is published for `linux/amd64` and `linux/arm64`.
+
+| Tag | Base | Notes |
+| --- | --- | --- |
+| `latest`, `v0.3.0` | `scratch` | Default. Smallest image, nothing but the server and a CA bundle. |
+| `distroless`, `v0.3.0-distroless` | `gcr.io/distroless/static-debian13` | Debian filesystem layout, tzdata and a maintained CA bundle, still no shell. |
+| `debian`, `v0.3.0-debian` | `debian:trixie-slim` | glibc and a full Debian userland, for Debian-based tooling and scanners. |
+| `alpine`, `v0.3.0-alpine` | `alpine:3.21` | Busybox shell and `apk`, for debugging inside a running container. |
+
+Variant tags follow the same scheme as the default image, so `v0`, `v0.3` and
+`v0.3.0` each have `-alpine`, `-debian` and `-distroless` counterparts.
+
+```bash
+docker pull ghcr.io/sagarc03/stowry:alpine
+docker pull ghcr.io/sagarc03/stowry:v0.3-distroless
+```
+
 ### Binary
 
 Download from [Releases](https://github.com/sagarc03/stowry/releases):
