@@ -83,7 +83,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// Checked here rather than in config.Load so that the offline subcommands
 	// stay usable on a config this rejects, and so the warning it can emit goes
 	// through the configured logger.
-	if err := cfg.ValidateForServe(); err != nil {
+	err = cfg.ValidateForServe()
+	if err != nil {
 		return err
 	}
 
