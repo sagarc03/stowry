@@ -80,6 +80,14 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("parse server mode: %w", err)
 	}
 
+	// Checked here rather than in config.Load so that the offline subcommands
+	// stay usable on a config this rejects, and so the warning it can emit goes
+	// through the configured logger.
+	err = cfg.ValidateForServe()
+	if err != nil {
+		return err
+	}
+
 	serviceCfg := stowry.ServiceConfig{
 		Mode:           mode,
 		CleanupTimeout: time.Duration(cfg.Service.CleanupTimeout) * time.Second,
