@@ -180,7 +180,9 @@ func (h *Handler) handleHead(w http.ResponseWriter, r *http.Request) {
 	modTime := obj.UpdatedAt.UTC()
 
 	w.Header().Set("ETag", etag)
-	w.Header().Set("Last-Modified", modTime.Format(http.TimeFormat))
+	if !isZeroTime(modTime) {
+		w.Header().Set("Last-Modified", modTime.Format(http.TimeFormat))
+	}
 
 	// Evaluated before Content-Length is set: unlike 304, a 412 response is not
 	// stripped of entity headers by net/http, and advertising the object size
@@ -224,11 +226,13 @@ const (
 // GET answer an identical conditional request identically (RFC 9110 §9.3.2).
 func checkPreconditions(r *http.Request, etag string, modTime time.Time) preconditionResult {
 	if im := r.Header.Get("If-Match"); im != "" {
-		if !etagStrongMatch(im, etag) {
+		if !etagStrongMatchRFC(im, etag) {
 			return preconditionFailed
 		}
 	} else if ius := r.Header.Get("If-Unmodified-Since"); ius != "" {
-		if t, err := http.ParseTime(ius); err == nil {
+		// A zero modification time carries no information, so ServeContent
+		// ignores the date checks entirely rather than comparing against it.
+		if t, err := http.ParseTime(ius); err == nil && !isZeroTime(modTime) {
 			if modTime.Truncate(time.Second).After(t.Truncate(time.Second)) {
 				return preconditionFailed
 			}
@@ -240,7 +244,7 @@ func checkPreconditions(r *http.Request, etag string, modTime time.Time) precond
 			return preconditionNotModified
 		}
 	} else if ims := r.Header.Get("If-Modified-Since"); ims != "" {
-		if t, err := http.ParseTime(ims); err == nil {
+		if t, err := http.ParseTime(ims); err == nil && !isZeroTime(modTime) {
 			if !modTime.Truncate(time.Second).After(t.Truncate(time.Second)) {
 				return preconditionNotModified
 			}
@@ -248,6 +252,45 @@ func checkPreconditions(r *http.Request, etag string, modTime time.Time) precond
 	}
 
 	return preconditionNone
+}
+
+// unixEpochTime is the other value net/http treats as "no modification time".
+var unixEpochTime = time.Unix(0, 0)
+
+// isZeroTime reports whether t is one of the values that mean "unknown", using
+// the same definition as net/http's isZeroTime.
+func isZeroTime(t time.Time) bool {
+	return t.IsZero() || t.Equal(unixEpochTime)
+}
+
+// etagStrongMatchRFC reports whether headerVal matches etag under the strong
+// comparison rules http.ServeContent applies on the GET path: an opaque-tag
+// must be quoted (net/http's scanETag rejects anything else outright), and a
+// weak tag never participates in a strong comparison.
+//
+// This is deliberately stricter than etagStrongMatch, which tolerates unquoted
+// tags for conditional writes - see TestHandler_HandlePut_IfMatch_Match. Using
+// the lenient form here would make HEAD answer an unquoted If-Match with 200
+// while GET answered 412.
+func etagStrongMatchRFC(headerVal, etag string) bool {
+	if headerVal == "*" {
+		return true
+	}
+	if strings.HasPrefix(etag, `W/`) {
+		return false
+	}
+
+	for _, raw := range strings.Split(headerVal, ",") {
+		candidate := strings.TrimSpace(raw)
+		if len(candidate) < 2 || !strings.HasPrefix(candidate, `"`) || !strings.HasSuffix(candidate, `"`) {
+			continue
+		}
+		if candidate == etag {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (h *Handler) handlePut(w http.ResponseWriter, r *http.Request) {
