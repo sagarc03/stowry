@@ -1,7 +1,6 @@
 # Stowry
 
 [![CI](https://github.com/sagarc03/stowry/actions/workflows/ci.yaml/badge.svg)](https://github.com/sagarc03/stowry/actions/workflows/ci.yaml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/sagarc03/stowry)](https://goreportcard.com/report/github.com/sagarc03/stowry)
 
 A lightweight, self-hosted object storage server with AWS Signature V4 authentication.
 
