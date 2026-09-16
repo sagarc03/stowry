@@ -315,7 +315,9 @@ func TestStore_List_Success(t *testing.T) {
 	assert.NotEmpty(t, file1.ETag)
 	assert.Equal(t, "text/plain; charset=utf-8", file1.ContentType)
 
-	file2 := pathMap[filepath.Join("subdir", "file2.json")]
+	// Object keys are slash-separated on every platform, so the lookup must not
+	// be built with filepath.Join.
+	file2 := pathMap["subdir/file2.json"]
 	assert.Equal(t, int64(8), file2.Size)
 	assert.NotEmpty(t, file2.ETag)
 	assert.Equal(t, "application/json", file2.ContentType)

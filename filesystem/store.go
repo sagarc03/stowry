@@ -33,12 +33,12 @@ func NewFileStorage(root *os.Root) *Store {
 }
 
 // Get opens a file for reading. Returns stowry.ErrNotFound if the file does not exist.
-func (s *Store) Get(ctx context.Context, path string) (io.ReadSeekCloser, error) {
+func (s *Store) Get(ctx context.Context, name string) (io.ReadSeekCloser, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	f, err := s.root.Open(path)
+	f, err := s.root.Open(name)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, stowry.ErrNotFound
@@ -64,7 +64,7 @@ func (r *ctxReader) Read(p []byte) (n int, err error) {
 // Write atomically writes content to the given path using a temp file and rename.
 // It creates intermediate directories as needed and returns a SaveResult containing
 // the number of bytes written and SHA256-based etag. The operation respects context cancellation.
-func (s *Store) Write(ctx context.Context, path string, content io.Reader) (stowry.SaveResult, error) {
+func (s *Store) Write(ctx context.Context, name string, content io.Reader) (stowry.SaveResult, error) {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return stowry.SaveResult{}, ctxErr
 	}
@@ -102,14 +102,14 @@ func (s *Store) Write(ctx context.Context, path string, content io.Reader) (stow
 		return stowry.SaveResult{}, fmt.Errorf("sync file: %w", err)
 	}
 
-	destDir := filepath.Dir(path)
+	destDir := filepath.Dir(name)
 	if destDir != "." {
 		if err := s.root.MkdirAll(destDir, 0o755); err != nil {
 			return stowry.SaveResult{}, fmt.Errorf("create directories: %w", err)
 		}
 	}
 
-	if renameErr := s.root.Rename(tmpFile, path); renameErr != nil {
+	if renameErr := s.root.Rename(tmpFile, name); renameErr != nil {
 		return stowry.SaveResult{}, fmt.Errorf("rename file: %w", renameErr)
 	}
 
@@ -120,12 +120,12 @@ func (s *Store) Write(ctx context.Context, path string, content io.Reader) (stow
 }
 
 // Delete removes a file. Returns stowry.ErrNotFound if the file does not exist.
-func (s *Store) Delete(ctx context.Context, path string) error {
+func (s *Store) Delete(ctx context.Context, name string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
-	err := s.root.Remove(path)
+	err := s.root.Remove(name)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return stowry.ErrNotFound
