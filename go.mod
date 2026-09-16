@@ -11,9 +11,7 @@ go 1.26.0
 // v1.2.1 exists solely to carry these directives - a retraction has to be
 // published in a version higher than the versions it retracts - and retracts
 // itself, so it is never selected either.
-retract (
-	[v1.0.0, v1.2.1]
-)
+retract [v1.0.0, v1.2.1]
 
 // stowry-go v1.x was published in error and its tags have been deleted upstream:
 // those versions now resolve only from the module proxy cache, and not at all
