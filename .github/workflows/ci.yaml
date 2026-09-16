@@ -139,10 +139,25 @@ jobs:
             docker run --rm -v "$volume:/data" "$image" init --db-dsn /data/stowry.db
             cid=$(docker run -d -p 5708:5708 -v "$volume:/data" "$image" serve --db-dsn /data/stowry.db)
 
+            # Dump the container's own logs however this variant fails, and
+            # clean up either way: set -e would otherwise kill the step at the
+            # first failing curl, leaving a bare "exit 22" with no explanation
+            # and a container and volume behind on the runner.
+            trap 'status=$?; if [ "$status" -ne 0 ]; then echo "::error::$variant image failed"; docker logs "$cid" || true; fi; docker rm -f "$cid" > /dev/null 2>&1 || true; docker volume rm "$volume" > /dev/null 2>&1 || true; exit $status' EXIT
+
+            ready=""
             for _ in $(seq 1 30); do
-              curl -fsS -o /dev/null http://127.0.0.1:5708/ && break
+              if curl -fsS -o /dev/null http://127.0.0.1:5708/; then
+                ready=yes
+                break
+              fi
               sleep 1
             done
+
+            if [ -z "$ready" ]; then
+              echo "::error::$variant image never became ready"
+              exit 1
+            fi
 
             curl -fsS -X PUT --data-binary "hello from $variant" \
               -H 'Content-Type: text/plain' http://127.0.0.1:5708/smoke.txt > /dev/null
@@ -150,10 +165,10 @@ jobs:
 
             if [ "$body" != "hello from $variant" ]; then
               echo "::error::$variant image served \"$body\""
-              docker logs "$cid"
               exit 1
             fi
 
+            trap - EXIT
             docker rm -f "$cid" > /dev/null
             docker volume rm "$volume" > /dev/null
             echo "$variant: ok"
