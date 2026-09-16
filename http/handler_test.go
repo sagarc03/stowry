@@ -1287,6 +1287,85 @@ func TestHandler_HeadGetPreconditionParity(t *testing.T) {
 	}
 }
 
+// TestHandler_HeadGetParity_EdgeCases covers the two conditional-request cases
+// where the HEAD path used to disagree with what http.ServeContent does on GET.
+func TestHandler_HeadGetParity_EdgeCases(t *testing.T) {
+	base := headTestMetadata()
+
+	zeroModTime := base
+	zeroModTime.UpdatedAt = time.Time{}
+
+	epochModTime := base
+	epochModTime.UpdatedAt = time.Unix(0, 0)
+
+	future := time.Now().Add(time.Hour).UTC().Format(http.TimeFormat)
+
+	tests := []struct {
+		name     string
+		metadata stowry.MetaData
+		header   string
+		value    string
+	}{
+		// A zero modification time means "unknown", so ServeContent skips the
+		// date comparisons rather than treating the object as ancient.
+		{"zero modtime, if-modified-since", zeroModTime, "If-Modified-Since", future},
+		{"zero modtime, if-unmodified-since", zeroModTime, "If-Unmodified-Since", future},
+		{"epoch modtime, if-modified-since", epochModTime, "If-Modified-Since", future},
+		// net/http's scanETag rejects an unquoted opaque-tag outright.
+		{"unquoted if-match", base, "If-Match", "abc123"},
+		{"unquoted if-match in a list", base, "If-Match", `"other", abc123`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			statuses := map[string]int{}
+
+			for _, method := range []string{"GET", "HEAD"} {
+				config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+				service := new(MockService)
+				handler := stowryhttp.NewHandler(config, service)
+
+				content := readSeekNopCloser{strings.NewReader("hello world")}
+				service.On("Info", mock.Anything, "test.txt").Return(tt.metadata, nil).Maybe()
+				service.On("Get", mock.Anything, "test.txt").Return(tt.metadata, content, nil).Maybe()
+
+				req := httptest.NewRequest(method, "/test.txt", nil)
+				req.Header.Set(tt.header, tt.value)
+				rec := httptest.NewRecorder()
+
+				handler.Router().ServeHTTP(rec, req)
+				statuses[method] = rec.Code
+			}
+
+			assert.Equal(t, statuses["GET"], statuses["HEAD"],
+				"GET and HEAD disagreed on %s: %s", tt.header, tt.value)
+		})
+	}
+}
+
+// TestHandler_HandleHead_ZeroModTimeOmitsLastModified pins that HEAD does not
+// advertise a meaningless "Mon, 01 Jan 0001" date that GET suppresses.
+func TestHandler_HandleHead_ZeroModTimeOmitsLastModified(t *testing.T) {
+	metadata := headTestMetadata()
+	metadata.UpdatedAt = time.Time{}
+
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	service.On("Info", mock.Anything, "test.txt").Return(metadata, nil)
+
+	req := httptest.NewRequest("HEAD", "/test.txt", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Empty(t, rec.Header().Get("Last-Modified"))
+
+	service.AssertExpectations(t)
+}
+
 func TestHandler_HandleHead_RootInStoreMode(t *testing.T) {
 	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
 	service := new(MockService)
