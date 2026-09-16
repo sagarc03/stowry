@@ -1,2 +1,5 @@
+# These images are built by GoReleaser's dockers_v2 pipe from a prepared
+# context holding the per-platform binaries (linux/amd64/stowry, ...), not from
+# the repository root.
 *
-!stowry
+!linux

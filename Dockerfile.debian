@@ -1,0 +1,35 @@
+# Debian variant: glibc and a familiar Debian userland, for environments whose
+# tooling, security scanners or support policy expect a Debian base.
+#
+# The target stage runs no commands, so cross-platform builds need no emulation:
+# the CA bundle and the data directory come from a build-platform helper stage.
+
+FROM --platform=$BUILDPLATFORM alpine:3.21@sha256:c3f8e73fdb79deaebaa2037150150191b9dcbfba68b4a46d70103204c53f4709 AS base
+RUN apk --no-cache add ca-certificates
+RUN mkdir -p /data
+
+FROM debian:trixie-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
+ARG TARGETPLATFORM
+
+LABEL org.opencontainers.image.source="https://github.com/sagarc03/stowry"
+LABEL org.opencontainers.image.description="Object storage server with pluggable metadata backends"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.base.name="debian:trixie-slim"
+
+# debian-slim ships no CA bundle; installing one would mean running apt under
+# emulation on the non-native platform, so the bundle is copied in instead.
+COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY --from=base --chown=65532:65532 /data /data
+COPY $TARGETPLATFORM/stowry /stowry
+
+VOLUME /data
+ENV STOWRY_STORAGE_PATH=/data
+
+# Numeric uid/gid: there is no matching /etc/passwd entry, which the server does
+# not need, and it keeps ownership identical across every image variant.
+USER 65532:65532
+
+EXPOSE 5708
+
+ENTRYPOINT ["/stowry"]
+CMD ["serve"]

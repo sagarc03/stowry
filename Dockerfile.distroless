@@ -1,0 +1,30 @@
+# Distroless variant: no shell or package manager, but with the standard
+# Debian-derived filesystem layout, tzdata and a maintained CA bundle.
+#
+# static-debian13:nonroot already runs as uid/gid 65532, which is the uid the
+# other stowry images use, so file ownership is portable across variants.
+
+FROM --platform=$BUILDPLATFORM alpine:3.21@sha256:c3f8e73fdb79deaebaa2037150150191b9dcbfba68b4a46d70103204c53f4709 AS base
+RUN mkdir -p /data
+
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3
+ARG TARGETPLATFORM
+
+LABEL org.opencontainers.image.source="https://github.com/sagarc03/stowry"
+LABEL org.opencontainers.image.description="Object storage server with pluggable metadata backends"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.base.name="gcr.io/distroless/static-debian13:nonroot"
+
+# No CA bundle is copied in: distroless ships and maintains its own.
+COPY --from=base --chown=65532:65532 /data /data
+COPY $TARGETPLATFORM/stowry /stowry
+
+VOLUME /data
+ENV STOWRY_STORAGE_PATH=/data
+
+USER 65532:65532
+
+EXPOSE 5708
+
+ENTRYPOINT ["/stowry"]
+CMD ["serve"]
