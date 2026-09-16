@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -77,6 +78,7 @@ func (h *Handler) Router() http.Handler {
 		r.Use(AuthMiddleware(h.config.ReadVerifier))
 		if h.config.Mode == stowry.ModeStore {
 			r.Get("/", h.handleList)
+			r.Head("/", h.handleList)
 		}
 		r.Get("/*", h.handleGet)
 		r.Head("/*", h.handleHead)
@@ -156,6 +158,14 @@ func (h *Handler) handleHead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Range requests need the 206/Content-Range handling that handleGet gets
+	// for free from http.ServeContent. Serve them through the GET path so the
+	// two methods cannot disagree; net/http suppresses the body for HEAD.
+	if r.Header.Get("Range") != "" {
+		h.handleGet(w, r)
+		return
+	}
+
 	obj, err := h.service.Info(r.Context(), path)
 	if err != nil {
 		if errors.Is(err, stowry.ErrNotFound) {
@@ -170,27 +180,74 @@ func (h *Handler) handleHead(w http.ResponseWriter, r *http.Request) {
 	modTime := obj.UpdatedAt.UTC()
 
 	w.Header().Set("ETag", etag)
+	w.Header().Set("Last-Modified", modTime.Format(http.TimeFormat))
+
+	// Evaluated before Content-Length is set: unlike 304, a 412 response is not
+	// stripped of entity headers by net/http, and advertising the object size
+	// on an empty body would leave the client waiting for content.
+	switch checkPreconditions(r, etag, modTime) {
+	case preconditionFailed:
+		w.WriteHeader(http.StatusPreconditionFailed)
+		return
+	case preconditionNotModified:
+		w.WriteHeader(http.StatusNotModified)
+		return
+	case preconditionNone:
+		// No conditional header applied: serve the metadata below.
+	}
+
 	w.Header().Set("Content-Type", obj.ContentType)
 	w.Header().Set("Content-Length", fmt.Sprintf("%d", obj.FileSizeBytes))
-	w.Header().Set("Last-Modified", modTime.Format(http.TimeFormat))
 	w.Header().Set("Accept-Ranges", "bytes")
 
-	// If-None-Match takes precedence per RFC 7232
-	if inm := r.Header.Get("If-None-Match"); inm != "" {
-		if etagWeakMatch(inm, etag) {
-			w.WriteHeader(http.StatusNotModified)
-			return
+	w.WriteHeader(http.StatusOK)
+}
+
+// preconditionResult is the outcome of evaluating conditional request headers.
+type preconditionResult int
+
+const (
+	// preconditionNone means the request should be served normally.
+	preconditionNone preconditionResult = iota
+	// preconditionFailed means the request must be answered with 412.
+	preconditionFailed
+	// preconditionNotModified means the request must be answered with 304.
+	preconditionNotModified
+)
+
+// checkPreconditions evaluates the conditional headers of a GET or HEAD request
+// in the order required by RFC 9110 §13.2.2: If-Match, then If-Unmodified-Since
+// only when If-Match is absent, then If-None-Match, then If-Modified-Since only
+// when If-None-Match is absent.
+//
+// This mirrors what http.ServeContent applies on the GET path, so that HEAD and
+// GET answer an identical conditional request identically (RFC 9110 §9.3.2).
+func checkPreconditions(r *http.Request, etag string, modTime time.Time) preconditionResult {
+	if im := r.Header.Get("If-Match"); im != "" {
+		if !etagStrongMatch(im, etag) {
+			return preconditionFailed
 		}
-	} else if ims := r.Header.Get("If-Modified-Since"); ims != "" {
-		if t, err := http.ParseTime(ims); err == nil {
-			if !modTime.Truncate(time.Second).After(t.Truncate(time.Second)) {
-				w.WriteHeader(http.StatusNotModified)
-				return
+	} else if ius := r.Header.Get("If-Unmodified-Since"); ius != "" {
+		if t, err := http.ParseTime(ius); err == nil {
+			if modTime.Truncate(time.Second).After(t.Truncate(time.Second)) {
+				return preconditionFailed
 			}
 		}
 	}
 
-	w.WriteHeader(http.StatusOK)
+	if inm := r.Header.Get("If-None-Match"); inm != "" {
+		if etagWeakMatch(inm, etag) {
+			return preconditionNotModified
+		}
+	} else if ims := r.Header.Get("If-Modified-Since"); ims != "" {
+		if t, err := http.ParseTime(ims); err == nil {
+			if !modTime.Truncate(time.Second).After(t.Truncate(time.Second)) {
+				return preconditionNotModified
+			}
+		}
+	}
+
+	return preconditionNone
 }
 
 func (h *Handler) handlePut(w http.ResponseWriter, r *http.Request) {
@@ -285,15 +342,21 @@ func (h *Handler) handleNotFound(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Try custom error document if configured
+	// Try custom error document if configured. A missing error document falls
+	// through to the built-in page, but any other failure (database down,
+	// unreadable blob) is logged rather than silently hidden behind a 404.
 	if h.config.ErrorDocument != "" {
 		obj, content, err := h.service.Get(r.Context(), h.config.ErrorDocument)
-		if err == nil {
+		switch {
+		case err == nil:
 			defer func() { _ = content.Close() }()
 			w.Header().Set("Content-Type", obj.ContentType)
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = io.Copy(w, content)
 			return
+		case !errors.Is(err, stowry.ErrNotFound):
+			slog.Error("failed to serve custom error document",
+				"error", err, "error_document", h.config.ErrorDocument, "path", r.URL.Path)
 		}
 	}
 

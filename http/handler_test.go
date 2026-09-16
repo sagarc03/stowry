@@ -1128,6 +1128,211 @@ func TestHandler_HandleHead_IfNoneMatchTakesPrecedence(t *testing.T) {
 	service.AssertExpectations(t)
 }
 
+func headTestMetadata() stowry.MetaData {
+	return stowry.MetaData{
+		ID:            uuid.New(),
+		Path:          "test.txt",
+		ContentType:   "text/plain",
+		Etag:          "abc123",
+		FileSizeBytes: 1024,
+		UpdatedAt:     time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC),
+	}
+}
+
+func TestHandler_HandleHead_IfMatch(t *testing.T) {
+	tests := []struct {
+		name           string
+		ifMatch        string
+		expectedStatus int
+	}{
+		{"exact match", `"abc123"`, http.StatusOK},
+		{"no match", `"different"`, http.StatusPreconditionFailed},
+		{"wildcard", `*`, http.StatusOK},
+		{"multiple with match", `"other", "abc123"`, http.StatusOK},
+		{"multiple without match", `"other", "nope"`, http.StatusPreconditionFailed},
+		{"weak tag is never a strong match", `W/"abc123"`, http.StatusPreconditionFailed},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+			service := new(MockService)
+			handler := stowryhttp.NewHandler(config, service)
+
+			service.On("Info", mock.Anything, "test.txt").Return(headTestMetadata(), nil)
+
+			req := httptest.NewRequest("HEAD", "/test.txt", nil)
+			req.Header.Set("If-Match", tt.ifMatch)
+			rec := httptest.NewRecorder()
+
+			handler.Router().ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.expectedStatus, rec.Code)
+			assert.Equal(t, `"abc123"`, rec.Header().Get("ETag"))
+			assert.Empty(t, rec.Body.String())
+
+			if tt.expectedStatus == http.StatusPreconditionFailed {
+				// A 412 carries no body, and net/http does not strip entity
+				// headers from it the way it does for 304.
+				assert.Empty(t, rec.Header().Get("Content-Length"))
+			}
+
+			service.AssertExpectations(t)
+		})
+	}
+}
+
+func TestHandler_HandleHead_IfUnmodifiedSince(t *testing.T) {
+	metadata := headTestMetadata()
+
+	tests := []struct {
+		name           string
+		since          time.Time
+		expectedStatus int
+	}{
+		{"not modified since", metadata.UpdatedAt, http.StatusOK},
+		{"modified since", metadata.UpdatedAt.Add(-1 * time.Hour), http.StatusPreconditionFailed},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+			service := new(MockService)
+			handler := stowryhttp.NewHandler(config, service)
+
+			service.On("Info", mock.Anything, "test.txt").Return(metadata, nil)
+
+			req := httptest.NewRequest("HEAD", "/test.txt", nil)
+			req.Header.Set("If-Unmodified-Since", tt.since.UTC().Format(http.TimeFormat))
+			rec := httptest.NewRecorder()
+
+			handler.Router().ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.expectedStatus, rec.Code)
+
+			service.AssertExpectations(t)
+		})
+	}
+}
+
+func TestHandler_HandleHead_IfMatchTakesPrecedenceOverIfUnmodifiedSince(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	metadata := headTestMetadata()
+	service.On("Info", mock.Anything, "test.txt").Return(metadata, nil)
+
+	req := httptest.NewRequest("HEAD", "/test.txt", nil)
+	// If-Match matches (→ 200) while If-Unmodified-Since alone would fail (→ 412).
+	// Per RFC 9110 §13.2.2, If-Unmodified-Since is ignored when If-Match is present.
+	req.Header.Set("If-Match", `"abc123"`)
+	req.Header.Set("If-Unmodified-Since", metadata.UpdatedAt.Add(-1*time.Hour).UTC().Format(http.TimeFormat))
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	service.AssertExpectations(t)
+}
+
+// TestHandler_HeadGetPreconditionParity pins RFC 9110 §9.3.2: the response to a
+// HEAD must be identical to the response to the same GET, minus the body.
+func TestHandler_HeadGetPreconditionParity(t *testing.T) {
+	metadata := headTestMetadata()
+	oldTime := metadata.UpdatedAt.Add(-1 * time.Hour).UTC().Format(http.TimeFormat)
+	sameTime := metadata.UpdatedAt.UTC().Format(http.TimeFormat)
+
+	tests := []struct {
+		name   string
+		header string
+		value  string
+	}{
+		{"if-match mismatch", "If-Match", `"wrong"`},
+		{"if-match match", "If-Match", `"abc123"`},
+		{"if-match wildcard", "If-Match", "*"},
+		{"if-unmodified-since stale", "If-Unmodified-Since", oldTime},
+		{"if-unmodified-since current", "If-Unmodified-Since", sameTime},
+		{"if-none-match match", "If-None-Match", `"abc123"`},
+		{"if-none-match mismatch", "If-None-Match", `"wrong"`},
+		{"if-modified-since current", "If-Modified-Since", sameTime},
+		{"if-modified-since stale", "If-Modified-Since", oldTime},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			statuses := map[string]int{}
+
+			for _, method := range []string{"GET", "HEAD"} {
+				config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+				service := new(MockService)
+				handler := stowryhttp.NewHandler(config, service)
+
+				content := readSeekNopCloser{strings.NewReader("hello world")}
+				service.On("Info", mock.Anything, "test.txt").Return(metadata, nil).Maybe()
+				service.On("Get", mock.Anything, "test.txt").Return(metadata, content, nil).Maybe()
+
+				req := httptest.NewRequest(method, "/test.txt", nil)
+				req.Header.Set(tt.header, tt.value)
+				rec := httptest.NewRecorder()
+
+				handler.Router().ServeHTTP(rec, req)
+				statuses[method] = rec.Code
+			}
+
+			assert.Equal(t, statuses["GET"], statuses["HEAD"],
+				"GET and HEAD disagreed on %s: %s", tt.header, tt.value)
+		})
+	}
+}
+
+func TestHandler_HandleHead_RootInStoreMode(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStore}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	service.On("List", mock.Anything, mock.Anything).Return(stowry.ListResult{}, nil)
+
+	req := httptest.NewRequest("HEAD", "/", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	// GET / is the object list, so HEAD / must report the same status rather
+	// than 404 through the object lookup.
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+
+	service.AssertExpectations(t)
+}
+
+func TestHandler_HandleNotFound_ErrorDocumentInternalError(t *testing.T) {
+	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStatic, ErrorDocument: "404.html"}
+	service := new(MockService)
+	handler := stowryhttp.NewHandler(config, service)
+
+	service.On("Get", mock.Anything, "missing.html").Return(
+		stowry.MetaData{}, nil, stowry.ErrNotFound,
+	)
+	// The error document itself fails with an internal error, not ErrNotFound.
+	service.On("Get", mock.Anything, "404.html").Return(
+		stowry.MetaData{}, nil, errors.New("database is down"),
+	)
+
+	req := httptest.NewRequest("GET", "/missing.html", nil)
+	rec := httptest.NewRecorder()
+
+	handler.Router().ServeHTTP(rec, req)
+
+	// The requested object is still missing, so the status stays 404 and the
+	// built-in page is served; the underlying failure is logged.
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Contains(t, rec.Body.String(), "404")
+
+	service.AssertExpectations(t)
+}
+
 func TestHandler_StaticMode_PutReturns405(t *testing.T) {
 	config := &stowryhttp.HandlerConfig{Mode: stowry.ModeStatic}
 	service := new(MockService)
