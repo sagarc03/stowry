@@ -192,6 +192,8 @@ func (h *Handler) handleHead(w http.ResponseWriter, r *http.Request) {
 	case preconditionNotModified:
 		w.WriteHeader(http.StatusNotModified)
 		return
+	case preconditionNone:
+		// No conditional header applied: serve the metadata below.
 	}
 
 	w.Header().Set("Content-Type", obj.ContentType)
