@@ -99,14 +99,14 @@ func runServe(cmd *cobra.Command, args []string) error {
 	}
 	verifier := stowry.NewSignatureVerifier(authCfg, store)
 
+	// Config validation guarantees auth.read is public outside store mode, so
+	// there is no mode check here: the verifiers simply follow the config.
 	var readVerifier, writeVerifier stowryhttp.RequestVerifier
-	if mode == stowry.ModeStore {
-		if cfg.Auth.Read != "public" {
-			readVerifier = verifier
-		}
-		if cfg.Auth.Write != "public" {
-			writeVerifier = verifier
-		}
+	if cfg.Auth.Read != "public" {
+		readVerifier = verifier
+	}
+	if cfg.Auth.Write != "public" {
+		writeVerifier = verifier
 	}
 
 	handlerConfig := stowryhttp.HandlerConfig{

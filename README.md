@@ -178,7 +178,7 @@ log:
   level: info  # debug | info | warn | error
 ```
 
-> **Note:** In `static` and `spa` modes, auth settings are ignored — all access is public. The `max_upload_size` setting only applies in `store` mode.
+> **Note:** `static` and `spa` modes serve browsers, which cannot sign requests, so all access is public in those modes. Setting `auth.read: private` together with `mode: static` or `mode: spa` is a startup error rather than a silently public site — use `store` mode if you need signed reads. `auth.write` is ignored there (writes are not served at all) and only logs a warning. The `max_upload_size` setting only applies in `store` mode.
 
 Environment variables use `STOWRY_` prefix: `STOWRY_SERVER_PORT=8080`
 

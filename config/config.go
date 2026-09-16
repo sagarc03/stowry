@@ -189,5 +189,43 @@ func Load(configFiles []string, flags *pflag.FlagSet) (*Config, error) {
 		return nil, fmt.Errorf("validate config: %w", err)
 	}
 
+	// 8. Validate combinations the per-field rules cannot express
+	if err := cfg.validateModeAuth(); err != nil {
+		return nil, fmt.Errorf("validate config: %w", err)
+	}
+
 	return &cfg, nil
+}
+
+// validateModeAuth rejects auth settings that the configured server mode cannot
+// honour.
+//
+// Static and SPA modes serve browsers, which cannot sign their requests, so
+// request verification is not wired up in those modes at all. Accepting
+// auth.read: private there would serve every object publicly while the operator
+// believed the site was protected, so it is a startup error instead.
+func (c *Config) validateModeAuth() error {
+	if c.Server.Mode == string(stowry.ModeStore) {
+		return nil
+	}
+
+	if c.Auth.Read != "public" {
+		return fmt.Errorf(
+			"auth.read is %q but server.mode is %q: %s mode cannot verify signed requests, "+
+				"set auth.read to public to serve this content publicly, or use store mode",
+			c.Auth.Read, c.Server.Mode, c.Server.Mode,
+		)
+	}
+
+	// Writes are not routed at all in these modes, so a non-public auth.write is
+	// inert rather than unsafe. Warn so the setting is not mistaken for an
+	// active protection.
+	if c.Auth.Write != "public" {
+		slog.Warn(
+			"auth.write is ignored in this mode: writes are not served at all",
+			"auth.write", c.Auth.Write, "mode", c.Server.Mode,
+		)
+	}
+
+	return nil
 }
