@@ -2,6 +2,16 @@ module github.com/sagarc03/stowry
 
 go 1.25.5
 
+// v1.0.0, v1.1.0 and v1.2.0 of this module were published in error - stowry is
+// pre-1.0 - and their tags have been deleted from the repository. Deleting a tag
+// does not unpublish anything: proxy.golang.org caches versions permanently, so
+// they stay resolvable and `@latest` still points at v1.2.0.
+//
+// v1.2.1 exists solely to carry these directives - a retraction has to be
+// published in a version higher than the versions it retracts - and retracts
+// itself, so it is never selected either.
+retract [v1.0.0, v1.2.1]
+
 require (
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/go-chi/cors v1.2.2
