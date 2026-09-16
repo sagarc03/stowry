@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -345,7 +344,7 @@ func (s *StowryService) resolveMetadata(ctx context.Context, path string) (MetaD
 				// Clean URL chain: foo.html → foo/index.html
 				m, err = s.repo.Get(ctx, path+".html")
 				if errors.Is(err, ErrNotFound) {
-					m, err = s.repo.Get(ctx, filepath.Join(path, "index.html"))
+					m, err = s.repo.Get(ctx, path+"/index.html")
 				}
 			}
 		case ModeSPA:
