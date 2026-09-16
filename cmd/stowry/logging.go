@@ -14,7 +14,7 @@ import (
 func setupLogging(cfg *config.Config) {
 	level := parseLevel(cfg.Log.Level)
 
-	h := tint.NewHandler(os.Stdout, &tint.Options{
+	h := tint.NewTextHandler(os.Stdout, &tint.Options{
 		Level:      level,
 		AddSource:  true,
 		TimeFormat: "15:04:05.000",
