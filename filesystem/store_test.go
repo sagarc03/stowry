@@ -14,13 +14,33 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// openTestRoot opens tempDir as an os.Root and closes it when the test ends.
+//
+// Closing matters on Windows, where an open handle to a directory blocks its
+// removal: without this, t.TempDir's cleanup fails with "The process cannot
+// access the file because it is being used by another process".
+func openTestRoot(t *testing.T, dir string) *os.Root {
+	t.Helper()
+
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		t.Fatalf("open root %s: %v", dir, err)
+	}
+	t.Cleanup(func() {
+		if err := root.Close(); err != nil {
+			t.Errorf("close root %s: %v", dir, err)
+		}
+	})
+
+	return root
+}
+
 func TestStore_Get_Success(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
 	content := []byte("test content")
-	err = os.WriteFile(filepath.Join(tempDir, "test.txt"), content, 0o644)
+	err := os.WriteFile(filepath.Join(tempDir, "test.txt"), content, 0o644)
 	assert.NoError(t, err)
 
 	store := filesystem.NewFileStorage(osDir)
@@ -41,8 +61,7 @@ func TestStore_Get_Success(t *testing.T) {
 
 func TestStore_Get_ContextCanceled(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
 	store := filesystem.NewFileStorage(osDir)
 
@@ -58,8 +77,7 @@ func TestStore_Get_ContextCanceled(t *testing.T) {
 
 func TestStore_Get_NotFound(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
 	store := filesystem.NewFileStorage(osDir)
 
@@ -73,8 +91,7 @@ func TestStore_Get_NotFound(t *testing.T) {
 
 func TestStore_Write_Success(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
 	store := filesystem.NewFileStorage(osDir)
 
@@ -96,8 +113,7 @@ func TestStore_Write_Success(t *testing.T) {
 
 func TestStore_Write_WithSubdirectory(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
 	store := filesystem.NewFileStorage(osDir)
 
@@ -118,8 +134,7 @@ func TestStore_Write_WithSubdirectory(t *testing.T) {
 
 func TestStore_Write_ContextCanceledBefore(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
 	store := filesystem.NewFileStorage(osDir)
 
@@ -137,8 +152,7 @@ func TestStore_Write_ContextCanceledBefore(t *testing.T) {
 
 func TestStore_Write_ContextCanceledDuringCopy(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
 	store := filesystem.NewFileStorage(osDir)
 
@@ -155,6 +169,57 @@ func TestStore_Write_ContextCanceledDuringCopy(t *testing.T) {
 	assert.Equal(t, int64(0), result.BytesWritten)
 	assert.Empty(t, result.Etag)
 	assert.ErrorIs(t, err, context.Canceled)
+}
+
+// TestStore_Write_LeavesNoTempFileOnFailure pins that a failed write cleans up
+// its temp file. The cleanup used t.Name(), an absolute path, which os.Root
+// rejects as escaping its namespace, so every failed write used to leak a
+// .t<uuid> file into the storage directory permanently - where a later
+// `stowry init` scan would then index it as an object.
+func TestStore_Write_LeavesNoTempFileOnFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	store := filesystem.NewFileStorage(openTestRoot(t, tempDir))
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	_, err := store.Write(ctx, "test.txt", &slowReader{
+		data:   []byte("test content"),
+		cancel: cancel,
+	})
+	assert.Error(t, err)
+
+	entries, err := os.ReadDir(tempDir)
+	assert.NoError(t, err)
+
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	assert.Empty(t, names, "storage directory should be clean after a failed write")
+}
+
+// TestStore_List_UsesSlashSeparatedKeys pins that object keys are always
+// slash-separated. walkDir traverses an fs.FS, whose paths are slash-separated
+// by definition, and the keys it produces are looked up by slash-separated
+// request paths, so an OS-specific separator breaks both on Windows.
+func TestStore_List_UsesSlashSeparatedKeys(t *testing.T) {
+	tempDir := t.TempDir()
+	osDir := openTestRoot(t, tempDir)
+
+	err := os.MkdirAll(filepath.Join(tempDir, "a", "b"), 0o755)
+	assert.NoError(t, err)
+
+	err = os.WriteFile(filepath.Join(tempDir, "a", "b", "file.txt"), []byte("content"), 0o644)
+	assert.NoError(t, err)
+
+	store := filesystem.NewFileStorage(osDir)
+
+	entries, err := store.List(context.Background())
+
+	assert.NoError(t, err)
+	assert.Len(t, entries, 1)
+	assert.Equal(t, "a/b/file.txt", entries[0].Path)
+	assert.Equal(t, "text/plain; charset=utf-8", entries[0].ContentType)
 }
 
 type slowReader struct {
@@ -175,10 +240,9 @@ func (r *slowReader) Read(p []byte) (n int, err error) {
 
 func TestStore_Delete_Success(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
-	err = os.WriteFile(filepath.Join(tempDir, "test.txt"), []byte("content"), 0o644)
+	err := os.WriteFile(filepath.Join(tempDir, "test.txt"), []byte("content"), 0o644)
 	assert.NoError(t, err)
 
 	store := filesystem.NewFileStorage(osDir)
@@ -194,15 +258,14 @@ func TestStore_Delete_Success(t *testing.T) {
 
 func TestStore_Delete_ContextCanceled(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
 	store := filesystem.NewFileStorage(osDir)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	err = store.Delete(ctx, "test.txt")
+	err := store.Delete(ctx, "test.txt")
 
 	assert.Error(t, err)
 	assert.Equal(t, context.Canceled, err)
@@ -210,13 +273,12 @@ func TestStore_Delete_ContextCanceled(t *testing.T) {
 
 func TestStore_Delete_NotFound(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
 	store := filesystem.NewFileStorage(osDir)
 
 	ctx := context.Background()
-	err = store.Delete(ctx, "nonexistent.txt")
+	err := store.Delete(ctx, "nonexistent.txt")
 
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, stowry.ErrNotFound)
@@ -224,10 +286,9 @@ func TestStore_Delete_NotFound(t *testing.T) {
 
 func TestStore_List_Success(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
-	err = os.WriteFile(filepath.Join(tempDir, "file1.txt"), []byte("content1"), 0o644)
+	err := os.WriteFile(filepath.Join(tempDir, "file1.txt"), []byte("content1"), 0o644)
 	assert.NoError(t, err)
 
 	err = os.MkdirAll(filepath.Join(tempDir, "subdir"), 0o755)
@@ -262,8 +323,7 @@ func TestStore_List_Success(t *testing.T) {
 
 func TestStore_List_EmptyDirectory(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
 	store := filesystem.NewFileStorage(osDir)
 
@@ -276,8 +336,7 @@ func TestStore_List_EmptyDirectory(t *testing.T) {
 
 func TestStore_List_ContextCanceled(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
 	store := filesystem.NewFileStorage(osDir)
 
@@ -293,10 +352,9 @@ func TestStore_List_ContextCanceled(t *testing.T) {
 
 func TestStore_List_NestedDirectories(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
-	err = os.MkdirAll(filepath.Join(tempDir, "a", "b", "c"), 0o755)
+	err := os.MkdirAll(filepath.Join(tempDir, "a", "b", "c"), 0o755)
 	assert.NoError(t, err)
 
 	err = os.WriteFile(filepath.Join(tempDir, "a", "file1.txt"), []byte("content1"), 0o644)
@@ -319,10 +377,9 @@ func TestStore_List_NestedDirectories(t *testing.T) {
 
 func TestStore_List_UnknownFileExtension(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
-	err = os.WriteFile(filepath.Join(tempDir, "file.unknown"), []byte("content"), 0o644)
+	err := os.WriteFile(filepath.Join(tempDir, "file.unknown"), []byte("content"), 0o644)
 	assert.NoError(t, err)
 
 	store := filesystem.NewFileStorage(osDir)
@@ -337,8 +394,7 @@ func TestStore_List_UnknownFileExtension(t *testing.T) {
 
 func TestStore_Write_ETagConsistency(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
 	store := filesystem.NewFileStorage(osDir)
 
@@ -363,8 +419,7 @@ func TestStore_Write_ETagConsistency(t *testing.T) {
 
 func TestStore_Write_LargeFile(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
 	store := filesystem.NewFileStorage(osDir)
 
@@ -385,8 +440,7 @@ func TestStore_Write_LargeFile(t *testing.T) {
 
 func TestStore_Integration_WriteReadDelete(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
 	store := filesystem.NewFileStorage(osDir)
 	ctx := context.Background()
@@ -425,8 +479,7 @@ func TestStore_Integration_WriteReadDelete(t *testing.T) {
 
 func TestStore_ConcurrentWrites(t *testing.T) {
 	tempDir := t.TempDir()
-	osDir, err := os.OpenRoot(tempDir)
-	assert.NoError(t, err)
+	osDir := openTestRoot(t, tempDir)
 
 	store := filesystem.NewFileStorage(osDir)
 	ctx := context.Background()

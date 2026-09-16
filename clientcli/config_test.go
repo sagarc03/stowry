@@ -3,6 +3,7 @@ package clientcli_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/sagarc03/stowry/clientcli"
@@ -275,10 +276,14 @@ func TestConfigFile_SaveAndLoad(t *testing.T) {
 	err := original.Save(configPath)
 	require.NoError(t, err)
 
-	// Verify file exists with correct permissions
+	// Verify file exists with correct permissions. Windows has no POSIX mode
+	// bits - Go synthesises 0666/0444 from the read-only attribute - so the
+	// owner-only check only means something on Unix.
 	info, err := os.Stat(configPath)
 	require.NoError(t, err)
-	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	if runtime.GOOS != "windows" {
+		assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	}
 
 	// Load
 	loaded, err := clientcli.LoadConfigFile(configPath)
