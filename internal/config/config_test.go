@@ -3,8 +3,11 @@ package config_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/go-viper/mapstructure/v2"
 
 	"github.com/sagarc03/stowry/internal/config"
 	"github.com/sagarc03/stowry/types"
@@ -95,6 +98,8 @@ func TestLoadEnvReachesEverySetting(t *testing.T) {
 		"STOWRY_AUTH_WRITE":                "private",
 		"STOWRY_AUTH_AWS_REGION":           "eu-west-1",
 		"STOWRY_AUTH_AWS_SERVICE":          "s4",
+		"STOWRY_ACCESS_KEY":                "AKIAEXAMPLE",
+		"STOWRY_SECRET_KEY":                "wJalrXUt",
 		"STOWRY_AUTH_KEYS_FILE":            "/keys.json",
 		"STOWRY_CORS_ALLOWED_ORIGINS":      "https://a.example.com",
 		"STOWRY_CORS_ALLOW_CREDENTIALS":    "true",
@@ -121,6 +126,8 @@ func TestLoadEnvReachesEverySetting(t *testing.T) {
 	assert.Equal(t, config.AccessPrivate, cfg.Auth.Write)
 	assert.Equal(t, "eu-west-1", cfg.Auth.AWS.Region)
 	assert.Equal(t, "s4", cfg.Auth.AWS.Service)
+	assert.Equal(t, "AKIAEXAMPLE", cfg.Auth.AccessKey)
+	assert.Equal(t, "wJalrXUt", cfg.Auth.SecretKey)
 	assert.Equal(t, "/keys.json", cfg.Auth.Keys.File, "a zero-default field must still be env-reachable")
 	assert.Equal(t, []string{"https://a.example.com"}, cfg.CORS.AllowedOrigins)
 	assert.True(t, cfg.CORS.AllowCredentials)
@@ -203,7 +210,8 @@ func TestLoadRejectsInvalid(t *testing.T) {
 		{name: "table name is not an identifier", yaml: "database:\n  tables:\n    meta_data: Meta-Data\n", errContains: "table_name"},
 		{name: "unknown access", yaml: "auth:\n  read: maybe\n", errContains: "Read"},
 		{name: "unknown log level", yaml: "log:\n  level: loud\n", errContains: "Level"},
-		{name: "half-written key pair", yaml: "auth:\n  keys:\n    inline:\n      - access_key: AKIA\n", errContains: "SecretKey"},
+		{name: "access key with no secret", yaml: "auth:\n  access_key: AKIA\n", errContains: "SecretKey"},
+		{name: "secret with no access key", yaml: "auth:\n  secret_key: shh\n", errContains: "AccessKey"},
 	}
 
 	for _, tt := range tests {
@@ -249,7 +257,8 @@ func TestValidateForServe(t *testing.T) {
 
 func TestConversions(t *testing.T) {
 	cfg := config.Defaults()
-	cfg.Auth.Keys.Inline = []config.KeyPair{{AccessKey: "AKIA", SecretKey: "secret"}}
+	cfg.Auth.AccessKey = "AKIA"
+	cfg.Auth.SecretKey = "secret"
 	cfg.Auth.Keys.File = "/keys.json"
 
 	t.Run("database", func(t *testing.T) {
@@ -332,5 +341,74 @@ func TestEnvVar(t *testing.T) {
 			t.Setenv(tt.want, v.env)
 			assert.Equal(t, v.want, tt.set(load(t, nil, nil)))
 		})
+	}
+}
+
+// These two do not take the variable their key path spells, so the override is
+// pinned: the short name reaches the setting and the derived one does not. Both
+// halves are always set, since either alone fails validation.
+func TestCredentialEnvVars(t *testing.T) {
+	const (
+		shortAccess = "STOWRY_ACCESS_KEY"
+		shortSecret = "STOWRY_SECRET_KEY"
+	)
+
+	derived := func(key string) string {
+		return "STOWRY_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
+	}
+
+	t.Run("EnvVarForKey names the short form", func(t *testing.T) {
+		assert.Equal(t, shortAccess, config.EnvVarForKey("auth.access_key"))
+		assert.Equal(t, shortSecret, config.EnvVarForKey("auth.secret_key"))
+	})
+
+	t.Run("the short names are read", func(t *testing.T) {
+		t.Setenv(shortAccess, "AKIA")
+		t.Setenv(shortSecret, "shh")
+
+		cfg := load(t, nil, nil)
+		assert.Equal(t, "AKIA", cfg.Auth.AccessKey)
+		assert.Equal(t, "shh", cfg.Auth.SecretKey)
+	})
+
+	// Binding a name replaces the derived one rather than adding to it, so each
+	// credential has exactly one variable.
+	t.Run("the derived names are not", func(t *testing.T) {
+		require.NotEqual(t, shortAccess, derived("auth.access_key"))
+		t.Setenv(derived("auth.access_key"), "AKIA")
+		t.Setenv(derived("auth.secret_key"), "shh")
+
+		cfg := load(t, nil, nil)
+		assert.Empty(t, cfg.Auth.AccessKey)
+		assert.Empty(t, cfg.Auth.SecretKey)
+	})
+
+	t.Run("the file still works", func(t *testing.T) {
+		path := writeConfig(t, "auth:\n  access_key: AKIA\n  secret_key: shh\n")
+
+		cfg := load(t, []string{path}, nil)
+		assert.Equal(t, "AKIA", cfg.Auth.AccessKey)
+		assert.Equal(t, "shh", cfg.Auth.SecretKey)
+	})
+
+	t.Run("env beats the file", func(t *testing.T) {
+		path := writeConfig(t, "auth:\n  access_key: FROMFILE\n  secret_key: fromfile\n")
+		t.Setenv(shortAccess, "FROMENV")
+		t.Setenv(shortSecret, "fromenv")
+
+		cfg := load(t, []string{path}, nil)
+		assert.Equal(t, "FROMENV", cfg.Auth.AccessKey)
+		assert.Equal(t, "fromenv", cfg.Auth.SecretKey)
+	})
+}
+
+// Every setting must be reachable from a flag. A new field added to Config
+// without a flagToKey entry fails here rather than silently having no flag.
+func TestFlagReachesEverySetting(t *testing.T) {
+	var nested map[string]any
+	require.NoError(t, mapstructure.Decode(config.Defaults(), &nested))
+
+	for key := range config.FlattenForTest(nested) {
+		assert.NotEmpty(t, config.FlagForKey(key), "config key %s has no flag", key)
 	}
 }

@@ -187,11 +187,10 @@ auth:
   aws:
     region: us-east-1
     service: s3
+  access_key: YOUR_ACCESS_KEY
+  secret_key: YOUR_SECRET_KEY
   keys:
-    inline:
-      - access_key: YOUR_ACCESS_KEY
-        secret_key: YOUR_SECRET_KEY
-    # file: /path/to/keys.json
+    # file: /path/to/keys.json  # several pairs
 
 log:
   level: info  # debug | info | warn | error
@@ -199,7 +198,22 @@ log:
 
 > **Note:** `static` and `spa` modes serve browsers, which cannot sign requests, so all access is public in those modes. Setting `auth.read: private` together with `mode: static` or `mode: spa` is a startup error rather than a silently public site — use `store` mode if you need signed reads. `auth.write` is ignored there (writes are not served at all) and only logs a warning. The `max_upload_size` setting only applies in `store` mode.
 
-Environment variables use `STOWRY_` prefix: `STOWRY_SERVER_PORT=8080`
+Environment variables use the `STOWRY_` prefix, with `.` becoming `_`:
+`server.port` is `STOWRY_SERVER_PORT`. The credentials are the one exception,
+dropping the section name:
+
+```sh
+export STOWRY_ACCESS_KEY=YOUR_ACCESS_KEY
+export STOWRY_SECRET_KEY=YOUR_SECRET_KEY
+```
+
+Each setting answers to exactly one variable, so `STOWRY_AUTH_ACCESS_KEY` is
+not read. The same pair is also available on `serve` as `-a/--access-key` and
+`-k/--secret-key`, though a flag value is visible in the process list.
+
+A deployment with more than one key pair sets `auth.keys.file`
+(`STOWRY_AUTH_KEYS_FILE`) instead; the two are merged, and the file wins on a
+repeated access key.
 
 ## API
 

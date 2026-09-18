@@ -20,13 +20,48 @@ const envPrefix = "STOWRY"
 // flagToKey maps a CLI flag to the key it overrides; unlisted flags override
 // the key of the same name.
 var flagToKey = map[string]string{
-	"db-type":      "database.type",
-	"db-dsn":       "database.dsn",
-	"storage-path": "storage.path",
-	"populate":     "storage.populate",
-	"migrate":      "database.migrate",
-	"port":         "server.port",
-	"mode":         "server.mode",
+	"port":             "server.port",
+	"mode":             "server.mode",
+	"max-upload-size":  "server.max_upload_size",
+	"error-document":   "server.error_document",
+	"cleanup-timeout":  "service.cleanup_timeout",
+	"db-type":          "database.type",
+	"db-dsn":           "database.dsn",
+	"db-table":         "database.tables.meta_data",
+	"migrate":          "database.migrate",
+	"storage-path":     "storage.path",
+	"populate":         "storage.populate",
+	"auth-read":        "auth.read",
+	"auth-write":       "auth.write",
+	"access-key":       "auth.access_key",
+	"secret-key":       "auth.secret_key",
+	"keys-file":        "auth.keys.file",
+	"aws-region":       "auth.aws.region",
+	"aws-service":      "auth.aws.service",
+	"cors-origins":     "cors.allowed_origins",
+	"cors-methods":     "cors.allowed_methods",
+	"cors-headers":     "cors.allowed_headers",
+	"cors-expose":      "cors.exposed_headers",
+	"cors-credentials": "cors.allow_credentials",
+	"cors-max-age":     "cors.max_age",
+	"log-level":        "log.level",
+}
+
+// envOverride names the environment variable for keys that do not take the one
+// their path spells, so the credentials are not STOWRY_AUTH_ACCESS_KEY. The
+// path form does not also work: setDefaults binds one name per key.
+var envOverride = map[string]string{
+	"auth.access_key": envPrefix + "_ACCESS_KEY",
+	"auth.secret_key": envPrefix + "_SECRET_KEY",
+}
+
+// EnvVarForKey returns the environment variable that reaches key.
+func EnvVarForKey(key string) string {
+	if name, ok := envOverride[key]; ok {
+		return name
+	}
+
+	return envPrefix + "_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
 }
 
 // EnvVar returns the environment variable that reaches the same setting as the
@@ -37,7 +72,7 @@ func EnvVar(flag string) string {
 		key = mapped
 	}
 
-	return envPrefix + "_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
+	return EnvVarForKey(key)
 }
 
 // Load reads the configuration. Later sources win: flags, then environment,
@@ -50,10 +85,6 @@ func Load(files []string, flags *pflag.FlagSet) (*Config, error) {
 	}
 
 	readFiles(v, files)
-
-	v.SetEnvPrefix(envPrefix)
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	v.AutomaticEnv()
 
 	if flags != nil {
 		bindFlags(v, flags)
@@ -72,8 +103,14 @@ func Load(files []string, flags *pflag.FlagSet) (*Config, error) {
 }
 
 // setDefaults registers every leaf of Defaults with viper, zero values
-// included. That is what lets the environment reach any setting: viper resolves
-// an environment variable during Unmarshal only for a key it already knows.
+// included, and binds the environment variable that reaches it. A field missing
+// from Defaults is therefore unreachable from the environment.
+//
+// The variables are bound by name rather than left to AutomaticEnv, which
+// derives one from the key path and cannot be told otherwise. Binding is what
+// lets envOverride hold, and it gives every setting exactly one variable: with
+// AutomaticEnv also applied, an overridden key would answer to both names and
+// the derived one would win.
 func setDefaults(v *viper.Viper) error {
 	var nested map[string]any
 	if err := mapstructure.Decode(Defaults(), &nested); err != nil {
@@ -82,6 +119,10 @@ func setDefaults(v *viper.Viper) error {
 
 	for key, value := range flatten("", nested) {
 		v.SetDefault(key, value)
+
+		if err := v.BindEnv(key, EnvVarForKey(key)); err != nil {
+			return fmt.Errorf("bind %s: %w", EnvVarForKey(key), err)
+		}
 	}
 
 	return nil
@@ -229,4 +270,15 @@ func (c *Config) ValidateForServe() error {
 	}
 
 	return nil
+}
+
+// FlagForKey returns the flag that overrides key, or "" when none does.
+func FlagForKey(key string) string {
+	for flag, k := range flagToKey {
+		if k == key {
+			return flag
+		}
+	}
+
+	return ""
 }

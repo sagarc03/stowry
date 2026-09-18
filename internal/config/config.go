@@ -66,8 +66,11 @@ const MemoryPath = ":memory:"
 type Auth struct {
 	Read  Access `mapstructure:"read" validate:"required,oneof=public private"`
 	Write Access `mapstructure:"write" validate:"required,oneof=public private"`
-	AWS   AWS    `mapstructure:"aws"`
-	Keys  Keys   `mapstructure:"keys"`
+	// AccessKey and SecretKey are one key pair; several pairs go in Keys.File.
+	AccessKey string `mapstructure:"access_key" validate:"required_with=SecretKey"`
+	SecretKey string `mapstructure:"secret_key" validate:"required_with=AccessKey"`
+	AWS       AWS    `mapstructure:"aws"`
+	Keys      Keys   `mapstructure:"keys"`
 }
 
 // Access says whether a request must be signed.
@@ -86,15 +89,8 @@ type AWS struct {
 }
 
 type Keys struct {
-	// Inline requires both halves: a half-written pair is an operator mistake.
-	Inline []KeyPair `mapstructure:"inline" validate:"dive"`
 	// File is the path to a JSON array of key pairs.
 	File string `mapstructure:"file"`
-}
-
-type KeyPair struct {
-	AccessKey string `mapstructure:"access_key" validate:"required"`
-	SecretKey string `mapstructure:"secret_key" validate:"required"`
 }
 
 // CORS is applied only when AllowedOrigins is set, so serving any origin is
@@ -155,12 +151,12 @@ func (c *Config) DatabaseConfig() database.Config {
 
 // KeysConfig builds the access key store's configuration.
 func (c *Config) KeysConfig() keybackend.KeysConfig {
-	inline := make([]keybackend.KeyPair, 0, len(c.Auth.Keys.Inline))
-	for _, p := range c.Auth.Keys.Inline {
-		inline = append(inline, keybackend.KeyPair{AccessKey: p.AccessKey, SecretKey: p.SecretKey})
+	// A pair missing either half is dropped by the store, so an unset one needs
+	// no check here.
+	return keybackend.KeysConfig{
+		Inline: []keybackend.KeyPair{{AccessKey: c.Auth.AccessKey, SecretKey: c.Auth.SecretKey}},
+		File:   c.Auth.Keys.File,
 	}
-
-	return keybackend.KeysConfig{Inline: inline, File: c.Auth.Keys.File}
 }
 
 // AWSConfig builds the signature verifier's configuration.

@@ -21,11 +21,11 @@ auth:
   aws:
     region: us-east-1
     service: s3
+  # One key pair, also settable as STOWRY_AUTH_ACCESS_KEY / STOWRY_AUTH_SECRET_KEY
+  access_key: AKIAIOSFODNN7EXAMPLE
+  secret_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
   keys:
-    inline:
-      - access_key: AKIAIOSFODNN7EXAMPLE
-        secret_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-    # file: /path/to/keys.json  # JSON format: [{"access_key": "...", "secret_key": "..."}]
+    # file: /path/to/keys.json  # several pairs: [{"access_key": "...", "secret_key": "..."}]
 
 # Logging
 log:

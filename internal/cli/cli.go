@@ -56,19 +56,54 @@ is compatible with the AWS SDKs for generating presigned URLs.`,
 	flags := cmd.PersistentFlags()
 	flags.StringSliceP("config", "c", nil,
 		usage("config", "config file paths, merged left to right", "./config.yaml"))
+
+	flags.Int64("max-upload-size", 0, usage("max-upload-size", "cap a PUT body in bytes, 0 for no limit", d.Server.MaxUploadSize))
+	flags.String("error-document", "", usage("error-document", "object served for a 404 in static and spa modes", quoted(d.Server.ErrorDocument)))
+	flags.Duration("cleanup-timeout", 0, usage("cleanup-timeout", "how long a cleanup may run", d.Service.CleanupTimeout))
+
 	flags.String("db-type", "", usage("db-type", "database type: sqlite or postgres", d.Database.Type))
 	flags.StringP("db-dsn", "d", "", usage("db-dsn", "database connection string", quoted(d.Database.DSN)))
+	flags.String("db-table", "", usage("db-table", "metadata table name", d.Database.Tables.MetaData))
+
 	flags.StringP("storage-path", "s", "", usage("storage-path", "storage directory path", quoted(d.Storage.Path)))
 
-	cmd.AddGroup(&cobra.Group{ID: groupServer, Title: "Server Commands:"})
+	flags.String("auth-read", "", usage("auth-read", "reads are public or private", d.Auth.Read))
+	flags.String("auth-write", "", usage("auth-write", "writes are public or private", d.Auth.Write))
+	flags.String("keys-file", "", usage("keys-file", "path to a JSON array of key pairs", quoted(d.Auth.Keys.File)))
+	flags.String("aws-region", "", usage("aws-region", "region an AWS-signed request is verified against", d.Auth.AWS.Region))
+	flags.String("aws-service", "", usage("aws-service", "service an AWS-signed request is verified against", d.Auth.AWS.Service))
+
+	// A flag value is visible in the process list, so the environment and the
+	// config file stay the better places for these.
+	flags.StringP("access-key", "a", "", usage("access-key", "access key for signed requests", quoted(d.Auth.AccessKey)))
+	flags.StringP("secret-key", "k", "", usage("secret-key", "secret key for signed requests", quoted(d.Auth.SecretKey)))
+
+	// CORS is applied only once origins are set, so every other cors flag is
+	// inert on its own.
+	flags.StringSlice("cors-origins", nil, usage("cors-origins", "origins allowed to call the server, or *", "none"))
+	flags.StringSlice("cors-methods", nil, usage("cors-methods", "methods allowed cross-origin", "none"))
+	flags.StringSlice("cors-headers", nil, usage("cors-headers", "request headers allowed cross-origin", "none"))
+	flags.StringSlice("cors-expose", nil, usage("cors-expose", "response headers revealed to the page", "none"))
+	flags.Bool("cors-credentials", false, usage("cors-credentials", "allow credentialed cross-origin requests", d.CORS.AllowCredentials))
+	flags.Int("cors-max-age", 0, usage("cors-max-age", "seconds a browser may cache a preflight", d.CORS.MaxAge))
+
+	flags.String("log-level", "", usage("log-level", "log level: debug, info, warn or error", d.Log.Level))
+
+	cmd.AddGroup(
+		&cobra.Group{ID: groupServer, Title: "Server Commands:"},
+		&cobra.Group{ID: groupClient, Title: "Client Commands:"},
+	)
 	cmd.AddCommand(newServeCmd(), newMigrateCmd(), newValidateCmd(), newPopulateCmd())
 
 	return cmd
 }
 
-// groupServer covers everything that runs the server or prepares what it serves
-// from. The client commands are not part of this binary yet.
-const groupServer = "server"
+const (
+	// groupServer runs the server, or prepares what it serves from.
+	groupServer = "server"
+	// groupClient talks to a running server over HTTP.
+	groupClient = "client"
+)
 
 // configFiles returns the config files to read, falling back to the
 // environment. This one setting cannot go through Load the way the others do:
