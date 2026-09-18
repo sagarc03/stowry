@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"path"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -76,11 +77,19 @@ func (s *Service) Create(ctx context.Context, obj types.CreateObject, content io
 		return types.MetaData{}, fmt.Errorf("invalid path %s: %w", obj.Path, ErrInvalidInput)
 	}
 
+	// Create does not make parent directories, and an object path is a whole
+	// directory chain more often than not.
+	if dir := path.Dir(obj.Path); dir != "." {
+		if err := s.storage.MkdirAll(dir, 0o755); err != nil {
+			return types.MetaData{}, fmt.Errorf("create directory %s: %w", dir, err)
+		}
+	}
+
 	file, err := s.storage.Create(obj.Path)
 	if err != nil {
 		return types.MetaData{}, fmt.Errorf("failed to create file %s: %w", obj.Path, err)
 	}
-	defer func() { _ = file.Close }()
+	defer func() { _ = file.Close() }()
 
 	h := sha256.New()
 	w := io.MultiWriter(h, file)

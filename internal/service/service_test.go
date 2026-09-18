@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"strings"
 	"syscall"
 	"testing"
 	"unicode/utf8"
@@ -16,6 +17,7 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 type SpyMetaDataRepo struct {
@@ -946,4 +948,24 @@ func TestIsValidPath(t *testing.T) {
 			}
 		})
 	}
+}
+
+// MemMapFs creates parent directories implicitly; a real one does not. This
+// runs on disk so a nested object path is exercised the way a server sees it.
+func TestStowryService_Create_NestedPathOnDisk(t *testing.T) {
+	storage := afero.NewBasePathFs(afero.NewOsFs(), t.TempDir())
+	svc, repo := NewStowryServiceWithFs(t, storage)
+
+	entry := types.MetaData{Path: "docs/guide/index.html"}
+	repo.On("Upsert", mock.Anything, mock.Anything).Return(entry, true, nil)
+
+	got, err := svc.Create(t.Context(),
+		types.CreateObject{Path: "docs/guide/index.html", ContentType: "text/html"},
+		strings.NewReader("<h1>hi</h1>"))
+	require.NoError(t, err)
+	assert.Equal(t, "docs/guide/index.html", got.Path)
+
+	content, err := afero.ReadFile(storage, "docs/guide/index.html")
+	require.NoError(t, err)
+	assert.Equal(t, "<h1>hi</h1>", string(content))
 }
