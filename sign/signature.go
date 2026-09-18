@@ -20,7 +20,7 @@ const (
 	DateTimeFormat     = "20060102T150405Z"
 	DateFormat         = "20060102"
 
-	// AWS Signature V4 query parameter names
+	// AWS Signature V4 query parameters.
 	AWSAlgorithmParam     = "X-Amz-Algorithm"
 	AWSCredentialParam    = "X-Amz-Credential" //nolint:gosec // This is a param name, not a credential
 	AWSDateParam          = "X-Amz-Date"
@@ -29,38 +29,31 @@ const (
 	AWSSignatureParam     = "X-Amz-Signature"
 )
 
-// SecretStore provides access key lookup for signature verification.
-// Implementations can retrieve keys from various sources (local files, Vault, SSM, etc.).
+// SecretStore looks up the secret for an access key.
 type SecretStore interface {
-	// Lookup retrieves the secret key for the given access key.
-	// Returns the secret key if found, or an error if not found or lookup fails.
 	Lookup(accessKey string) (secretKey string, err error)
 }
 
-// AWSConfig holds AWS-specific configuration for signature verification.
+// AWSConfig is the region and service an AWS-signed request is verified
+// against, such as "us-east-1" and "s3".
 type AWSConfig struct {
-	Region  string `mapstructure:"region"`  // AWS region (e.g., "us-east-1")
-	Service string `mapstructure:"service"` // AWS service name (e.g., "s3")
+	Region  string `mapstructure:"region"`
+	Service string `mapstructure:"service"`
 }
 
-// AuthConfig holds configuration for SignatureVerifier.
+// AuthConfig configures a SignatureVerifier.
 type AuthConfig struct {
 	AWS AWSConfig `mapstructure:"aws"`
 }
 
-// SignatureVerifier verifies signed requests using either AWS Signature V4 or native Stowry signing.
-// It automatically detects the signing scheme from the request query parameters.
+// SignatureVerifier verifies a request signed either way, choosing the scheme
+// from the query parameters.
 type SignatureVerifier struct {
 	stowryVerifier *StowrySignatureVerifier
 	awsVerifier    *AWSSignatureVerifier
 }
 
-// NewSignatureVerifier creates a new unified signature verifier that supports both
-// AWS Signature V4 and native Stowry signing schemes.
-//
-// Parameters:
-//   - cfg: Auth configuration containing region and service
-//   - store: Secret store for retrieving secret keys by access key
+// NewSignatureVerifier returns a verifier accepting both signing schemes.
 func NewSignatureVerifier(cfg AuthConfig, store SecretStore) *SignatureVerifier {
 	return &SignatureVerifier{
 		stowryVerifier: NewStowrySignatureVerifier(store),
@@ -68,12 +61,8 @@ func NewSignatureVerifier(cfg AuthConfig, store SecretStore) *SignatureVerifier 
 	}
 }
 
-// Verify verifies a signed HTTP request using the appropriate signing scheme.
-// It detects the scheme from query parameters:
-//   - X-Stowry-Signature: Uses native Stowry verification
-//   - X-Amz-Signature: Uses AWS Signature V4 verification
-//
-// Returns an error if no supported signature is present or verification fails.
+// Verify checks r against whichever signature it carries, X-Stowry-Signature or
+// X-Amz-Signature. It returns an error if r carries neither.
 func (v *SignatureVerifier) Verify(r *http.Request) error {
 	query := r.URL.Query()
 
@@ -93,18 +82,14 @@ type StowrySignatureVerifier struct {
 	store SecretStore
 }
 
-// NewStowrySignatureVerifier creates a new Stowry signature verifier.
-//
-// Parameters:
-//   - store: Secret store for retrieving secret keys by access key
+// NewStowrySignatureVerifier returns a verifier for Stowry presigned URLs.
 func NewStowrySignatureVerifier(store SecretStore) *StowrySignatureVerifier {
 	return &StowrySignatureVerifier{
 		store: store,
 	}
 }
 
-// Verify verifies a Stowry native presigned URL from an HTTP request.
-// Returns an error if verification fails, nil if signature is valid.
+// Verify checks the Stowry signature on r.
 func (v *StowrySignatureVerifier) Verify(r *http.Request) error {
 	query := r.URL.Query()
 
@@ -156,12 +141,8 @@ type AWSSignatureVerifier struct {
 	store   SecretStore
 }
 
-// NewAWSSignatureVerifier creates a new AWS signature verifier.
-//
-// Parameters:
-//   - region: AWS region (e.g., "us-east-1")
-//   - service: AWS service name (e.g., "s3")
-//   - store: Secret store for retrieving secret keys by access key
+// NewAWSSignatureVerifier returns a verifier for AWS Signature V4 presigned
+// URLs scoped to region and service.
 func NewAWSSignatureVerifier(region, service string, store SecretStore) *AWSSignatureVerifier {
 	return &AWSSignatureVerifier{
 		Region:  region,
@@ -170,8 +151,7 @@ func NewAWSSignatureVerifier(region, service string, store SecretStore) *AWSSign
 	}
 }
 
-// Verify verifies an AWS Signature V4 presigned URL from an HTTP request.
-// Returns an error if verification fails, nil if signature is valid.
+// Verify checks the AWS Signature V4 on r.
 func (v *AWSSignatureVerifier) Verify(r *http.Request) error {
 	query := r.URL.Query()
 	headers := r.Header.Clone()
@@ -329,18 +309,15 @@ func buildCanonicalRequest(method, path string, query url.Values, headers http.H
 	)
 }
 
-// buildCanonicalHeaders builds the canonical headers string from the signed headers list.
-// Headers are sorted alphabetically and formatted as "name:value\n".
+// buildCanonicalHeaders renders the signed headers as sorted "name:value\n"
+// lines, the form AWS signs over.
 func buildCanonicalHeaders(headers http.Header, signedHeaders string) string {
 	headerNames := strings.Split(signedHeaders, ";")
 	sort.Strings(headerNames)
 
 	var result strings.Builder
 	for _, name := range headerNames {
-		// Header names in signedHeaders are lowercase
-		value := headers.Get(name)
-		// Trim whitespace and collapse multiple spaces
-		value = strings.TrimSpace(value)
+		value := strings.TrimSpace(headers.Get(name))
 		result.WriteString(name)
 		result.WriteString(":")
 		result.WriteString(value)

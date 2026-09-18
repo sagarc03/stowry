@@ -2,23 +2,21 @@ package sign
 
 import (
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
 
-// Client generates presigned URLs for Stowry.
-//
-// A Client is safe for concurrent use by multiple goroutines.
+// Client generates presigned URLs. It is safe for concurrent use.
 type Client struct {
 	endpoint  string
 	accessKey string
 	secretKey string
 }
 
-// NewClient creates a Client for generating presigned URLs.
-//
-// The endpoint is the base URL of your Stowry server (e.g., "https://storage.example.com").
-// Trailing slashes are automatically trimmed.
+// NewClient returns a Client signing for endpoint, the server's base URL. A
+// trailing slash is trimmed.
 func NewClient(endpoint, accessKey, secretKey string) *Client {
 	return &Client{
 		endpoint:  strings.TrimSuffix(endpoint, "/"),
@@ -27,30 +25,47 @@ func NewClient(endpoint, accessKey, secretKey string) *Client {
 	}
 }
 
-// PresignGet generates a presigned URL for downloading an object.
-//
-// The path should include any bucket or prefix (e.g., "/bucket/path/to/file.pdf").
-// Paths without a leading slash are automatically normalized.
-//
-// The expires parameter specifies the validity period in seconds. Values <= 0
-// default to [DefaultExpires] (900 seconds). Values exceeding [MaxExpires]
-// (604800 seconds) are capped.
+// PresignGet returns a presigned URL for downloading path. A missing leading
+// slash is added. expires is in seconds: zero or less means [DefaultExpires],
+// and anything above [MaxExpires] is capped.
 func (c *Client) PresignGet(path string, expires int) string {
 	return c.preSign("GET", path, expires)
 }
 
-// PresignPut generates a presigned URL for uploading an object.
-//
-// See [Client.PresignGet] for parameter details.
+// PresignPut returns a presigned URL for uploading path.
+// See [Client.PresignGet] for the parameters.
 func (c *Client) PresignPut(path string, expires int) string {
 	return c.preSign("PUT", path, expires)
 }
 
-// PresignDelete generates a presigned URL for deleting an object.
-//
-// See [Client.PresignGet] for parameter details.
+// PresignDelete returns a presigned URL for deleting path.
+// See [Client.PresignGet] for the parameters.
 func (c *Client) PresignDelete(path string, expires int) string {
 	return c.preSign("DELETE", path, expires)
+}
+
+// PresignList returns a presigned URL for listing objects. The signature covers
+// the root path only, so prefix, limit and cursor are appended after signing. A
+// limit of zero is omitted, leaving the server its own default.
+func (c *Client) PresignList(prefix string, limit int, cursor string, expires int) string {
+	signed := c.preSign("GET", "/", expires)
+
+	extra := url.Values{}
+	if prefix != "" {
+		extra.Set("prefix", prefix)
+	}
+	if limit > 0 {
+		extra.Set("limit", strconv.Itoa(limit))
+	}
+	if cursor != "" {
+		extra.Set("cursor", cursor)
+	}
+
+	if len(extra) == 0 {
+		return signed
+	}
+
+	return signed + "&" + extra.Encode()
 }
 
 func (c *Client) preSign(method, path string, expires int) string {
@@ -68,7 +83,6 @@ func (c *Client) preSign(method, path string, expires int) string {
 	timestamp := time.Now().Unix()
 	signature := Sign(c.secretKey, method, path, timestamp, int64(expires))
 
-	// Query params sorted alphabetically
 	return fmt.Sprintf("%s%s?%s=%s&%s=%d&%s=%d&%s=%s",
 		c.endpoint, path,
 		StowryCredentialParam, c.accessKey,
