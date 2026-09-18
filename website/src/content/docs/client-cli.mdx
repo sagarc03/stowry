@@ -21,8 +21,9 @@ server verifies.
 ### Server mode awareness
 
 `upload`, `delete` and `list` are routed only in `store` mode. In `static` and
-`spa` modes the server serves reads and nothing else, so those three return
-`405 Method Not Allowed`. `download` works in every mode.
+`spa` modes `upload` and `delete` return `405 Method Not Allowed`, and `list`
+fails to parse the response: with no list route, `GET /` serves the index
+document instead of JSON. `download` works in every mode.
 
 To publish content to a static or spa server, put the files in its storage
 directory and run [`stowry populate`](cli-reference#populate).
