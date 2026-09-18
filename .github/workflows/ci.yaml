@@ -69,19 +69,11 @@ jobs:
         with:
           go-version-file: go.mod
 
-      # database/postgres and e2e packages use testcontainers-go which requires
-      # Docker. Only GitHub's Ubuntu runners have Docker pre-installed; macOS and
-      # Windows runners do not, so those packages are excluded on non-Linux OSes.
+      # The PostgreSQL tests need a container runtime, which only GitHub's Ubuntu
+      # runners have. They skip themselves elsewhere, so the same command runs
+      # on every OS.
       - name: Run tests
-        if: runner.os == 'Linux'
         run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
-
-      - name: Run tests (no Docker)
-        if: runner.os != 'Linux'
-        shell: bash
-        run: |
-          packages=$(go list ./... | grep -v -E '(database/postgres|e2e)')
-          go test -race $packages
 
       - name: Upload coverage
         if: matrix.os == 'ubuntu-latest'

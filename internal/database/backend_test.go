@@ -203,6 +203,9 @@ var (
 
 // sharedPostgres returns a pool for the package's PostgreSQL container,
 // starting it on first use. TestMain tears it down.
+//
+// The container needs a container runtime, which the macOS and Windows CI
+// runners do not have, so its absence skips rather than fails.
 func sharedPostgres(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 
@@ -236,7 +239,13 @@ func sharedPostgres(t *testing.T) *pgxpool.Pool {
 		postgresPool = pool
 	})
 
-	require.NoError(t, postgresErr)
+	if postgresErr != nil {
+		if _, lookErr := testcontainers.NewDockerClientWithOpts(context.Background()); lookErr != nil {
+			t.Skipf("no container runtime: %v", lookErr)
+		}
+
+		require.NoError(t, postgresErr)
+	}
 
 	return postgresPool
 }
