@@ -1,0 +1,699 @@
+package client_test
+
+import (
+	"context"
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+	"uuid"
+
+	"github.com/sagarc03/stowry/internal/client"
+	"github.com/sagarc03/stowry/types"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestNew(t *testing.T) {
+	t.Run("valid config", func(t *testing.T) {
+		cfg := &client.Config{
+			Endpoint:  "http://localhost:5708",
+			AccessKey: "test-key",
+			SecretKey: "test-secret",
+		}
+
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+		assert.NotNil(t, c)
+	})
+
+	t.Run("empty endpoint uses default", func(t *testing.T) {
+		cfg := &client.Config{}
+
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+		assert.NotNil(t, c)
+	})
+
+	t.Run("trailing slash removed from endpoint", func(t *testing.T) {
+		cfg := &client.Config{
+			Endpoint: "http://localhost:5708/",
+		}
+
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+		assert.NotNil(t, c)
+	})
+}
+
+func TestClient_Upload(t *testing.T) {
+	t.Run("successful upload", func(t *testing.T) {
+		// Create mock server
+		expectedID := uuid.New()
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodPut, r.Method)
+			assert.Contains(t, r.URL.Path, "/test/file.txt")
+			assert.Equal(t, "text/plain; charset=utf-8", r.Header.Get("Content-Type"))
+
+			// Read body to verify content
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			assert.Equal(t, "test content", string(body))
+
+			// Return metadata response
+			resp := map[string]any{
+				"id":              expectedID.String(),
+				"path":            "test/file.txt",
+				"content_type":    "text/plain; charset=utf-8",
+				"etag":            "abc123",
+				"file_size_bytes": 12,
+				"created_at":      time.Now().Format(time.RFC3339),
+				"updated_at":      time.Now().Format(time.RFC3339),
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		// Create temp file
+		tmpDir := t.TempDir()
+		localPath := filepath.Join(tmpDir, "file.txt")
+		err := os.WriteFile(localPath, []byte("test content"), 0o600)
+		require.NoError(t, err)
+
+		// Create c
+		cfg := &client.Config{
+			Endpoint:  server.URL,
+			AccessKey: "test-key",
+			SecretKey: "test-secret",
+		}
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+
+		// Upload
+		results, err := c.Upload(context.Background(), types.UploadOptions{
+			LocalPath:  localPath,
+			RemotePath: "test/file.txt",
+		})
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+
+		result := results[0]
+		assert.Equal(t, localPath, result.LocalPath)
+		assert.Equal(t, "test/file.txt", result.RemotePath)
+		assert.Equal(t, expectedID, result.ID)
+		assert.Equal(t, "abc123", result.ETag)
+		assert.Nil(t, result.Err)
+	})
+
+	t.Run("upload error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"error": "internal_error", "message": "Something went wrong"}`))
+		}))
+		defer server.Close()
+
+		// Create temp file
+		tmpDir := t.TempDir()
+		localPath := filepath.Join(tmpDir, "file.txt")
+		err := os.WriteFile(localPath, []byte("test content"), 0o600)
+		require.NoError(t, err)
+
+		cfg := &client.Config{
+			Endpoint:  server.URL,
+			AccessKey: "test-key",
+			SecretKey: "test-secret",
+		}
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+
+		_, err = c.Upload(context.Background(), types.UploadOptions{
+			LocalPath:  localPath,
+			RemotePath: "test/file.txt",
+		})
+		assert.Error(t, err)
+	})
+}
+
+func TestClient_Download(t *testing.T) {
+	t.Run("successful download to file", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method)
+
+			w.Header().Set("ETag", `"etag123"`)
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte("downloaded content"))
+		}))
+		defer server.Close()
+
+		cfg := &client.Config{
+			Endpoint:  server.URL,
+			AccessKey: "test-key",
+			SecretKey: "test-secret",
+		}
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+
+		tmpDir := t.TempDir()
+		localPath := filepath.Join(tmpDir, "downloaded.txt")
+
+		result, reader, err := c.Download(context.Background(), types.DownloadOptions{
+			RemotePath: "test/file.txt",
+			LocalPath:  localPath,
+		})
+		require.NoError(t, err)
+		assert.Nil(t, reader)
+		assert.Equal(t, "etag123", result.ETag)
+		assert.Equal(t, "text/plain", result.ContentType)
+
+		// Verify file content
+		content, err := os.ReadFile(localPath)
+		require.NoError(t, err)
+		assert.Equal(t, "downloaded content", string(content))
+	})
+
+	t.Run("download to stdout returns reader", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("ETag", `"etag123"`)
+			w.Header().Set("Content-Type", "text/plain")
+			_, _ = w.Write([]byte("stdout content"))
+		}))
+		defer server.Close()
+
+		cfg := &client.Config{
+			Endpoint:  server.URL,
+			AccessKey: "test-key",
+			SecretKey: "test-secret",
+		}
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+
+		result, reader, err := c.Download(context.Background(), types.DownloadOptions{
+			RemotePath: "test/file.txt",
+			LocalPath:  "-",
+		})
+		require.NoError(t, err)
+		require.NotNil(t, reader)
+		defer func() { _ = reader.Close() }()
+
+		assert.Equal(t, "-", result.LocalPath)
+
+		content, err := io.ReadAll(reader)
+		require.NoError(t, err)
+		assert.Equal(t, "stdout content", string(content))
+	})
+
+	t.Run("download 404 error", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error": "not_found", "message": "Object not found"}`))
+		}))
+		defer server.Close()
+
+		cfg := &client.Config{
+			Endpoint:  server.URL,
+			AccessKey: "test-key",
+			SecretKey: "test-secret",
+		}
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+
+		_, _, err = c.Download(context.Background(), types.DownloadOptions{
+			RemotePath: "nonexistent/file.txt",
+			LocalPath:  "-",
+		})
+		assert.Error(t, err)
+	})
+}
+
+func TestClient_Delete(t *testing.T) {
+	t.Run("successful delete", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method)
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer server.Close()
+
+		cfg := &client.Config{
+			Endpoint:  server.URL,
+			AccessKey: "test-key",
+			SecretKey: "test-secret",
+		}
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+
+		results, err := c.Delete(context.Background(), types.DeleteOptions{
+			Paths: []string{"test/file.txt"},
+		})
+		require.NoError(t, err)
+		require.Len(t, results, 1)
+
+		assert.Equal(t, "test/file.txt", results[0].Path)
+		assert.True(t, results[0].Deleted)
+		assert.Nil(t, results[0].Err)
+	})
+
+	t.Run("delete not found", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error": "not_found"}`))
+		}))
+		defer server.Close()
+
+		cfg := &client.Config{
+			Endpoint:  server.URL,
+			AccessKey: "test-key",
+			SecretKey: "test-secret",
+		}
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+
+		results, err := c.Delete(context.Background(), types.DeleteOptions{
+			Paths: []string{"nonexistent.txt"},
+		})
+
+		// Every path is still attempted and reported, and the failure also
+		// reaches the error, so checking only err cannot miss it.
+		require.Len(t, results, 1)
+		assert.False(t, results[0].Deleted)
+		assert.NotNil(t, results[0].Err)
+
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "nonexistent.txt")
+		assert.ErrorIs(t, err, client.ErrNotFound, "the per-path cause stays reachable")
+	})
+
+	t.Run("empty paths error", func(t *testing.T) {
+		cfg := &client.Config{
+			Endpoint:  "http://localhost",
+			AccessKey: "test-key",
+			SecretKey: "test-secret",
+		}
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+
+		_, err = c.Delete(context.Background(), types.DeleteOptions{
+			Paths: []string{},
+		})
+		assert.Error(t, err)
+	})
+}
+
+func TestClient_List(t *testing.T) {
+	t.Run("successful list", func(t *testing.T) {
+		id1 := uuid.New()
+		id2 := uuid.New()
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method)
+			assert.Equal(t, "/", r.URL.Path)
+
+			resp := map[string]any{
+				"items": []map[string]any{
+					{
+						"id":              id1.String(),
+						"path":            "file1.txt",
+						"content_type":    "text/plain",
+						"etag":            "etag1",
+						"file_size_bytes": 100,
+						"created_at":      time.Now().Format(time.RFC3339),
+						"updated_at":      time.Now().Format(time.RFC3339),
+					},
+					{
+						"id":              id2.String(),
+						"path":            "file2.txt",
+						"content_type":    "text/plain",
+						"etag":            "etag2",
+						"file_size_bytes": 200,
+						"created_at":      time.Now().Format(time.RFC3339),
+						"updated_at":      time.Now().Format(time.RFC3339),
+					},
+				},
+				"next_cursor": "cursor123",
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		cfg := &client.Config{
+			Endpoint:  server.URL,
+			AccessKey: "test-key",
+			SecretKey: "test-secret",
+		}
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+
+		result, err := c.List(context.Background(), types.ListOptions{
+			Limit: 100,
+		})
+		require.NoError(t, err)
+
+		assert.Len(t, result.Items, 2)
+		assert.Equal(t, "file1.txt", result.Items[0].Path)
+		assert.Equal(t, "file2.txt", result.Items[1].Path)
+		assert.Equal(t, "cursor123", result.NextCursor)
+		assert.Equal(t, int64(300), result.TotalSize())
+	})
+
+	t.Run("list with prefix", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, "images/", r.URL.Query().Get("prefix"))
+
+			resp := map[string]any{
+				"items": []map[string]any{},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		cfg := &client.Config{
+			Endpoint:  server.URL,
+			AccessKey: "test-key",
+			SecretKey: "test-secret",
+		}
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+
+		_, err = c.List(context.Background(), types.ListOptions{
+			Prefix: "images/",
+		})
+		require.NoError(t, err)
+	})
+}
+
+func TestHasDeleteErrors(t *testing.T) {
+	t.Run("no errors", func(t *testing.T) {
+		results := []types.DeleteResult{
+			{Path: "a.txt", Deleted: true},
+			{Path: "b.txt", Deleted: true},
+		}
+		assert.False(t, client.HasDeleteErrors(results))
+	})
+
+	t.Run("has errors", func(t *testing.T) {
+		results := []types.DeleteResult{
+			{Path: "a.txt", Deleted: true},
+			{Path: "b.txt", Deleted: false, Err: assert.AnError},
+		}
+		assert.True(t, client.HasDeleteErrors(results))
+	})
+
+	t.Run("empty results", func(t *testing.T) {
+		var results []types.DeleteResult
+		assert.False(t, client.HasDeleteErrors(results))
+	})
+}
+
+func TestNormalizeLocalToRemotePath(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"simple file", "file.txt", "file.txt"},
+		{"with leading dot slash", "./file.txt", "file.txt"},
+		{"nested with dot slash", "./images/photo.jpg", "images/photo.jpg"},
+		{"absolute path", "/abs/path/file.txt", "abs/path/file.txt"},
+		{"parent traversal", "../sibling/file.txt", "sibling/file.txt"},
+		{"multiple parent traversal", "../../other/file.txt", "other/file.txt"},
+		{"mixed traversal", "./foo/../bar/file.txt", "bar/file.txt"},
+		{"deep nested", "./a/b/c/d/file.txt", "a/b/c/d/file.txt"},
+		{"just dot", ".", ""},
+		{"just double dot", "..", ""},
+		{"trailing slash directory", "./images/", "images"},
+		{"nested directory no slash", "./path/to/dir", "path/to/dir"},
+		{"absolute with trailing slash", "/abs/path/", "abs/path"},
+		{"parent then nested", "../foo/bar/baz.txt", "foo/bar/baz.txt"},
+		{"current dir reference", "./foo/./bar/file.txt", "foo/bar/file.txt"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := client.NormalizeLocalToRemotePath(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestNew_Options(t *testing.T) {
+	t.Run("nil config returns error", func(t *testing.T) {
+		c, err := client.New(nil)
+		assert.Error(t, err)
+		assert.Nil(t, c)
+		assert.Contains(t, err.Error(), "config is required")
+	})
+
+	t.Run("with custom http c", func(t *testing.T) {
+		cfg := &client.Config{Endpoint: "http://localhost:5708"}
+		customClient := &http.Client{Timeout: 60 * time.Second}
+
+		c, err := client.New(cfg, client.WithHTTPClient(customClient))
+		require.NoError(t, err)
+		assert.NotNil(t, c)
+	})
+
+	t.Run("with custom timeout", func(t *testing.T) {
+		cfg := &client.Config{Endpoint: "http://localhost:5708"}
+
+		c, err := client.New(cfg, client.WithTimeout(60*time.Second))
+		require.NoError(t, err)
+		assert.NotNil(t, c)
+	})
+}
+
+func TestAPIError_Is(t *testing.T) {
+	t.Run("matches same status code", func(t *testing.T) {
+		err := &client.APIError{StatusCode: 404, Body: "not found"}
+		assert.ErrorIs(t, err, client.ErrNotFound)
+	})
+
+	t.Run("does not match different status code", func(t *testing.T) {
+		err := &client.APIError{StatusCode: 500, Body: "server error"}
+		assert.NotErrorIs(t, err, client.ErrNotFound)
+	})
+
+	t.Run("does not match non-APIError", func(t *testing.T) {
+		err := &client.APIError{StatusCode: 404, Body: "not found"}
+		assert.NotErrorIs(t, err, io.EOF)
+	})
+
+	t.Run("401 matches ErrUnauthorized", func(t *testing.T) {
+		err := &client.APIError{StatusCode: 401, Body: "invalid credentials"}
+		assert.ErrorIs(t, err, client.ErrUnauthorized)
+	})
+
+	t.Run("403 matches ErrForbidden", func(t *testing.T) {
+		err := &client.APIError{StatusCode: 403, Body: "access denied"}
+		assert.ErrorIs(t, err, client.ErrForbidden)
+	})
+}
+
+func TestClient_Upload_Validation(t *testing.T) {
+	t.Run("empty local path returns error", func(t *testing.T) {
+		cfg := &client.Config{Endpoint: "http://localhost:5708"}
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+
+		_, err = c.Upload(context.Background(), types.UploadOptions{
+			LocalPath: "",
+		})
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, client.ErrEmptyPath)
+	})
+}
+
+func TestClient_Download_Validation(t *testing.T) {
+	t.Run("empty remote path returns error", func(t *testing.T) {
+		cfg := &client.Config{Endpoint: "http://localhost:5708"}
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+
+		_, _, err = c.Download(context.Background(), types.DownloadOptions{
+			RemotePath: "",
+		})
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, client.ErrEmptyPath)
+	})
+}
+
+func TestClient_Delete_Validation(t *testing.T) {
+	t.Run("empty paths returns error", func(t *testing.T) {
+		cfg := &client.Config{Endpoint: "http://localhost:5708"}
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+
+		_, err = c.Delete(context.Background(), types.DeleteOptions{
+			Paths: []string{},
+		})
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, client.ErrNoPaths)
+	})
+}
+
+func TestAPIError_Error(t *testing.T) {
+	err := &client.APIError{StatusCode: 404, Body: "not found"}
+	assert.Equal(t, "server error: 404 - not found", err.Error())
+}
+
+func TestAPIError_IsNotFound(t *testing.T) {
+	t.Run("404 is not found", func(t *testing.T) {
+		err := &client.APIError{StatusCode: 404, Body: "not found"}
+		assert.True(t, err.IsNotFound())
+	})
+
+	t.Run("500 is not not found", func(t *testing.T) {
+		err := &client.APIError{StatusCode: 500, Body: "server error"}
+		assert.False(t, err.IsNotFound())
+	})
+}
+
+func TestClient_List_All(t *testing.T) {
+	t.Run("fetches all pages", func(t *testing.T) {
+		callCount := 0
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			callCount++
+			var resp map[string]any
+
+			if callCount == 1 {
+				resp = map[string]any{
+					"items": []map[string]any{
+						{
+							"id":              uuid.New().String(),
+							"path":            "file1.txt",
+							"content_type":    "text/plain",
+							"etag":            "etag1",
+							"file_size_bytes": 100,
+							"created_at":      time.Now().Format(time.RFC3339),
+							"updated_at":      time.Now().Format(time.RFC3339),
+						},
+					},
+					"next_cursor": "cursor123",
+				}
+			} else {
+				resp = map[string]any{
+					"items": []map[string]any{
+						{
+							"id":              uuid.New().String(),
+							"path":            "file2.txt",
+							"content_type":    "text/plain",
+							"etag":            "etag2",
+							"file_size_bytes": 200,
+							"created_at":      time.Now().Format(time.RFC3339),
+							"updated_at":      time.Now().Format(time.RFC3339),
+						},
+					},
+				}
+			}
+
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		cfg := &client.Config{
+			Endpoint:  server.URL,
+			AccessKey: "test-key",
+			SecretKey: "test-secret",
+		}
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+
+		result, err := c.List(context.Background(), types.ListOptions{
+			All: true,
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, 2, callCount)
+		assert.Len(t, result.Items, 2)
+		assert.Equal(t, "file1.txt", result.Items[0].Path)
+		assert.Equal(t, "file2.txt", result.Items[1].Path)
+		assert.Empty(t, result.NextCursor)
+	})
+}
+
+func TestClient_Upload_Recursive(t *testing.T) {
+	t.Run("uploads directory recursively", func(t *testing.T) {
+		uploadedFiles := make(map[string]bool)
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			uploadedFiles[r.URL.Path] = true
+
+			resp := map[string]any{
+				"id":              uuid.New().String(),
+				"path":            r.URL.Path,
+				"content_type":    "text/plain",
+				"etag":            "etag",
+				"file_size_bytes": 100,
+				"created_at":      time.Now().Format(time.RFC3339),
+				"updated_at":      time.Now().Format(time.RFC3339),
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		// Create temp directory with files
+		tmpDir := t.TempDir()
+		subDir := filepath.Join(tmpDir, "subdir")
+		require.NoError(t, os.MkdirAll(subDir, 0o750))
+		require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "file1.txt"), []byte("content1"), 0o600))
+		require.NoError(t, os.WriteFile(filepath.Join(subDir, "file2.txt"), []byte("content2"), 0o600))
+
+		cfg := &client.Config{
+			Endpoint:  server.URL,
+			AccessKey: "test-key",
+			SecretKey: "test-secret",
+		}
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+
+		results, err := c.Upload(context.Background(), types.UploadOptions{
+			LocalPath:  tmpDir,
+			RemotePath: "uploads",
+			Recursive:  true,
+		})
+		require.NoError(t, err)
+		assert.Len(t, results, 2)
+	})
+
+	t.Run("recursive on single file uploads single file", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			resp := map[string]any{
+				"id":              uuid.New().String(),
+				"path":            r.URL.Path,
+				"content_type":    "text/plain",
+				"etag":            "etag",
+				"file_size_bytes": 100,
+				"created_at":      time.Now().Format(time.RFC3339),
+				"updated_at":      time.Now().Format(time.RFC3339),
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(resp)
+		}))
+		defer server.Close()
+
+		tmpDir := t.TempDir()
+		filePath := filepath.Join(tmpDir, "file.txt")
+		require.NoError(t, os.WriteFile(filePath, []byte("content"), 0o600))
+
+		cfg := &client.Config{
+			Endpoint:  server.URL,
+			AccessKey: "test-key",
+			SecretKey: "test-secret",
+		}
+		c, err := client.New(cfg)
+		require.NoError(t, err)
+
+		results, err := c.Upload(context.Background(), types.UploadOptions{
+			LocalPath:  filePath,
+			RemotePath: "file.txt",
+			Recursive:  true,
+		})
+		require.NoError(t, err)
+		assert.Len(t, results, 1)
+	})
+}
