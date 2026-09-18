@@ -3,9 +3,12 @@ package service_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"io/fs"
+	pathpkg "path"
 	"strings"
 	"syscall"
 	"testing"
@@ -967,4 +970,151 @@ func TestStowryService_Create_NestedPathOnDisk(t *testing.T) {
 	content, err := afero.ReadFile(storage, "docs/guide/index.html")
 	require.NoError(t, err)
 	assert.Equal(t, "<h1>hi</h1>", string(content))
+}
+
+func TestStowryService_Populate(t *testing.T) {
+	newPopulated := func(t *testing.T, files map[string]string) (*service.Service, *SpyMetaDataRepo, afero.Fs) {
+		t.Helper()
+
+		storage := afero.NewBasePathFs(afero.NewOsFs(), t.TempDir())
+		for name, content := range files {
+			require.NoError(t, storage.MkdirAll(pathpkg.Dir(name), 0o755))
+			require.NoError(t, afero.WriteFile(storage, name, []byte(content), 0o600))
+		}
+
+		svc, repo := NewStowryServiceWithFs(t, storage)
+
+		return svc, repo, storage
+	}
+
+	upserted := func(repo *SpyMetaDataRepo, into *[]types.ObjectEntry) *mock.Call {
+		return repo.On("Upsert", mock.Anything, mock.Anything).
+			Run(func(args mock.Arguments) {
+				*into = append(*into, args.Get(1).(types.ObjectEntry))
+			}).
+			Return(types.MetaData{}, true, nil)
+	}
+
+	t.Run("records every file under the storage root", func(t *testing.T) {
+		svc, repo, _ := newPopulated(t, map[string]string{
+			"index.html":         "<h1>home</h1>",
+			"assets/app.css":     "body{}",
+			"docs/deep/guide.md": "deep doc",
+		})
+
+		var got []types.ObjectEntry
+		upserted(repo, &got)
+
+		entries, err := svc.Populate(t.Context())
+		require.NoError(t, err)
+		assert.Len(t, entries, 3)
+
+		paths := make([]string, 0, len(got))
+		for _, e := range got {
+			paths = append(paths, e.Path)
+		}
+
+		assert.ElementsMatch(t,
+			[]string{"index.html", "assets/app.css", "docs/deep/guide.md"},
+			paths)
+	})
+
+	t.Run("records size, sha256 etag and a guessed content type", func(t *testing.T) {
+		svc, repo, _ := newPopulated(t, map[string]string{"assets/app.css": "body{}"})
+
+		var got []types.ObjectEntry
+		upserted(repo, &got)
+
+		_, err := svc.Populate(t.Context())
+		require.NoError(t, err)
+		require.Len(t, got, 1)
+
+		sum := sha256.Sum256([]byte("body{}"))
+		assert.Equal(t, int64(len("body{}")), got[0].Size)
+		assert.Equal(t, hex.EncodeToString(sum[:]), got[0].ETag)
+		assert.Contains(t, got[0].ContentType, "text/css")
+	})
+
+	t.Run("an unknown extension is recorded as opaque bytes", func(t *testing.T) {
+		svc, repo, _ := newPopulated(t, map[string]string{"blob.zzzz": "x"})
+
+		var got []types.ObjectEntry
+		upserted(repo, &got)
+
+		_, err := svc.Populate(t.Context())
+		require.NoError(t, err)
+		require.Len(t, got, 1)
+		assert.Equal(t, "application/octet-stream", got[0].ContentType)
+	})
+
+	t.Run("nothing is written to storage", func(t *testing.T) {
+		svc, repo, storage := newPopulated(t, map[string]string{"a.txt": "one"})
+
+		repo.On("Upsert", mock.Anything, mock.Anything).Return(types.MetaData{}, true, nil)
+
+		_, err := svc.Populate(t.Context())
+		require.NoError(t, err)
+
+		content, err := afero.ReadFile(storage, "a.txt")
+		require.NoError(t, err)
+		assert.Equal(t, "one", string(content))
+
+		names, err := afero.Glob(storage, "*")
+		require.NoError(t, err)
+		assert.Equal(t, []string{"a.txt"}, names)
+	})
+
+	t.Run("an empty storage root records nothing", func(t *testing.T) {
+		svc, repo, _ := newPopulated(t, nil)
+
+		entries, err := svc.Populate(t.Context())
+		require.NoError(t, err)
+		assert.Empty(t, entries)
+
+		repo.AssertNotCalled(t, "Upsert", mock.Anything, mock.Anything)
+	})
+
+	t.Run("a file that cannot be served stops the run", func(t *testing.T) {
+		// The walk is lexical, so fine.txt is recorded before we?ird.txt fails.
+		svc, repo, _ := newPopulated(t, map[string]string{
+			"fine.txt":   "ok",
+			"we?ird.txt": "rejected by the path rules",
+		})
+
+		repo.On("Upsert", mock.Anything, mock.Anything).Once().Return(types.MetaData{}, true, nil)
+
+		entries, err := svc.Populate(t.Context())
+
+		require.ErrorIs(t, err, service.ErrInvalidInput)
+		assert.ErrorContains(t, err, "we?ird.txt")
+		assert.Len(t, entries, 1)
+
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("a repository failure stops the run", func(t *testing.T) {
+		svc, repo, _ := newPopulated(t, map[string]string{"a.txt": "one", "b.txt": "two"})
+
+		wantErr := errors.New("database is down")
+		repo.On("Upsert", mock.Anything, mock.Anything).Once().Return(types.MetaData{}, false, wantErr)
+
+		entries, err := svc.Populate(t.Context())
+
+		require.ErrorIs(t, err, wantErr)
+		assert.Empty(t, entries)
+
+		repo.AssertExpectations(t)
+	})
+
+	t.Run("a cancelled context is refused", func(t *testing.T) {
+		svc, repo, _ := newPopulated(t, map[string]string{"a.txt": "one"})
+
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+
+		_, err := svc.Populate(ctx)
+
+		require.ErrorIs(t, err, context.Canceled)
+		repo.AssertNotCalled(t, "Upsert", mock.Anything, mock.Anything)
+	})
 }

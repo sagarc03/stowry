@@ -37,8 +37,9 @@ func newServeCmd() *cobra.Command {
 		RunE:  runServe,
 	}
 
-	cmd.Flags().Int("port", 5708, "HTTP server port")
-	cmd.Flags().String("mode", "store", "server mode (store, static, spa)")
+	d := config.Defaults()
+	cmd.Flags().Int("port", 0, fmt.Sprintf("HTTP server port (default %d)", d.Server.Port))
+	cmd.Flags().String("mode", "", fmt.Sprintf("server mode: store, static or spa (default %s)", d.Server.Mode))
 
 	return cmd
 }

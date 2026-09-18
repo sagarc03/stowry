@@ -2,6 +2,8 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"github.com/sagarc03/stowry/internal/config"
@@ -44,13 +46,18 @@ is compatible with the AWS SDKs for generating presigned URLs.`,
 		},
 	}
 
-	flags := cmd.PersistentFlags()
-	flags.StringSliceP("config", "c", nil, "config file paths, merged left to right (default: ./config.yaml)")
-	flags.String("db-type", "", "database type: sqlite or postgres")
-	flags.String("db-dsn", "", "database connection string")
-	flags.String("storage-path", "", "storage directory path")
+	// The flags themselves default to zero so that an unset one never overrides
+	// the file or the environment; the real defaults are config.Defaults, and
+	// the usage text is built from them so the two cannot drift.
+	d := config.Defaults()
 
-	cmd.AddCommand(newServeCmd())
+	flags := cmd.PersistentFlags()
+	flags.StringSliceP("config", "c", nil, "config file paths, merged left to right (default ./config.yaml)")
+	flags.String("db-type", "", fmt.Sprintf("database type: sqlite or postgres (default %s)", d.Database.Type))
+	flags.StringP("db-dsn", "d", "", fmt.Sprintf("database connection string (default %q)", d.Database.DSN))
+	flags.StringP("storage-path", "s", "", fmt.Sprintf("storage directory path (default %q)", d.Storage.Path))
+
+	cmd.AddCommand(newServeCmd(), newPopulateCmd())
 
 	return cmd
 }

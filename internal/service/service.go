@@ -7,6 +7,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"mime"
+	"os"
 	"path"
 	"strings"
 	"unicode"
@@ -194,6 +196,93 @@ func (s *Service) List(ctx context.Context, q types.ListQuery) (types.ListResult
 	}
 
 	return result, nil
+}
+
+// Populate records metadata for the files already in storage, so a directory
+// of existing files can be served without uploading anything. The files are
+// only read: their layout under the storage root becomes the object paths.
+// An entry that already exists is updated in place.
+//
+// It stops at the first file it cannot record, returning the entries written
+// before it.
+func (s *Service) Populate(ctx context.Context) ([]types.MetaData, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, fmt.Errorf("context: %w", err)
+	}
+
+	// Walking from "." is what yields object paths: relative to the storage
+	// root, slash-separated, no leading slash.
+	var paths []string
+
+	err := afero.Walk(s.storage, ".", func(name string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !info.IsDir() {
+			paths = append(paths, name)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list storage: %w", err)
+	}
+
+	entries := make([]types.MetaData, 0, len(paths))
+
+	for _, p := range paths {
+		m, err := s.populateOne(ctx, p)
+		if err != nil {
+			return entries, err
+		}
+
+		entries = append(entries, m)
+	}
+
+	return entries, nil
+}
+
+// populateOne hashes one stored file and records what it found.
+func (s *Service) populateOne(ctx context.Context, p string) (types.MetaData, error) {
+	if !IsValidPath(p) {
+		return types.MetaData{}, fmt.Errorf("invalid path %s: %w", p, ErrInvalidInput)
+	}
+
+	file, err := s.storage.Open(p)
+	if err != nil {
+		return types.MetaData{}, fmt.Errorf("open file %s: %w", p, err)
+	}
+	defer func() { _ = file.Close() }()
+
+	h := sha256.New()
+
+	n, err := io.Copy(h, file)
+	if err != nil {
+		return types.MetaData{}, fmt.Errorf("read file %s: %w", p, err)
+	}
+
+	m, _, err := s.repo.Upsert(ctx, types.ObjectEntry{
+		Path:        p,
+		Size:        n,
+		ETag:        hex.EncodeToString(h.Sum(nil)),
+		ContentType: contentType(p),
+	})
+	if err != nil {
+		return types.MetaData{}, fmt.Errorf("upsert failed %s: %w", p, err)
+	}
+
+	return m, nil
+}
+
+// contentType guesses from the extension, since a file on disk carries none of
+// its own.
+func contentType(name string) string {
+	if ct := mime.TypeByExtension(path.Ext(name)); ct != "" {
+		return ct
+	}
+
+	return "application/octet-stream"
 }
 
 // IsValidPath reports whether p is usable as a storage path. A valid path is
