@@ -50,8 +50,14 @@ type Tables struct {
 }
 
 type Storage struct {
+	// Path is the object directory, or MemoryPath.
 	Path string `mapstructure:"path" validate:"required"`
 }
+
+// MemoryPath is the storage.path that keeps objects in the process rather than
+// on disk, losing them on restart. It is spelled the way SQLite spells the same
+// idea, so database.dsn and storage.path read alike.
+const MemoryPath = ":memory:"
 
 type Auth struct {
 	Read  Access `mapstructure:"read" validate:"required,oneof=public private"`
@@ -104,7 +110,8 @@ type Log struct {
 }
 
 // Defaults is the configuration before any file, environment variable or flag
-// is applied.
+// is applied. Both stores default to MemoryPath, so the binary runs with no
+// configuration at all and keeps nothing once it exits.
 func Defaults() Config {
 	return Config{
 		Server: Server{
@@ -116,11 +123,11 @@ func Defaults() Config {
 		},
 		Database: Database{
 			Type:   "sqlite",
-			DSN:    "stowry.db",
+			DSN:    MemoryPath,
 			Tables: Tables{MetaData: "stowry_metadata"},
 		},
 		Storage: Storage{
-			Path: "./data",
+			Path: MemoryPath,
 		},
 		Auth: Auth{
 			Read:  AccessPublic,

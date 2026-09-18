@@ -39,6 +39,8 @@ func TestLoadDefaults(t *testing.T) {
 	assert.Equal(t, types.ModeStore, cfg.Server.Mode)
 	assert.Equal(t, "stowry_metadata", cfg.Database.Tables.MetaData)
 	assert.Equal(t, 30*time.Second, cfg.Service.CleanupTimeout)
+	assert.Equal(t, config.MemoryPath, cfg.Database.DSN, "the binary runs with no config and keeps nothing")
+	assert.Equal(t, config.MemoryPath, cfg.Storage.Path)
 }
 
 func TestLoadYAML(t *testing.T) {
@@ -70,7 +72,7 @@ cors:
 	assert.Equal(t, 45*time.Second, cfg.Service.CleanupTimeout)
 	assert.Equal(t, []string{"https://app.example.com"}, cfg.CORS.AllowedOrigins)
 
-	assert.Equal(t, "./data", cfg.Storage.Path, "an unset key keeps its default")
+	assert.Equal(t, config.MemoryPath, cfg.Storage.Path, "an unset key keeps its default")
 }
 
 // Every field must be reachable from the environment, including ones whose
@@ -252,7 +254,7 @@ func TestConversions(t *testing.T) {
 		got := cfg.DatabaseConfig()
 
 		assert.Equal(t, "sqlite", got.Type)
-		assert.Equal(t, "stowry.db", got.DSN)
+		assert.Equal(t, config.MemoryPath, got.DSN)
 		assert.Equal(t, "stowry_metadata", got.Tables.MetaData)
 		assert.NoError(t, got.Tables.Validate())
 	})
