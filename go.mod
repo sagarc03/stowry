@@ -1,6 +1,8 @@
 module github.com/sagarc03/stowry
 
-go 1.26.0
+go 1.27
+
+toolchain go1.27.0
 
 // v1.0.0, v1.1.0 and v1.2.0 of this module were published in error - stowry is
 // pre-1.0 - and their tags have been deleted from the repository. Deleting a tag
@@ -13,14 +15,6 @@ go 1.26.0
 // itself, so it is never selected either.
 retract [v1.0.0, v1.2.1]
 
-// stowry-go v1.x was published in error and its tags have been deleted upstream:
-// those versions now resolve only from the module proxy cache, and not at all
-// with GOPROXY=direct. Excluded so `go get -u` cannot select them again.
-exclude (
-	github.com/sagarc03/stowry-go v1.0.0
-	github.com/sagarc03/stowry-go v1.1.0
-)
-
 require (
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-chi/cors v1.2.2
@@ -29,7 +23,8 @@ require (
 	github.com/jackc/pgx/v5 v5.11.0
 	github.com/lmittmann/tint v1.2.0
 	github.com/manifoldco/promptui v0.9.0
-	github.com/sagarc03/stowry-go v0.1.0
+	github.com/rs/cors v1.11.1
+	github.com/spf13/afero v1.15.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
@@ -95,7 +90,6 @@ require (
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
 	github.com/shirou/gopsutil/v4 v4.26.6 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
-	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
