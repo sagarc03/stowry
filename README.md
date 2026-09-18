@@ -196,7 +196,7 @@ server:
   error_document: ""  # Custom 404 page path for static mode (default: built-in HTML)
 
 service:
-  cleanup_timeout: 30  # Cleanup operation timeout in seconds
+  cleanup_timeout: 30s  # Cleanup operation timeout (a duration: 30s, 5m, 1h)
 
 database:
   type: sqlite      # sqlite | postgres

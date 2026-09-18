@@ -28,7 +28,7 @@ server:
 
 # Service configuration
 service:
-  cleanup_timeout: 30     # Cleanup operation timeout in seconds (default: 30)
+  cleanup_timeout: 30s    # Cleanup operation timeout (default: 30s)
 
 # Database configuration
 database:
@@ -76,7 +76,7 @@ log:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `cleanup_timeout` | int | 30 | Cleanup operation timeout in seconds |
+| `cleanup_timeout` | duration | 30s | Cleanup operation timeout. A bare number is nanoseconds, so write `30s`. |
 
 ### Database
 
@@ -313,7 +313,7 @@ server:
   max_upload_size: 104857600  # 100MB upload limit
 
 service:
-  cleanup_timeout: 30
+  cleanup_timeout: 30s
 
 database:
   type: postgres
