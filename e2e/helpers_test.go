@@ -1,6 +1,7 @@
 package e2e_test
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
 )
 
 // seedFile puts content at destPath in the storage directory and records it,
@@ -122,6 +124,25 @@ func buildBinary(t *testing.T) string {
 	}
 
 	return binaryPath
+}
+
+// requireLinuxContainers skips unless this host can run the Linux image the
+// PostgreSQL tests need.
+//
+// Only the Linux runners can. GitHub's macOS runners ship no Docker at all, and
+// its Windows runners are already nested one level deep, so the hypervisor
+// cannot give Docker the nested virtualization a Linux container would need -
+// their daemon answers, but only for Windows containers.
+func requireLinuxContainers(t *testing.T) {
+	t.Helper()
+
+	if runtime.GOOS != "linux" {
+		t.Skipf("no Linux containers on %s", runtime.GOOS)
+	}
+
+	if _, err := testcontainers.NewDockerClientWithOpts(context.Background()); err != nil {
+		t.Skipf("no container runtime: %v", err)
+	}
 }
 
 // yamlPath makes a path safe to embed in a double-quoted YAML scalar, where a
@@ -256,10 +277,20 @@ func startServer(t *testing.T, cfg ServerConfig) (string, func()) {
 	waitForServer(t, baseURL, 10*time.Second)
 
 	cleanup := func() {
-		if cmd.Process != nil {
-			_ = cmd.Process.Signal(syscall.SIGTERM)
-			_ = cmd.Wait()
+		if cmd.Process == nil {
+			return
 		}
+
+		// Windows implements no signal but Kill, so SIGTERM would return an
+		// error and leave Wait blocking on a server that never got asked to
+		// stop.
+		if runtime.GOOS == "windows" {
+			_ = cmd.Process.Kill()
+		} else {
+			_ = cmd.Process.Signal(syscall.SIGTERM)
+		}
+
+		_ = cmd.Wait()
 	}
 
 	return baseURL, cleanup
