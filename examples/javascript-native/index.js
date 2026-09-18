@@ -30,17 +30,18 @@ function loadConfig(path) {
 async function main() {
   const config = loadConfig(CONFIG_PATH);
   const auth = config.auth || {};
-  const keys = auth.keys?.inline || [];
+  const accessKey = auth.access_key;
+  const secretKey = auth.secret_key;
 
-  if (keys.length === 0) {
+  if (!accessKey || !secretKey) {
     throw new Error("No auth keys found in config");
   }
 
   // Create stowryjs client
   const client = new StowryClient({
     endpoint: STOWRY_ENDPOINT,
-    accessKey: keys[0].access_key,
-    secretKey: keys[0].secret_key,
+    accessKey,
+    secretKey,
   });
 
   // Upload a file

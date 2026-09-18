@@ -21,7 +21,8 @@ This example demonstrates how to use [Better Upload](https://better-upload.com) 
 
    ```bash
    # From the stowry root directory
-   go build ./cmd/stowry
+   go build -o stowry .
+   ./stowry migrate --config examples/config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
    ./stowry serve --config examples/config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
    ```
 

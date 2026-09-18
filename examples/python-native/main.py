@@ -34,16 +34,17 @@ def load_config(path: str) -> dict:
 def main():
     config = load_config(CONFIG_PATH)
     auth = config.get("auth", {})
-    keys = auth.get("keys", {}).get("inline", [])
+    access_key = auth.get("access_key")
+    secret_key = auth.get("secret_key")
 
-    if not keys:
+    if not access_key or not secret_key:
         raise ValueError("No auth keys found in config")
 
     # Create stowrypy client
     client = StowryClient(
         endpoint=STOWRY_ENDPOINT,
-        access_key=keys[0]["access_key"],
-        secret_key=keys[0]["secret_key"],
+        access_key=access_key,
+        secret_key=secret_key,
     )
 
     # Upload a file

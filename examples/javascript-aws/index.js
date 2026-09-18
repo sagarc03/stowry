@@ -33,8 +33,9 @@ function loadConfig(path) {
 
 function createClient(config) {
   const auth = config.auth || {};
-  const keys = auth.keys?.inline || [];
-  if (keys.length === 0) {
+  const accessKey = auth.access_key;
+  const secretKey = auth.secret_key;
+  if (!accessKey || !secretKey) {
     throw new Error("No auth keys found in config");
   }
 
@@ -43,8 +44,8 @@ function createClient(config) {
     endpoint: STOWRY_ENDPOINT,
     region: region,
     credentials: {
-      accessKeyId: keys[0].access_key,
-      secretAccessKey: keys[0].secret_key,
+      accessKeyId: accessKey,
+      secretAccessKey: secretKey,
     },
     forcePathStyle: true,
   });

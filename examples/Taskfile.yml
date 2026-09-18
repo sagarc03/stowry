@@ -32,19 +32,19 @@ tasks:
     cmds:
       - task --list
 
-  stowry:init:
-    desc: Initialize Stowry database (run once before stowry)
+  stowry:migrate:
+    desc: Create the Stowry schema (run once before stowry)
     cmds:
       - mkdir -p /tmp/data
-      - go run ../cmd/stowry init --config config.yaml
+      - go run .. migrate --config config.yaml
     status:
       - test -f /tmp/stowry.db
 
   stowry:
     desc: Start Stowry server for examples
-    deps: [stowry:init]
+    deps: [stowry:migrate]
     cmds:
-      - go run ../cmd/stowry serve --config config.yaml
+      - go run .. serve --config config.yaml
 
   stowry:reset:
     desc: Reset database and restart Stowry

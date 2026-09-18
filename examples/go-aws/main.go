@@ -46,12 +46,8 @@ type exampleConfig struct {
 			Region  string `yaml:"region"`
 			Service string `yaml:"service"`
 		} `yaml:"aws"`
-		Keys struct {
-			Inline []struct {
-				AccessKey string `yaml:"access_key"`
-				SecretKey string `yaml:"secret_key"`
-			} `yaml:"inline"`
-		} `yaml:"keys"`
+		AccessKey string `yaml:"access_key"`
+		SecretKey string `yaml:"secret_key"`
 	} `yaml:"auth"`
 }
 
@@ -63,7 +59,7 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	if len(cfg.Auth.Keys.Inline) == 0 {
+	if cfg.Auth.AccessKey == "" || cfg.Auth.SecretKey == "" {
 		log.Fatal("no auth keys found in config")
 	}
 
@@ -147,8 +143,8 @@ func newPresignClient(ctx context.Context, exCfg *exampleConfig) (*s3.PresignCli
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion(region),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-			exCfg.Auth.Keys.Inline[0].AccessKey,
-			exCfg.Auth.Keys.Inline[0].SecretKey,
+			exCfg.Auth.AccessKey,
+			exCfg.Auth.SecretKey,
 			"",
 		)),
 	)

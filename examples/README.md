@@ -47,11 +47,11 @@ All examples read credentials from `config.yaml`:
 
 ```yaml
 auth:
-  region: us-east-1
-  service: s3
-  keys:
-    - access_key: <your-access-key>
-      secret_key: <your-secret-key>
+  aws:
+    region: us-east-1
+    service: s3
+  access_key: <your-access-key>
+  secret_key: <your-secret-key>
 ```
 
 Generate your own keys:
