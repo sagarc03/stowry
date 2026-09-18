@@ -33,7 +33,18 @@ func newServeCmd() *cobra.Command {
 		Use:     "serve",
 		GroupID: groupServer,
 		Short:   "Start the HTTP server",
-		RunE:    runServe,
+		Long: `Start the HTTP server.
+
+Store mode routes uploads, deletes and listing; static and spa serve reads only,
+and reject auth.read private at startup because a browser cannot sign a request.
+
+The default config keeps both the database and the objects in memory, so with no
+configuration nothing survives the process. A storage directory that does not
+exist is created, owner-only.
+
+An in-memory database is migrated on startup since nothing else could have. A
+database on disk is not: use --migrate here, or run 'stowry migrate' first.`,
+		RunE: runServe,
 	}
 
 	d := config.Defaults()

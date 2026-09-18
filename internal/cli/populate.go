@@ -20,7 +20,12 @@ func newPopulateCmd() *cobra.Command {
 directory of existing files can be served without uploading anything.
 
 The files are read, never written: their layout under the storage path becomes
-the object paths.`,
+the object paths. Repeating the run updates the entries in place, picking up
+whatever changed on disk.
+
+The schema must already exist; pass --migrate to create it first. A file whose
+path the server could not serve stops the run, and the entries recorded before
+it are kept.`,
 		Args: cobra.NoArgs,
 		RunE: runPopulate,
 	}

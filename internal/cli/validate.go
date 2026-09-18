@@ -16,7 +16,11 @@ func newValidateCmd() *cobra.Command {
 		Long: `Report whether the existing schema is the one stowry expects.
 
 Nothing is created or altered, so this is what a deployment that migrates out
-of band runs in place of migrate.`,
+of band runs in place of migrate. It exits non-zero when the schema is missing
+or wrong.
+
+It checks the metadata table's columns, their types and nullability, and the
+unique constraint on path that every write depends on.`,
 		Args: cobra.NoArgs,
 		RunE: runValidate,
 	}

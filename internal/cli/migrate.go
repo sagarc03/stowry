@@ -13,8 +13,12 @@ func newMigrateCmd() *cobra.Command {
 		Short:   "Create the metadata schema",
 		Long: `Create the tables and indexes stowry needs, then confirm the result.
 
-It is idempotent, and it never alters a table that already exists: a schema
-stowry does not recognise is reported rather than changed.`,
+Run this before serving from a database on disk: serve migrates an in-memory
+database only.
+
+It is idempotent, and it never alters a table that already exists. A table
+stowry did not build is reported rather than changed, so migrating onto an
+older or foreign schema fails instead of half-working.`,
 		Args: cobra.NoArgs,
 		RunE: runMigrate,
 	}

@@ -22,12 +22,16 @@ func newRootCmd(version string) *cobra.Command {
 		Use:     "stowry",
 		Version: version,
 		Short:   "Self-hosted object storage, simplified",
-		Long: `Stowry is a lightweight object storage server. Deploy a single binary,
-configure your metadata backend, and start storing files with secure presigned
-URL authentication.
+		Long: `Stowry is a lightweight object storage server, and the client for it.
 
-It serves three modes - store, static and spa - over SQLite or PostgreSQL, and
-is compatible with the AWS SDKs for generating presigned URLs.`,
+The server runs in one of three modes - store, static or spa - over SQLite or
+PostgreSQL, authenticating with presigned URLs it signs itself or with AWS
+Signature V4, so the AWS SDKs work against it unchanged.
+
+Every setting can be given three ways, highest first: a flag, an environment
+variable, then the config files. Each flag's help names the variable that
+reaches the same setting. Config files default to ./config.yaml, are named with
+--config or STOWRY_CONFIG, and merge left to right.`,
 		// A failure while running a command is not a usage error.
 		SilenceUsage: true,
 		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {

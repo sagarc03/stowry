@@ -43,16 +43,19 @@ func newUploadCmd() *cobra.Command {
 		Use:     "upload <local-path> [remote-path]",
 		GroupID: groupClient,
 		Short:   "Upload a file or directory to the server",
-		Long: `Upload a file to the server. A directory is uploaded whole, with its
-tree preserved under the remote path.
+		Long: `Upload a file to the server. A directory is uploaded whole: its contents
+go directly under the remote path, with the tree below it preserved. The
+directory's own name is not added.
 
-Given no remote path, the local path is used, stripped of any leading "./",
-"../" or "/".`,
+With no remote path, one is derived from the local path by stripping any
+leading "./", "../" or "/".
+
+Requires store mode.`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: runUpload,
 	}
 
-	cmd.Flags().String("content-type", "", "content type to store, for every file uploaded (default: detect per file)")
+	cmd.Flags().String("content-type", "", "content type for every file uploaded (default: detect from each extension)")
 
 	return cmd
 }
@@ -100,8 +103,11 @@ func newDownloadCmd() *cobra.Command {
 		Short:   "Download a file from the server",
 		Long: `Download a file from the server.
 
-Given no local path, the file is written to the base name of the remote path.
-A local path of "-" writes it to stdout.`,
+With no local path, the file is written to the base name of the remote path.
+A local path of "-" writes it to stdout instead.
+
+Works in every mode. Static and spa modes resolve a missing object to an index
+or fallback document, so a download may return one of those rather than fail.`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: runDownload,
 	}
@@ -150,7 +156,10 @@ func newDeleteCmd() *cobra.Command {
 		Short:   "Delete files from the server",
 		Long: `Delete one or more files from the server.
 
-Every path is attempted: one failure does not abandon the rest.`,
+Every path is attempted, so one failure does not abandon the rest. Each outcome
+is printed, and the command exits non-zero if any path failed.
+
+Requires store mode.`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: runDelete,
 	}
@@ -182,17 +191,19 @@ func newListCmd() *cobra.Command {
 		Use:     "list [prefix]",
 		GroupID: groupClient,
 		Short:   "List objects on the server",
-		Long: `List objects on the server, most recent last.
+		Long: `List objects on the server, oldest first.
 
-The server pages the results: it returns a cursor to pass back for the next
-page, or --all to follow them to the end. Store mode only.`,
+Results are paged. Each page prints the cursor to pass back with --cursor for
+the next one; --all follows them to the end.
+
+Requires store mode.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: runList,
 	}
 
-	cmd.Flags().Int("limit", 0, "objects per page (default: the server's own)")
-	cmd.Flags().String("cursor", "", "continue from the cursor a previous page returned")
-	cmd.Flags().Bool("all", false, "follow the cursor until every object is listed")
+	cmd.Flags().Int("limit", 0, "objects per page (default: the server's own limit)")
+	cmd.Flags().String("cursor", "", "continue from a cursor a previous page printed")
+	cmd.Flags().Bool("all", false, "follow cursors until every object is listed")
 
 	return cmd
 }
