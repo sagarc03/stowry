@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sagarc03/stowry/internal/client"
 	"github.com/sagarc03/stowry/internal/config"
 	"github.com/sagarc03/stowry/types"
 )
@@ -75,4 +76,34 @@ func TestFlagsReachConfig(t *testing.T) {
 			assert.Equal(t, tt.want, tt.got(cfg))
 		})
 	}
+}
+
+// The endpoint is top-level config, so it takes STOWRY_ENDPOINT with no
+// override and reaches the client alongside the key pair the server verifies.
+func TestEndpointReachesClientConfig(t *testing.T) {
+	assert.Equal(t, "STOWRY_ENDPOINT", config.EnvVarForKey("endpoint"))
+
+	for _, c := range newRootCmd("test").Commands() {
+		if c.Name() != "serve" {
+			continue
+		}
+
+		require.NoError(t, c.ParseFlags([]string{
+			"--endpoint", "https://s.example.com",
+			"--access-key", "AKIA", "--secret-key", "shh",
+		}))
+
+		cfg, err := config.Load(nil, c.Flags())
+		require.NoError(t, err)
+
+		assert.Equal(t, client.Config{
+			Endpoint:  "https://s.example.com",
+			AccessKey: "AKIA",
+			SecretKey: "shh",
+		}, cfg.ClientConfig())
+
+		return
+	}
+
+	t.Fatal("no serve command")
 }

@@ -44,6 +44,7 @@ var flagToKey = map[string]string{
 	"cors-expose":      "cors.exposed_headers",
 	"cors-credentials": "cors.allow_credentials",
 	"cors-max-age":     "cors.max_age",
+	"endpoint":         "endpoint",
 	"log-level":        "log.level",
 }
 

@@ -7,6 +7,7 @@ package config
 import (
 	"time"
 
+	"github.com/sagarc03/stowry/internal/client"
 	"github.com/sagarc03/stowry/internal/database"
 	"github.com/sagarc03/stowry/internal/keybackend"
 	"github.com/sagarc03/stowry/internal/middleware"
@@ -24,6 +25,10 @@ type Config struct {
 	Auth     Auth     `mapstructure:"auth"`
 	CORS     CORS     `mapstructure:"cors"`
 	Log      Log      `mapstructure:"log"`
+	// Endpoint is the server the client commands talk to. It sits at the top
+	// level because it addresses this whole binary's other half, rather than
+	// configuring any one part of the server.
+	Endpoint string `mapstructure:"endpoint" validate:"required"`
 }
 
 type Server struct {
@@ -57,6 +62,10 @@ type Storage struct {
 	// Populate records the files already under Path before the server starts.
 	Populate bool `mapstructure:"populate"`
 }
+
+// defaultEndpoint is the server the client commands talk to when none is
+// configured.
+const defaultEndpoint = "http://localhost:5708"
 
 // MemoryPath is the storage.path that keeps objects in the process rather than
 // on disk, losing them on restart. It is spelled the way SQLite spells the same
@@ -137,6 +146,7 @@ func Defaults() Config {
 		Log: Log{
 			Level: "info",
 		},
+		Endpoint: defaultEndpoint,
 	}
 }
 
@@ -156,6 +166,16 @@ func (c *Config) KeysConfig() keybackend.KeysConfig {
 	return keybackend.KeysConfig{
 		Inline: []keybackend.KeyPair{{AccessKey: c.Auth.AccessKey, SecretKey: c.Auth.SecretKey}},
 		File:   c.Auth.Keys.File,
+	}
+}
+
+// ClientConfig builds the configuration the client commands take. They sign
+// with the same key pair the server verifies.
+func (c *Config) ClientConfig() client.Config {
+	return client.Config{
+		Endpoint:  c.Endpoint,
+		AccessKey: c.Auth.AccessKey,
+		SecretKey: c.Auth.SecretKey,
 	}
 }
 

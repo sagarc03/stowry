@@ -87,6 +87,8 @@ is compatible with the AWS SDKs for generating presigned URLs.`,
 	flags.Bool("cors-credentials", false, usage("cors-credentials", "allow credentialed cross-origin requests", d.CORS.AllowCredentials))
 	flags.Int("cors-max-age", 0, usage("cors-max-age", "seconds a browser may cache a preflight", d.CORS.MaxAge))
 
+	flags.StringP("endpoint", "e", "", usage("endpoint", "server the client commands talk to", d.Endpoint))
+
 	flags.String("log-level", "", usage("log-level", "log level: debug, info, warn or error", d.Log.Level))
 
 	cmd.AddGroup(
