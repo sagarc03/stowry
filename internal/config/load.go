@@ -24,6 +24,7 @@ var flagToKey = map[string]string{
 	"db-dsn":       "database.dsn",
 	"storage-path": "storage.path",
 	"populate":     "storage.populate",
+	"migrate":      "database.migrate",
 	"port":         "server.port",
 	"mode":         "server.mode",
 }

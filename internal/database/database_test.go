@@ -1,7 +1,9 @@
 package database_test
 
 import (
+	"database/sql"
 	"fmt"
+	"path/filepath"
 	"testing"
 	"uuid"
 
@@ -491,4 +493,82 @@ func paths(result types.ListResult) []string {
 	}
 
 	return out
+}
+
+// A pre-existing table is never altered, so both Migrate and Validate have to
+// report one they do not recognise rather than pass and fail on the first write.
+func TestMigrateAndValidateRejectForeignSchema(t *testing.T) {
+	const columns = `
+		id TEXT NOT NULL PRIMARY KEY,
+		path TEXT NOT NULL %s,
+		content_type TEXT NOT NULL,
+		etag TEXT NOT NULL,
+		file_size_bytes INTEGER NOT NULL,
+		created_at TEXT NOT NULL,
+		updated_at TEXT NOT NULL,
+		deleted_at TEXT,
+		cleaned_up_at TEXT`
+
+	open := func(t *testing.T, ddl string) database.Database {
+		t.Helper()
+
+		path := filepath.Join(t.TempDir(), "meta.db")
+
+		raw, err := sql.Open("sqlite", path)
+		require.NoError(t, err)
+		_, err = raw.Exec(ddl)
+		require.NoError(t, err)
+		require.NoError(t, raw.Close())
+
+		db, err := database.Connect(t.Context(), database.Config{
+			Type: "sqlite", DSN: path,
+			Tables: types.Tables{MetaData: "metadata"},
+		})
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = db.Close() })
+
+		return db
+	}
+
+	// Upsert targets ON CONFLICT (path), so without the constraint every write
+	// fails however right the columns look.
+	t.Run("no unique constraint on path", func(t *testing.T) {
+		db := open(t, fmt.Sprintf("CREATE TABLE metadata ("+columns+")", ""))
+
+		assert.ErrorContains(t, db.Validate(t.Context()), "no single-column unique constraint on path")
+		assert.ErrorContains(t, db.Migrate(t.Context()), "no single-column unique constraint on path")
+	})
+
+	// A column no index references: CREATE TABLE IF NOT EXISTS does nothing and
+	// reports no error, which is what made this silent.
+	t.Run("column missing from an older table", func(t *testing.T) {
+		db := open(t, `CREATE TABLE metadata (
+			id TEXT NOT NULL PRIMARY KEY, path TEXT NOT NULL UNIQUE,
+			etag TEXT NOT NULL, file_size_bytes INTEGER NOT NULL,
+			created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+			deleted_at TEXT, cleaned_up_at TEXT)`)
+
+		assert.ErrorContains(t, db.Migrate(t.Context()), "missing columns: content_type")
+	})
+
+	t.Run("a table stowry itself would have built is accepted", func(t *testing.T) {
+		db := open(t, fmt.Sprintf("CREATE TABLE metadata ("+columns+")", "UNIQUE"))
+
+		require.NoError(t, db.Migrate(t.Context()))
+		require.NoError(t, db.Validate(t.Context()))
+
+		_, created, err := db.Upsert(t.Context(), types.ObjectEntry{
+			Path: "a.txt", Size: 1, ETag: "x", ContentType: "text/plain",
+		})
+		require.NoError(t, err)
+		assert.True(t, created)
+	})
+
+	t.Run("migrate stays idempotent", func(t *testing.T) {
+		db := openMemory(t)
+
+		require.NoError(t, db.Migrate(t.Context()))
+		require.NoError(t, db.Migrate(t.Context()))
+		require.NoError(t, db.Validate(t.Context()))
+	})
 }

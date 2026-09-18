@@ -11,11 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 
 	"github.com/sagarc03/stowry/internal/config"
-	"github.com/sagarc03/stowry/internal/database"
 	"github.com/sagarc03/stowry/internal/handler"
 	"github.com/sagarc03/stowry/internal/keybackend"
 	"github.com/sagarc03/stowry/internal/middleware"
@@ -32,9 +30,10 @@ const (
 
 func newServeCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "serve",
-		Short: "Start the HTTP server",
-		RunE:  runServe,
+		Use:     "serve",
+		GroupID: groupServer,
+		Short:   "Start the HTTP server",
+		RunE:    runServe,
 	}
 
 	d := config.Defaults()
@@ -42,6 +41,8 @@ func newServeCmd() *cobra.Command {
 	cmd.Flags().String("mode", "", usage("mode", "server mode: store, static or spa", d.Server.Mode))
 	cmd.Flags().BoolP("populate", "p", false,
 		usage("populate", "record the files already in the storage directory before serving", d.Storage.Populate))
+	cmd.Flags().BoolP("migrate", "m", false,
+		usage("migrate", "create the metadata schema before serving", d.Database.Migrate))
 
 	return cmd
 }
@@ -62,28 +63,18 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	ctx, cancel := context.WithCancel(cmd.Context())
 	defer cancel()
 
-	db, err := database.Connect(ctx, cfg.DatabaseConfig())
+	// An in-memory database is created empty by this process, so nothing could
+	// have migrated it. A database on disk is migrated only when asked.
+	migrate := cfg.Database.DSN == config.MemoryPath || cfg.Database.Migrate
+
+	db, err := openDatabase(ctx, cfg, migrate)
 	if err != nil {
-		return fmt.Errorf("connect database: %w", err)
+		return err
 	}
 	defer func() { _ = db.Close() }()
 
 	if err := db.Ping(ctx); err != nil {
 		return fmt.Errorf("ping database: %w", err)
-	}
-
-	// An in-memory database is created empty by this process, so nothing could
-	// have migrated it. A database on disk is migrated deliberately, by init -
-	// or by asking for storage.populate, which is the same request to set the
-	// store up.
-	if cfg.Database.DSN == config.MemoryPath || cfg.Storage.Populate {
-		if err := db.Migrate(ctx); err != nil {
-			return fmt.Errorf("migrate database: %w", err)
-		}
-	}
-
-	if err := db.Validate(ctx); err != nil {
-		return fmt.Errorf("validate database schema: %w", err)
 	}
 
 	slog.Info("connected to database", "type", cfg.Database.Type)
@@ -122,23 +113,6 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	})
 
 	return listenAndServe(ctx, cancel, cfg.Server.Port, withServerMiddleware(cfg, mux))
-}
-
-// openStorage returns the object filesystem for path, which is a directory or
-// config.MemoryPath.
-//
-// 0o700 is owner-only. A Kubernetes deployment that needs shared access should
-// set fsGroup in securityContext and pre-create the directory with 0o750.
-func openStorage(path string) (afero.Fs, error) {
-	if path == config.MemoryPath {
-		return afero.NewMemMapFs(), nil
-	}
-
-	if err := os.MkdirAll(path, 0o700); err != nil {
-		return nil, fmt.Errorf("create storage directory: %w", err)
-	}
-
-	return afero.NewBasePathFs(afero.NewOsFs(), path), nil
 }
 
 func newVerifier(cfg *config.Config) (*sign.SignatureVerifier, error) {

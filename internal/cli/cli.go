@@ -60,10 +60,15 @@ is compatible with the AWS SDKs for generating presigned URLs.`,
 	flags.StringP("db-dsn", "d", "", usage("db-dsn", "database connection string", quoted(d.Database.DSN)))
 	flags.StringP("storage-path", "s", "", usage("storage-path", "storage directory path", quoted(d.Storage.Path)))
 
-	cmd.AddCommand(newServeCmd(), newPopulateCmd())
+	cmd.AddGroup(&cobra.Group{ID: groupServer, Title: "Server Commands:"})
+	cmd.AddCommand(newServeCmd(), newMigrateCmd(), newValidateCmd(), newPopulateCmd())
 
 	return cmd
 }
+
+// groupServer covers everything that runs the server or prepares what it serves
+// from. The client commands are not part of this binary yet.
+const groupServer = "server"
 
 // configFiles returns the config files to read, falling back to the
 // environment. This one setting cannot go through Load the way the others do:

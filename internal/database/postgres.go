@@ -83,6 +83,12 @@ func (d *postgresDB) Migrate(ctx context.Context) error {
 		return fmt.Errorf("migrate: %w", err)
 	}
 
+	// The DDL is all IF NOT EXISTS, so it succeeds without touching a table
+	// that already exists. Validating is what stops that being a silent pass.
+	if err := d.Validate(ctx); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+
 	return nil
 }
 
@@ -115,10 +121,12 @@ func (d *postgresDB) Validate(ctx context.Context) error {
 		return fmt.Errorf("validate: table %s does not exist", d.table)
 	}
 
+	// Filtered by schema as the check above is, so a table of the same name in
+	// another visible schema cannot merge its columns into this one's.
 	rows, err := d.pool.Query(ctx, `
 		SELECT column_name, data_type, is_nullable
 		FROM information_schema.columns
-		WHERE table_name = $1`, d.table)
+		WHERE table_schema = 'public' AND table_name = $1`, d.table)
 	if err != nil {
 		return fmt.Errorf("validate: query columns: %w", err)
 	}
@@ -140,7 +148,39 @@ func (d *postgresDB) Validate(ctx context.Context) error {
 		return fmt.Errorf("validate: %w", err)
 	}
 
+	unique, err := d.hasUniquePath(ctx)
+	if err != nil {
+		return fmt.Errorf("validate: check unique %s: %w", uniquePathColumn, err)
+	}
+
+	if !unique {
+		return fmt.Errorf("validate: %w", errNoUniquePath(d.table))
+	}
+
 	return nil
+}
+
+// hasUniquePath reports whether a single-column unique index covers path.
+// A partial index does not count: it constrains only the rows it covers.
+func (d *postgresDB) hasUniquePath(ctx context.Context) (bool, error) {
+	var exists bool
+
+	err := d.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM pg_index i
+			JOIN pg_class c ON c.oid = i.indrelid
+			JOIN pg_namespace n ON n.oid = c.relnamespace
+			JOIN pg_attribute a ON a.attrelid = c.oid AND a.attnum = i.indkey[0]
+			WHERE c.relname = $1
+			  AND n.nspname = 'public'
+			  AND i.indisunique
+			  AND i.indnkeyatts = 1
+			  AND i.indpred IS NULL
+			  AND a.attname = $2
+		)`, d.table, uniquePathColumn).Scan(&exists)
+
+	return exists, err
 }
 
 func (d *postgresDB) Get(ctx context.Context, path string) (types.MetaData, error) {

@@ -1,8 +1,8 @@
 package cli
 
 import (
+	"context"
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -12,9 +12,10 @@ import (
 )
 
 func newPopulateCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "populate",
-		Short: "Record the files already in the storage directory",
+	cmd := &cobra.Command{
+		Use:     "populate",
+		GroupID: groupServer,
+		Short:   "Record the files already in the storage directory",
 		Long: `Record metadata for the files already in the storage directory, so a
 directory of existing files can be served without uploading anything.
 
@@ -23,6 +24,12 @@ the object paths.`,
 		Args: cobra.NoArgs,
 		RunE: runPopulate,
 	}
+
+	d := config.Defaults()
+	cmd.Flags().BoolP("migrate", "m", false,
+		usage("migrate", "create the metadata schema first", d.Database.Migrate))
+
+	return cmd
 }
 
 func runPopulate(cmd *cobra.Command, _ []string) error {
@@ -31,38 +38,23 @@ func runPopulate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	root := cfg.Storage.Path
-
-	// In-memory storage holds no files to record, and the default config asks
-	// for it, so this is a no-op rather than a failure.
-	if root == config.MemoryPath {
-		return nil
-	}
-
-	info, err := os.Stat(root)
-	if err != nil {
-		return fmt.Errorf("read storage directory %s: %w", root, err)
-	}
-
-	if !info.IsDir() {
-		return fmt.Errorf("storage path %s is not a directory", root)
-	}
+	warnEphemeral(cfg)
 
 	ctx := cmd.Context()
 
-	db, err := database.Connect(ctx, cfg.DatabaseConfig())
+	db, err := openDatabase(ctx, cfg, cfg.Database.Migrate)
 	if err != nil {
-		return fmt.Errorf("connect database: %w", err)
+		return err
 	}
 	defer func() { _ = db.Close() }()
 
-	// Unlike serve, this command is the one that sets a store up, so it brings
-	// the schema with it.
-	if err := db.Migrate(ctx); err != nil {
-		return fmt.Errorf("migrate database: %w", err)
-	}
+	return populateInto(ctx, cmd, cfg, db)
+}
 
-	storage, err := openStorage(root)
+// populateInto records the storage directory against an already-prepared store,
+// which is what lets migrate --populate reuse the connection it just readied.
+func populateInto(ctx context.Context, cmd *cobra.Command, cfg *config.Config, db database.Database) error {
+	storage, err := openStorage(cfg.Storage.Path)
 	if err != nil {
 		return err
 	}
@@ -71,7 +63,7 @@ func runPopulate(cmd *cobra.Command, _ []string) error {
 
 	// Populate returns what it wrote before a failure, so the count is
 	// reported either way.
-	fmt.Fprintf(cmd.OutOrStdout(), "recorded %d files from %s\n", len(entries), root)
+	fmt.Fprintf(cmd.OutOrStdout(), "recorded %d files from %s\n", len(entries), cfg.Storage.Path)
 
 	return err
 }

@@ -101,6 +101,12 @@ func (d *sqliteDB) Migrate(ctx context.Context) error {
 		return fmt.Errorf("migrate: %w", err)
 	}
 
+	// The DDL is all IF NOT EXISTS, so it succeeds without touching a table
+	// that already exists. Validating is what stops that being a silent pass.
+	if err := d.Validate(ctx); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+
 	return nil
 }
 
@@ -156,7 +162,90 @@ func (d *sqliteDB) Validate(ctx context.Context) error {
 		return fmt.Errorf("validate: %w", err)
 	}
 
+	unique, err := d.hasUniquePath(ctx)
+	if err != nil {
+		return fmt.Errorf("validate: check unique %s: %w", uniquePathColumn, err)
+	}
+
+	if !unique {
+		return fmt.Errorf("validate: %w", errNoUniquePath(d.table))
+	}
+
 	return nil
+}
+
+// hasUniquePath reports whether a single-column unique index covers path. A
+// UNIQUE column constraint counts: SQLite implements it as an automatic index.
+func (d *sqliteDB) hasUniquePath(ctx context.Context) (bool, error) {
+	rows, err := d.db.QueryContext(ctx, fmt.Sprintf(`PRAGMA index_list(%s)`, quoteSQLite(d.table))) //nolint:gosec // G201: table name is validated in Connect
+	if err != nil {
+		return false, err
+	}
+
+	var names []string
+
+	for rows.Next() {
+		var (
+			seq, unique, partial int
+			name, origin         string
+		)
+		if err := rows.Scan(&seq, &name, &unique, &origin, &partial); err != nil {
+			_ = rows.Close()
+			return false, err
+		}
+
+		// A partial index constrains only the rows it covers, so it cannot
+		// stand in for a unique constraint on the whole table.
+		if unique == 1 && partial == 0 {
+			names = append(names, name)
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return false, err
+	}
+
+	if err := rows.Close(); err != nil {
+		return false, err
+	}
+
+	for _, name := range names {
+		cols, err := d.indexColumns(ctx, name)
+		if err != nil {
+			return false, err
+		}
+
+		if len(cols) == 1 && cols[0] == uniquePathColumn {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (d *sqliteDB) indexColumns(ctx context.Context, index string) ([]string, error) {
+	rows, err := d.db.QueryContext(ctx, fmt.Sprintf(`PRAGMA index_info(%s)`, quoteSQLite(index))) //nolint:gosec // G201: the index name comes from SQLite's own catalogue
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var cols []string
+
+	for rows.Next() {
+		var (
+			seqno, cid int
+			name       sql.NullString
+		)
+		if err := rows.Scan(&seqno, &cid, &name); err != nil {
+			return nil, err
+		}
+
+		cols = append(cols, name.String)
+	}
+
+	return cols, rows.Err()
 }
 
 func (d *sqliteDB) Get(ctx context.Context, path string) (types.MetaData, error) {

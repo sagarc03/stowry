@@ -58,7 +58,9 @@ type Database interface {
 	// Ping reports whether the connection is alive.
 	Ping(ctx context.Context) error
 
-	// Migrate creates the required tables and indexes. It is idempotent.
+	// Migrate creates the required tables and indexes, then validates the
+	// result. It is idempotent. It never alters a table that already exists,
+	// so an unrecognised schema is reported rather than changed.
 	Migrate(ctx context.Context) error
 
 	// Validate reports whether the existing schema matches what this package
@@ -110,6 +112,16 @@ type rowScanner interface {
 type column struct {
 	dataType string
 	nullable bool
+}
+
+// uniquePathColumn is the column Upsert's ON CONFLICT targets. Without a
+// single-column unique constraint on it every write fails.
+const uniquePathColumn = "path"
+
+func errNoUniquePath(table string) error {
+	return fmt.Errorf(
+		"table %s has no single-column unique constraint on %s, which writes require",
+		table, uniquePathColumn)
 }
 
 // checkColumns compares got against want and reports every discrepancy in a

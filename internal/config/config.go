@@ -40,9 +40,11 @@ type Service struct {
 }
 
 type Database struct {
-	Type   string `mapstructure:"type" validate:"required,oneof=sqlite postgres"`
-	DSN    string `mapstructure:"dsn" validate:"required"`
-	Tables Tables `mapstructure:"tables"`
+	Type string `mapstructure:"type" validate:"required,oneof=sqlite postgres"`
+	DSN  string `mapstructure:"dsn" validate:"required"`
+	// Migrate creates the schema before the command does its own work.
+	Migrate bool   `mapstructure:"migrate"`
+	Tables  Tables `mapstructure:"tables"`
 }
 
 type Tables struct {

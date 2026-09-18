@@ -116,7 +116,7 @@ func TestPopulate(t *testing.T) {
 		"docs/deep/guide.md": "deep doc",
 	})
 
-	out, err := runCLI(t, "populate", "-c", s.config)
+	out, err := runCLI(t, "populate", "-c", s.config, "-m")
 	require.NoError(t, err)
 	assert.Contains(t, out, "recorded 4 files")
 
@@ -151,11 +151,12 @@ func TestPopulate(t *testing.T) {
 }
 
 // Re-recording the same directory updates the entry rather than adding another.
+// The second run asks for no migration, which is the ordinary case.
 func TestPopulateIsRepeatable(t *testing.T) {
 	s := newStore(t)
 	s.fill(t, map[string]string{"a.txt": "one"})
 
-	_, err := runCLI(t, "populate", "-c", s.config)
+	_, err := runCLI(t, "populate", "-c", s.config, "-m")
 	require.NoError(t, err)
 	first := s.meta(t, "a.txt")
 
@@ -171,18 +172,32 @@ func TestPopulateIsRepeatable(t *testing.T) {
 	assert.NotEqual(t, first.Etag, second.Etag, "the new etag is picked up")
 }
 
-func TestPopulateSkipsInMemoryStorage(t *testing.T) {
+// Without --migrate the schema has to be there already, and saying so beats a
+// driver error on the first write.
+func TestPopulateRequiresSchema(t *testing.T) {
+	s := newStore(t)
+	s.fill(t, map[string]string{"a.txt": "one"})
+
+	_, err := runCLI(t, "populate", "-c", s.config)
+
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "does not exist")
+	assert.ErrorContains(t, err, "stowry migrate")
+}
+
+// In-memory storage holds no files, so there is nothing to record. That is not
+// an error - the default config asks for it - it just records nothing.
+func TestPopulateInMemoryRecordsNothing(t *testing.T) {
 	dir := t.TempDir()
 	cfg := filepath.Join(dir, "config.yaml")
-	body := "database: {type: sqlite, dsn: \"" + filepath.Join(dir, "m.db") + "\"}\n" +
+	body := "database: {type: sqlite, dsn: \":memory:\"}\n" +
 		"storage: {path: \":memory:\"}\nlog: {level: error}\n"
 	require.NoError(t, os.WriteFile(cfg, []byte(body), 0o600))
 
-	out, err := runCLI(t, "populate", "-c", cfg)
+	out, err := runCLI(t, "populate", "-c", cfg, "-m")
 
-	assert.NoError(t, err, "the default config asks for in-memory storage")
-	assert.Empty(t, out)
-	assert.NoFileExists(t, filepath.Join(dir, "m.db"), "nothing is opened either")
+	require.NoError(t, err)
+	assert.Contains(t, out, "recorded 0 files")
 }
 
 // A file that cannot be served stops the run, and the entries recorded before
@@ -194,7 +209,7 @@ func TestPopulateStopsAtUnservablePath(t *testing.T) {
 		"we?ird.txt": "rejected by the path rules",
 	})
 
-	out, err := runCLI(t, "populate", "-c", s.config)
+	out, err := runCLI(t, "populate", "-c", s.config, "-m")
 
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "we?ird.txt")
@@ -203,32 +218,24 @@ func TestPopulateStopsAtUnservablePath(t *testing.T) {
 }
 
 func TestPopulateRejectsBadStoragePath(t *testing.T) {
-	t.Run("missing", func(t *testing.T) {
-		s := newStore(t)
-		_, err := runCLI(t, "populate", "-c", s.config)
-		assert.ErrorContains(t, err, "read storage directory")
-	})
+	dir := t.TempDir()
+	file := filepath.Join(dir, "afile")
+	require.NoError(t, os.WriteFile(file, []byte("x"), 0o600))
 
-	t.Run("not a directory", func(t *testing.T) {
-		dir := t.TempDir()
-		file := filepath.Join(dir, "afile")
-		require.NoError(t, os.WriteFile(file, []byte("x"), 0o600))
+	cfg := filepath.Join(dir, "config.yaml")
+	body := "database: {type: sqlite, dsn: \"" + filepath.Join(dir, "m.db") + "\"}\n" +
+		"storage: {path: \"" + file + "\"}\nlog: {level: error}\n"
+	require.NoError(t, os.WriteFile(cfg, []byte(body), 0o600))
 
-		cfg := filepath.Join(dir, "config.yaml")
-		body := "database: {type: sqlite, dsn: \"" + filepath.Join(dir, "m.db") + "\"}\n" +
-			"storage: {path: \"" + file + "\"}\nlog: {level: error}\n"
-		require.NoError(t, os.WriteFile(cfg, []byte(body), 0o600))
-
-		_, err := runCLI(t, "populate", "-c", cfg)
-		assert.ErrorContains(t, err, "not a directory")
-	})
+	_, err := runCLI(t, "populate", "-c", cfg, "-m")
+	assert.ErrorContains(t, err, "create storage directory")
 }
 
 func TestPopulateEmptyDir(t *testing.T) {
 	s := newStore(t)
 	require.NoError(t, os.MkdirAll(s.dataDir, 0o700))
 
-	out, err := runCLI(t, "populate", "-c", s.config)
+	out, err := runCLI(t, "populate", "-c", s.config, "-m")
 
 	require.NoError(t, err)
 	assert.Contains(t, out, "recorded 0 files")
