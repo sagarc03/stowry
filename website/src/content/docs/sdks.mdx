@@ -14,9 +14,9 @@ For AWS SDK compatibility, see [Using AWS SDKs](#using-aws-sdks) below.
 :::tip[Command-Line Alternative]
 For quick operations without writing code, use the [Client CLI](client-cli):
 ```bash
-stowry-cli upload ./file.txt path/file.txt
-stowry-cli download path/file.txt
-stowry-cli list --prefix images/
+stowry upload ./file.txt path/file.txt
+stowry download path/file.txt
+stowry list images/
 ```
 :::
 
@@ -24,7 +24,7 @@ stowry-cli list --prefix images/
 
 | SDK | Package | Repository |
 |-----|---------|------------|
-| Go | `github.com/sagarc03/stowry-go` | [stowry-go](https://github.com/sagarc03/stowry-go) |
+| Go | `github.com/sagarc03/stowry/sign` | [stowry](https://github.com/sagarc03/stowry) |
 | Python | `stowrypy` | [stowrypy](https://github.com/sagarc03/stowrypy) |
 | JavaScript | `stowryjs` | [stowryjs](https://github.com/sagarc03/stowryjs) |
 
@@ -35,7 +35,7 @@ stowry-cli list --prefix images/
 <Tabs>
   <TabItem label="Go">
     ```bash
-    go get github.com/sagarc03/stowry-go
+    go get github.com/sagarc03/stowry
     ```
   </TabItem>
   <TabItem label="Python">
@@ -66,11 +66,11 @@ stowry-cli list --prefix images/
         "net/http"
         "time"
 
-        stowry "github.com/sagarc03/stowry-go"
+        "github.com/sagarc03/stowry/sign"
     )
 
     func main() {
-        client := stowry.NewClient(
+        client := sign.NewClient(
             "http://localhost:5708",
             "YOUR_ACCESS_KEY",
             "YOUR_SECRET_KEY",
@@ -341,8 +341,8 @@ async function uploadFile(file) {
 
 ## Platform Support
 
-### stowry-go
-- Go 1.21+
+### sign (Go)
+- Go 1.27+, the version the server is built with
 
 ### stowrypy
 - Python 3.8+
@@ -359,8 +359,8 @@ async function uploadFile(file) {
 ## Resources
 
 ### Go
-- [pkg.go.dev/github.com/sagarc03/stowry-go](https://pkg.go.dev/github.com/sagarc03/stowry-go)
-- [GitHub: stowry-go](https://github.com/sagarc03/stowry-go)
+- [pkg.go.dev/github.com/sagarc03/stowry/sign](https://pkg.go.dev/github.com/sagarc03/stowry/sign)
+- [GitHub: stowry](https://github.com/sagarc03/stowry)
 
 ### Python
 - [PyPI: stowrypy](https://pypi.org/project/stowrypy/)

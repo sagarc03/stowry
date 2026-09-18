@@ -1,6 +1,6 @@
 ---
 title: Server CLI Reference
-description: Command-line interface reference for stowry serve, add, remove, init, and cleanup commands.
+description: Command-line interface reference for stowry serve, migrate, validate and populate.
 ---
 
 # Server CLI Reference
@@ -13,15 +13,23 @@ To interact with a running Stowry server (upload, download, list, delete), see t
 
 ## Global Flags
 
-These flags are available for all commands:
+Every configuration setting is reachable three ways, highest first: a flag, an
+environment variable, then the config files. `stowry <command> --help` lists
+each flag alongside the variable that reaches the same setting.
 
-```bash
---config, -c string     Config file paths (can be specified multiple times, merged left-to-right)
---db-type string        Database type (sqlite, postgres)
---db-dsn string         Database connection string
---storage-path string   Storage directory path
--h, --help              Help for the command
-```
+The ones used most often:
+
+| Flag | Environment variable | Default | Description |
+|------|----------------------|---------|-------------|
+| `-c`, `--config` | `STOWRY_CONFIG` | `./config.yaml` | Config files, merged left to right |
+| `--db-type` | `STOWRY_DATABASE_TYPE` | `sqlite` | Database type |
+| `-d`, `--db-dsn` | `STOWRY_DATABASE_DSN` | `:memory:` | Database connection string |
+| `-s`, `--storage-path` | `STOWRY_STORAGE_PATH` | `:memory:` | Storage directory |
+| `-a`, `--access-key` | `STOWRY_ACCESS_KEY` | - | Access key for signed requests |
+| `-k`, `--secret-key` | `STOWRY_SECRET_KEY` | - | Secret key for signed requests |
+
+Both stores default to `:memory:`, so with no configuration the server keeps
+nothing once it exits.
 
 ## Commands
 
@@ -39,6 +47,8 @@ stowry serve [flags]
 |------|------|---------|-------------|
 | `--port` | int | 5708 | HTTP server port |
 | `--mode` | string | store | Server mode (`store`, `static`, `spa`) |
+| `-m`, `--migrate` | bool | false | Create the metadata schema before serving |
+| `-p`, `--populate` | bool | false | Record the files already in the storage directory before serving |
 
 **Examples:**
 
@@ -63,8 +73,12 @@ stowry serve
 
 **Behavior:**
 
-- Creates the storage directory if it doesn't exist
-- Runs database migrations automatically
+- Creates the storage directory if it doesn't exist, owner-only
+- Migrates an in-memory database, since nothing else could have. A database on
+  disk is migrated only with `--migrate`, or by running
+  [`stowry migrate`](#migrate) first
+- Rejects `auth.read: private` in `static` and `spa` modes at startup, because a
+  browser cannot sign a request
 - Gracefully shuts down on SIGINT or SIGTERM
 - Default read timeout: 30 seconds
 - Default write timeout: 30 seconds
@@ -72,207 +86,110 @@ stowry serve
 
 ---
 
-### add
+### migrate
 
-Import files from external paths into stowry storage.
+Create the tables and indexes stowry needs, then confirm the result.
 
 ```bash
-stowry add [flags] <file1> [file2] ...
+stowry migrate [flags]
 ```
+
+Run this before serving from a database on disk: `serve` migrates an in-memory
+database only.
 
 **Flags:**
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--dest`, `-d` | string | | Destination path prefix in storage |
-| `--recursive`, `-r` | bool | false | Recursively add directories |
-| `--no-clobber`, `-n` | bool | false | Skip existing files instead of overwriting |
-| `--quiet`, `-q` | bool | false | Suppress per-file output |
+| `-p`, `--populate` | bool | false | Record the files already in the storage directory once the schema is in place |
 
 **Examples:**
 
 ```bash
-# Add a single file
-stowry add /path/to/file.txt
+# Create the schema
+stowry migrate --db-dsn stowry.db
 
-# Add with a destination prefix
-stowry add --dest images/ /path/to/photo.jpg
+# Create it and record an existing directory of files in one go
+stowry migrate --db-dsn stowry.db --storage-path ./data --populate
 
-# Add a directory recursively
-stowry add -r /path/to/assets
-
-# Add files to a specific prefix without overwriting existing
-stowry add --dest uploads/ --no-clobber /path/to/file.txt
-
-# Quiet mode for scripting
-stowry add -q -r /path/to/assets
+# PostgreSQL
+stowry migrate --db-type postgres --db-dsn "postgres://localhost/stowry"
 ```
 
 **Behavior:**
 
-1. Copies files from the source path to the storage directory
-2. Registers metadata in the database (path, content type, hash, size)
-3. Content type is detected from file extension
-4. Existing files are overwritten by default (use `--no-clobber` to skip)
-5. For directories, requires `--recursive` flag
+- Idempotent: running it twice changes nothing
+- Never alters a table that already exists. A table stowry did not build is
+  reported rather than changed, so migrating onto an older or foreign schema
+  fails instead of half-working
+- Warns when the database is in memory, since nothing it creates will outlive
+  the process
 
-**Output:**
+---
 
+### validate
+
+Report whether the existing schema is the one stowry expects.
+
+```bash
+stowry validate
 ```
-INFO added path=photo.jpg content_type=image/jpeg
-INFO add complete added=5 skipped=2
+
+Nothing is created or altered, so this is what a deployment that migrates out
+of band runs in place of `migrate`. It exits non-zero when the schema is
+missing or wrong.
+
+It checks the metadata table's columns, their types and nullability, and the
+unique constraint on `path` that every write depends on.
+
+**Examples:**
+
+```bash
+stowry validate --db-dsn stowry.db
+stowry validate --db-type postgres --db-dsn "postgres://localhost/stowry"
 ```
 
 ---
 
-### remove
+### populate
 
-Soft-delete files from stowry storage.
+Record metadata for the files already in the storage directory, so a directory
+of existing files can be served without uploading anything.
 
 ```bash
-stowry remove [flags] <path1> [path2] ...
+stowry populate [flags]
 ```
+
+The files are read, never written: their layout under the storage path becomes
+the object paths.
 
 **Flags:**
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--prefix`, `-p` | bool | false | Treat paths as prefixes and remove all matching files |
-| `--quiet`, `-q` | bool | false | Suppress per-file output |
+| `-m`, `--migrate` | bool | false | Create the metadata schema first |
 
 **Examples:**
 
 ```bash
-# Remove a single file
-stowry remove myfile.txt
+# Record an existing directory
+stowry populate --db-dsn stowry.db --storage-path ./data
 
-# Remove multiple files
-stowry remove file1.txt file2.txt file3.txt
+# Create the schema and record in one go
+stowry populate --db-dsn stowry.db --storage-path ./data --migrate
 
-# Remove all files with a prefix (e.g., a directory)
-stowry remove --prefix images/
-
-# Quiet mode for scripting
-stowry remove -q file.txt
+# Pick up whatever changed on disk
+stowry populate --db-dsn stowry.db --storage-path ./data
 ```
 
 **Behavior:**
 
-1. Marks files as deleted by setting `deleted_at` timestamp in metadata
-2. Physical files remain on disk until `stowry cleanup` runs
-3. Deleted files are no longer accessible via the API
-4. With `--prefix`, removes all files matching the prefix (paginated internally)
-5. Non-existent paths are logged as warnings, not errors
-
-**Output:**
-
-```
-INFO removed path=myfile.txt
-INFO remove complete removed=3 not_found=1
-```
-
----
-
-### init
-
-Initialize the metadata database from existing storage files.
-
-```bash
-stowry init [flags]
-```
-
-**Use Cases:**
-
-- Setting up Stowry with pre-existing files
-- Recovering metadata after database loss or corruption
-- Migrating from another storage system
-
-**Examples:**
-
-```bash
-# Initialize from default storage path
-stowry init
-
-# With custom paths
-stowry init --storage-path /var/data --db-dsn /var/lib/stowry/metadata.db
-
-# With PostgreSQL
-stowry init --db-type postgres --db-dsn "postgres://localhost/stowry"
-```
-
-**Behavior:**
-
-1. Scans the storage directory recursively
-2. For each file found:
-   - Calculates SHA256 hash (used as ETag)
-   - Detects content type from file extension
-   - Creates or updates metadata entry
-3. Reports total files indexed
-
-**Output:**
-
-```
-INFO scanning storage directory path=./data
-INFO initialization complete files_indexed=42
-```
-
----
-
-### cleanup
-
-Permanently remove soft-deleted files from storage.
-
-```bash
-stowry cleanup [flags]
-```
-
-**Flags:**
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--limit` | int | 100 | Maximum files to clean up per batch |
-
-**Examples:**
-
-```bash
-# Clean up with default limit
-stowry cleanup
-
-# Clean up more files
-stowry cleanup --limit 500
-
-# Clean up with custom config
-stowry cleanup --config /etc/stowry/config.yaml --limit 1000
-```
-
-**Behavior:**
-
-1. Queries metadata for soft-deleted files (where `deleted_at` is set but `cleaned_up_at` is not)
-2. For each file:
-   - Deletes the physical file from storage
-   - Sets `cleaned_up_at` timestamp in metadata
-3. Reports total files cleaned
-
-**Output:**
-
-```
-INFO starting cleanup limit=100
-INFO cleanup complete files_cleaned=15
-```
-
-**Scheduling:**
-
-Run cleanup periodically to reclaim storage space:
-
-```bash
-# Cron job (every hour)
-0 * * * * /usr/local/bin/stowry cleanup --config /etc/stowry/config.yaml
-
-# Systemd timer
-[Timer]
-OnCalendar=hourly
-Persistent=true
-```
+- Repeatable: an entry that already exists is updated in place, picking up
+  whatever changed on disk
+- The schema must already exist unless `--migrate` is passed
+- A file whose path the server could not serve stops the run, and the entries
+  recorded before it are kept
+- This is how content reaches a `static` or `spa` server, which route no writes
 
 ---
 

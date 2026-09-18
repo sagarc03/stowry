@@ -276,7 +276,7 @@ DELETE /{path}
 curl -X DELETE http://localhost:5708/photos/vacation.jpg
 ```
 
-**Note:** Deleted objects remain in storage until `stowry cleanup` is run.
+**Note:** A delete removes both the metadata entry and the stored file.
 
 ---
 

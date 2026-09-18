@@ -354,40 +354,6 @@ Read-only Single Page Application host (public access). Returns `/index.html` fo
 
 Put the files in the storage directory and run `stowry populate`; static and spa modes route no writes.
 
-## Kubernetes
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: stowry
-spec:
-  selector:
-    matchLabels:
-      app: stowry
-  template:
-    metadata:
-      labels:
-        app: stowry
-    spec:
-      securityContext:
-        runAsUser: 65532
-        runAsGroup: 65532
-        fsGroup: 65532
-      containers:
-        - name: stowry
-          image: ghcr.io/sagarc03/stowry:latest
-          ports:
-            - containerPort: 5708
-          volumeMounts:
-            - name: data
-              mountPath: /data
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: stowry-data
-```
-
 ## Development
 
 This project uses [Task](https://taskfile.dev/) as a task runner.
@@ -439,8 +405,4 @@ Contributions are welcome! Please follow these steps:
 
 MIT. See [LICENSE](LICENSE).
 
-Dependencies keep their own licences, all permissive: 20 MIT, 9 BSD-3-Clause,
-3 BSD-2-Clause and 2 Apache-2.0 (`spf13/afero` and `spf13/cobra`). Apache-2.0
-requires its licence to travel with the binary, so release archives ship
-[THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES). Regenerate it with
-`task licenses` after changing dependencies; CI fails if it is out of date.
+Dependencies their licences can be reviewed under [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES).

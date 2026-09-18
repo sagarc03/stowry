@@ -110,10 +110,10 @@ git clone https://github.com/sagarc03/stowry.git
 cd stowry
 
 # Build the binary
-go build -o stowry ./cmd/stowry
+go build -o stowry .
 
 # Optional: Install to GOPATH/bin
-go install ./cmd/stowry
+go install .
 ```
 
 ## Verify Installation
@@ -152,56 +152,14 @@ Use "stowry [command] --help" for more information about a command.
 
 ---
 
-## Client CLI (stowry-cli)
+## Client CLI
 
-The `stowry-cli` is a separate binary for interacting with a running Stowry server from the command line.
-
-### Binary Download
-
-#### Linux
+There is no separate client binary. `stowry` is both the server and the client,
+so the installation above gives you `upload`, `download`, `list` and `delete`
+alongside `serve`.
 
 ```bash
-# amd64
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli_VERSION_linux_amd64.tar.gz
-tar xzf stowry-cli_VERSION_linux_amd64.tar.gz
-sudo mv stowry-cli /usr/local/bin/
-
-# arm64
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli_VERSION_linux_arm64.tar.gz
-tar xzf stowry-cli_VERSION_linux_arm64.tar.gz
-sudo mv stowry-cli /usr/local/bin/
-```
-
-Replace `VERSION` with the desired version (e.g., `1.0.0`). Check the [releases page](https://github.com/sagarc03/stowry/releases) for available versions.
-
-#### macOS
-
-```bash
-# Apple Silicon (M1/M2/M3)
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli_VERSION_darwin_arm64.tar.gz
-tar xzf stowry-cli_VERSION_darwin_arm64.tar.gz
-sudo mv stowry-cli /usr/local/bin/
-
-# Intel
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli_VERSION_darwin_amd64.tar.gz
-tar xzf stowry-cli_VERSION_darwin_amd64.tar.gz
-sudo mv stowry-cli /usr/local/bin/
-```
-
-#### Windows
-
-Download `stowry-cli_VERSION_windows_amd64.zip` from the [releases page](https://github.com/sagarc03/stowry/releases), extract the archive, and add the binary to your PATH.
-
-### Build from Source
-
-```bash
-go install github.com/sagarc03/stowry/cmd/stowry-cli@latest
-```
-
-### Verify Installation
-
-```bash
-stowry-cli --help
+stowry upload --help
 ```
 
 For full documentation, see the [Client CLI Reference](client-cli).

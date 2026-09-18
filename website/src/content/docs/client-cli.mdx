@@ -5,544 +5,245 @@ description: Command-line client for interacting with Stowry object storage serv
 
 # Client CLI Reference
 
-The `stowry-cli` is a command-line client for interacting with Stowry servers. It provides a simple interface for uploading, downloading, listing, and deleting objects without writing code.
+The `stowry` binary is both the server and the client. The client commands talk
+to a running server over HTTP, signing every request with the same key pair the
+server verifies.
 
 ## Overview
 
-Stowry provides two separate binaries:
+| Command | Purpose |
+|---------|---------|
+| `upload` | Send a file, or a whole directory |
+| `download` | Fetch a file, or stream it to stdout |
+| `list` | Page through the objects on the server |
+| `delete` | Remove one or more objects |
 
-| Binary | Purpose |
-|--------|---------|
-| `stowry` | Server-side CLI for running and managing the Stowry server |
-| `stowry-cli` | Client-side CLI for interacting with a running Stowry server |
+### Server mode awareness
 
-### Server Mode Awareness
+`upload`, `delete` and `list` are routed only in `store` mode. In `static` and
+`spa` modes the server serves reads and nothing else, so those three return
+`405 Method Not Allowed`. `download` works in every mode.
 
-Commands behave differently depending on the server's mode:
-
-| Command | Store Mode | Static Mode | SPA Mode |
-|---------|------------|-------------|----------|
-| `upload` | Works | Works | Works |
-| `download` | Returns file or 404 | Returns file, tries `path/index.html`, or 404 | Returns file or falls back to `/index.html` |
-| `delete` | Works | Works | Works |
-| `list` | Works | 404 error | 404 error |
-
----
+To publish content to a static or spa server, put the files in its storage
+directory and run [`stowry populate`](cli-reference#populate).
 
 ## Installation
 
-### Binary Download
-
-Download pre-built binaries from the [GitHub Releases](https://github.com/sagarc03/stowry/releases) page.
-
-#### Linux
-
-```bash
-# amd64
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli_VERSION_linux_amd64.tar.gz
-tar xzf stowry-cli_VERSION_linux_amd64.tar.gz
-sudo mv stowry-cli /usr/local/bin/
-
-# arm64
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli_VERSION_linux_arm64.tar.gz
-tar xzf stowry-cli_VERSION_linux_arm64.tar.gz
-sudo mv stowry-cli /usr/local/bin/
-```
-
-Replace `VERSION` with the desired version (e.g., `1.0.0`). Check the [releases page](https://github.com/sagarc03/stowry/releases) for available versions.
-
-#### macOS
-
-```bash
-# Apple Silicon (M1/M2/M3)
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli_VERSION_darwin_arm64.tar.gz
-tar xzf stowry-cli_VERSION_darwin_arm64.tar.gz
-sudo mv stowry-cli /usr/local/bin/
-
-# Intel
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-cli_VERSION_darwin_amd64.tar.gz
-tar xzf stowry-cli_VERSION_darwin_amd64.tar.gz
-sudo mv stowry-cli /usr/local/bin/
-```
-
-#### Windows
-
-Download `stowry-cli_VERSION_windows_amd64.zip` from the [releases page](https://github.com/sagarc03/stowry/releases), extract the archive, and add the binary to your PATH.
-
-### Build from Source
-
-```bash
-go install github.com/sagarc03/stowry/cmd/stowry-cli@latest
-```
-
----
+The client is the same binary as the server, so there is nothing extra to
+install. See [Installation](installation).
 
 ## Configuration
 
-The client supports multiple server profiles, allowing you to easily switch between different Stowry servers.
-
-### Configuration Priority
-
-Settings are resolved in this order (highest to lowest priority):
-
-1. **Command-line flags** (`--endpoint`, `--access-key`, `--secret-key`)
-2. **Environment variables** (`STOWRY_ENDPOINT`, `STOWRY_ACCESS_KEY`, `STOWRY_SECRET_KEY`)
-3. **Selected profile** (`--profile` flag or `STOWRY_PROFILE` env var)
-4. **Default profile** from config file
-
-### Configuration File
-
-Create `~/.stowry/config.yaml` with one or more profiles:
+The client needs three settings: where the server is, and the key pair to sign
+with.
 
 ```yaml
-profiles:
-  - name: local
-    endpoint: http://localhost:5708
-    access_key: YOUR_LOCAL_ACCESS_KEY
-    secret_key: YOUR_LOCAL_SECRET_KEY
-    default: true
+# config.yaml
+endpoint: http://localhost:5708
 
-  - name: production
-    endpoint: https://storage.example.com
-    access_key: YOUR_PROD_ACCESS_KEY
-    secret_key: YOUR_PROD_SECRET_KEY
-
-  - name: staging
-    endpoint: https://staging.example.com
-    access_key: YOUR_STAGING_ACCESS_KEY
-    secret_key: YOUR_STAGING_SECRET_KEY
+auth:
+  access_key: YOUR_ACCESS_KEY
+  secret_key: YOUR_SECRET_KEY
 ```
 
-The first profile is used as default, unless one is marked with `default: true`.
+Each is reachable three ways, highest first: a flag, an environment variable,
+then the config file.
 
-### Using Profiles
+| Setting | Flag | Environment variable | Default |
+|---------|------|----------------------|---------|
+| Server address | `-e`, `--endpoint` | `STOWRY_ENDPOINT` | `http://localhost:5708` |
+| Access key | `-a`, `--access-key` | `STOWRY_ACCESS_KEY` | - |
+| Secret key | `-k`, `--secret-key` | `STOWRY_SECRET_KEY` | - |
+| Config files | `-c`, `--config` | `STOWRY_CONFIG` | `./config.yaml` |
 
 ```bash
-# Uses default profile
-stowry-cli upload ./file.txt
-
-# Use a specific profile
-stowry-cli --profile production upload ./file.txt
-stowry-cli -p staging list
-
-# Set profile via environment variable
-export STOWRY_PROFILE=production
-stowry-cli upload ./file.txt
+export STOWRY_ENDPOINT=https://storage.example.com
+export STOWRY_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE
+export STOWRY_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 ```
 
-### Environment Variables
+A flag value is visible in the process list, so the environment and the config
+file are the better places for credentials.
 
-```bash
-export STOWRY_PROFILE=production            # Select profile by name
-export STOWRY_CONFIG=~/.stowry/config.yaml  # Custom config file path
-export STOWRY_ENDPOINT=http://localhost:5708 # Override server URL
-export STOWRY_ACCESS_KEY=YOUR_ACCESS_KEY    # Override access key
-export STOWRY_SECRET_KEY=YOUR_SECRET_KEY    # Override secret key
+Without credentials the client fails before it makes a request, rather than
+returning a 401:
+
 ```
-
-### Command-line Overrides
-
-Flags override both profile and environment settings:
-
-```bash
-stowry-cli --profile production --endpoint https://backup.example.com upload ./file.txt
+Error: no credentials: set auth.access_key and auth.secret_key, or pass --access-key and --secret-key
 ```
-
----
-
-## Global Flags
-
-These flags are available for all commands:
-
-| Flag | Short | Env Var | Default | Description |
-|------|-------|---------|---------|-------------|
-| `--config` | `-c` | `STOWRY_CONFIG` | `~/.stowry/config.yaml` | Config file path |
-| `--profile` | `-p` | `STOWRY_PROFILE` | - | Use named profile from config |
-| `--endpoint` | `-e` | `STOWRY_ENDPOINT` | `http://localhost:5708` | Endpoint URL override |
-| `--access-key` | `-a` | `STOWRY_ACCESS_KEY` | - | Access key override |
-| `--secret-key` | `-k` | `STOWRY_SECRET_KEY` | - | Secret key override |
-| `--json` | - | - | `false` | Output results as JSON |
-| `--quiet` | `-q` | - | `false` | Suppress non-essential output |
-| `--help` | `-h` | - | - | Help for the command |
-
----
 
 ## Commands
 
-### configure
-
-Manage server profiles in the configuration file.
-
-```bash
-stowry-cli configure <subcommand>
-```
-
-**Subcommands:**
-
-| Subcommand | Description |
-|------------|-------------|
-| `list` | List all configured profiles |
-| `add <name>` | Add a new profile interactively |
-| `update <name>` | Update an existing profile interactively |
-| `remove <name>` | Remove a profile |
-| `set-default <name>` | Set the default profile |
-| `show [name]` | Show profile details (default profile if name omitted) |
-
-**Flags for `add` and `update`:**
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--skip-test` | `false` | Skip connection test before saving |
-
-**Examples:**
-
-```bash
-# List all profiles (* marks default)
-stowry-cli configure list
-
-# Add a new profile interactively
-stowry-cli configure add production
-
-# Add profile without testing connection
-stowry-cli configure add staging --skip-test
-
-# Update an existing profile
-stowry-cli configure update production
-
-# Update profile without testing connection
-stowry-cli configure update production --skip-test
-
-# Show profile details (secrets hidden)
-stowry-cli configure show production
-
-# Show profile with secrets revealed
-stowry-cli configure show production --show-secrets
-
-# Set default profile
-stowry-cli configure set-default production
-
-# Remove a profile
-stowry-cli configure remove old-server
-```
-
-**Output of `configure list`:**
-
-```
-  NAME        ENDPOINT                     ACCESS KEY
-  ----------  ---------------------------  --------------------
-* local       http://localhost:5708        AKIA...MPLE
-  production  https://storage.example.com  PROD...KEY
-```
-
----
-
 ### upload
 
-Upload files to the server.
+```bash
+stowry upload <local-path> [remote-path]
+```
+
+A directory is uploaded whole: its contents go directly under the remote path,
+with the tree below it preserved. The directory's own name is not added.
+
+With no remote path, one is derived from the local path by stripping any
+leading `./`, `../` or `/`.
+
+| Flag | Description |
+|------|-------------|
+| `--content-type` | Content type for every file uploaded. Defaults to detecting it from each file's extension. |
 
 ```bash
-stowry-cli upload [flags] <local-path> [remote-path]
+# Remote path defaults to the local path
+stowry upload ./images/photo.jpg        # -> images/photo.jpg
+
+# Explicit remote path
+stowry upload ./file.txt custom/path.txt
+
+# A directory: contents land under "assets"
+stowry upload ./site assets             # site/a.css -> assets/a.css
+
+# Override the detected content type
+stowry upload ./data.bin archive/data.bin --content-type application/x-custom
 ```
 
-If `remote-path` is omitted, the local path is used (normalized):
-- `./foo/bar.txt` → `foo/bar.txt`
-- `/abs/path/file.txt` → `abs/path/file.txt`
-- `../sibling/file.txt` → `sibling/file.txt`
-
-**Flags:**
-
-| Flag | Short | Default | Description |
-|------|-------|---------|-------------|
-| `--recursive` | `-r` | `false` | Upload directory recursively |
-| `--content-type` | `-t` | auto-detect | Override content type |
-
-**Examples:**
-
-```bash
-# Upload using local path as remote path
-stowry-cli upload ./document.pdf
-
-# Upload nested file (preserves directory structure)
-stowry-cli upload ./images/photo.jpg
-
-# Upload with explicit remote path
-stowry-cli upload ./document.pdf reports/2024/report.pdf
-
-# Upload with explicit content type
-stowry-cli upload --content-type application/json ./data.json
-
-# Upload a directory recursively
-stowry-cli upload -r ./images/
-
-# Upload directory to different remote prefix
-stowry-cli upload -r ./local/images/ remote/media/
-
-# Upload with JSON output
-stowry-cli upload --json ./file.txt
-```
-
-**Output:**
-
-```
-uploaded path/file.txt (1234 bytes)
-```
-
-With `--json`:
-
-```json
-[
-  {
-    "local_path": "./file.txt",
-    "remote_path": "path/file.txt",
-    "size": 1234,
-    "content_type": "text/plain"
-  }
-]
-```
-
----
+Each upload prints the local path, the URL it landed at, its size and its
+content type.
 
 ### download
 
-Download a file from the server.
+```bash
+stowry download <remote-path> [local-path]
+```
+
+With no local path, the file is written to the base name of the remote path. A
+local path of `-` writes it to stdout instead.
 
 ```bash
-stowry-cli download [flags] <remote-path> [local-path]
+# Writes ./photo.jpg
+stowry download images/photo.jpg
+
+# Writes ./local-copy.jpg
+stowry download images/photo.jpg local-copy.jpg
+
+# Straight to stdout
+stowry download config/settings.json - | jq .
 ```
 
-**Flags:**
-
-| Flag | Short | Default | Description |
-|------|-------|---------|-------------|
-| `--output` | `-o` | - | Output file path |
-| `--stdout` | - | `false` | Write content to stdout |
-
-**Examples:**
-
-```bash
-# Download to current directory (uses remote filename)
-stowry-cli download path/file.txt
-
-# Download to specific local path
-stowry-cli download path/file.txt ./local-copy.txt
-
-# Download using --output flag
-stowry-cli download -o ./local-copy.txt path/file.txt
-
-# Pipe to another command
-stowry-cli download --stdout config.json | jq .
-
-# Download with JSON metadata output
-stowry-cli download --json path/file.txt
-```
-
-**Output:**
-
-```
-downloaded path/file.txt -> ./file.txt (1234 bytes)
-```
-
-With `--stdout`, the file content is written directly to stdout, making it easy to pipe to other commands.
-
----
-
-### delete
-
-Delete one or more files from the server.
-
-```bash
-stowry-cli delete [flags] <remote-path> [remote-path...]
-```
-
-**Examples:**
-
-```bash
-# Delete a single file
-stowry-cli delete path/file.txt
-
-# Delete multiple files
-stowry-cli delete old/a.txt old/b.txt old/c.txt
-
-# Delete with quiet mode
-stowry-cli delete -q temp/file.txt
-
-# Delete with JSON output
-stowry-cli delete --json path/file.txt
-```
-
-**Output:**
-
-```
-deleted path/file.txt
-```
-
-With `--json`:
-
-```json
-[
-  {
-    "path": "path/file.txt",
-    "deleted": true
-  }
-]
-```
-
----
+In `static` and `spa` modes the server resolves a missing object to an index or
+fallback document, so a download may return one of those rather than fail.
 
 ### list
 
-List objects on the server.
+```bash
+stowry list [prefix]
+```
+
+Objects come back oldest first. Results are paged: each page prints the cursor
+to pass back for the next one.
+
+| Flag | Description |
+|------|-------------|
+| `--limit` | Objects per page. Defaults to the server's own limit. |
+| `--cursor` | Continue from a cursor a previous page printed. |
+| `--all` | Follow cursors until every object is listed. |
 
 ```bash
-stowry-cli list [flags] [prefix]
+# Everything on the server
+stowry list
+
+# Only one prefix
+stowry list images/
+
+# One page at a time
+stowry list --limit 10
+
+# Every page, however many there are
+stowry list images/ --all
 ```
 
-**Note:** This command only works when the server is running in `store` mode. In `static` or `spa` modes, this will return a 404 error.
+Output is a table, followed by the count and total size:
 
-**Flags:**
+```
+PATH            SIZE  CONTENT TYPE               UPDATED
+docs/a.txt      5     text/plain; charset=utf-8  2026-09-18T21:56:17Z
+site/a.txt      5     text/plain; charset=utf-8  2026-09-18T21:56:17Z
 
-| Flag | Short | Default | Description |
-|------|-------|---------|-------------|
-| `--prefix` | - | - | Filter by path prefix |
-| `--limit` | `-l` | `100` | Maximum results per page (max: 1000) |
-| `--all` | - | `false` | Fetch all pages |
-| `--cursor` | - | - | Pagination cursor for next page |
+2 objects, 10 bytes
+more: --cursor MjAyNi0wOS0xOFQyMTo1...
+```
 
-**Examples:**
+### delete
 
 ```bash
-# List all objects
-stowry-cli list
-
-# List with prefix (positional argument)
-stowry-cli list images/
-
-# List with prefix (flag)
-stowry-cli list --prefix documents/
-
-# Limit results
-stowry-cli list --limit 10
-
-# Fetch all pages
-stowry-cli list --all
-
-# Continue from cursor
-stowry-cli list --cursor "eyJwYXRoIjoi..."
-
-# JSON output
-stowry-cli list --json --prefix images/
+stowry delete <remote-path> [remote-path...]
 ```
 
-**Output:**
+Every path is attempted, so one failure does not abandon the rest. Each outcome
+is printed, and the command exits non-zero if any path failed.
 
-```
-images/photo1.jpg    image/jpeg    102400    2024-01-15T10:00:00Z
-images/photo2.jpg    image/jpeg    204800    2024-01-15T11:00:00Z
-images/photo3.jpg    image/jpeg    153600    2024-01-15T12:00:00Z
+```bash
+# One object
+stowry delete images/photo.jpg
 
-Next cursor: eyJwYXRoIjoi...
-```
-
-With `--json`:
-
-```json
-{
-  "items": [
-    {
-      "path": "images/photo1.jpg",
-      "content_type": "image/jpeg",
-      "file_size_bytes": 102400,
-      "created_at": "2024-01-15T10:00:00Z",
-      "updated_at": "2024-01-15T10:00:00Z"
-    }
-  ],
-  "next_cursor": "eyJwYXRoIjoi..."
-}
+# Several at once
+stowry delete old/a.txt old/b.txt old/c.txt
 ```
 
----
+```
+deleted old/a.txt
+failed  old/missing.txt: server error: 404 - Object not found
+Error: delete 1 of 2: old/missing.txt: server error: 404 - Object not found
+```
 
-## Exit Codes
+## Exit codes
 
 | Code | Meaning |
 |------|---------|
 | 0 | Success |
-| 1 | Error (authentication failed, file not found, server error, etc.) |
-
----
+| 1 | Error: missing credentials, authentication failed, object not found, server error |
 
 ## Examples
 
-### Basic Workflow
+### Basic workflow
 
 ```bash
-# Configure credentials
 export STOWRY_ENDPOINT=http://localhost:5708
-export STOWRY_ACCESS_KEY=your-access-key
-export STOWRY_SECRET_KEY=your-secret-key
+export STOWRY_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE
+export STOWRY_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 
-# Upload a file (uses local path as remote path)
-stowry-cli upload ./documents/report.pdf
-
-# Upload with explicit remote path
-stowry-cli upload ./report.pdf documents/2024/report.pdf
-
-# List files
-stowry-cli list documents/
-
-# Download a file
-stowry-cli download documents/report.pdf ./downloaded-report.pdf
-
-# Delete when done
-stowry-cli delete documents/report.pdf
+stowry upload ./report.pdf documents/report.pdf
+stowry list documents/
+stowry download documents/report.pdf
+stowry delete documents/report.pdf
 ```
 
-### Batch Operations
+### Publishing a directory
 
 ```bash
-# Upload entire directory (preserves structure)
-stowry-cli upload -r ./website/
+# Every file under ./dist lands under "site"
+stowry upload ./dist site
 
-# Upload directory to different prefix
-stowry-cli upload -r ./website/ static/
-
-# Delete multiple files
-stowry-cli delete static/old1.html static/old2.html static/old3.html
+# Check what arrived
+stowry list site/ --all
 ```
 
-### Scripting with JSON Output
+### Against several servers
+
+There are no stored profiles. Point the client at a server per invocation, or
+keep one config file per environment:
 
 ```bash
-# Get file count
-stowry-cli list --json --all | jq '.items | length'
+# Per invocation
+stowry --endpoint https://staging.example.com list
 
-# Get total size
-stowry-cli list --json --all | jq '[.items[].file_size_bytes] | add'
-
-# Filter by content type
-stowry-cli list --json --all | jq '.items[] | select(.content_type == "image/jpeg")'
+# Per config file
+stowry -c ./staging.yaml list
+stowry -c ./production.yaml list
 ```
 
-### Using Profiles
+`--config` takes several files, merged left to right, so shared settings can
+live in one file and the endpoint in another:
 
 ```bash
-# Set up profiles interactively
-stowry-cli configure add local
-stowry-cli configure add production
-stowry-cli configure add staging
-
-# Set production as default
-stowry-cli configure set-default production
-
-# Use default profile (production)
-stowry-cli upload ./file.txt
-
-# Use specific profile
-stowry-cli -p staging upload ./file.txt
-
-# CI/CD: Set profile via environment
-export STOWRY_PROFILE=production
-stowry-cli upload ./dist/
+stowry -c ./common.yaml,./staging.yaml list
 ```
 
 ---

@@ -77,7 +77,7 @@ server:
 - Missing paths return an HTML 404 page (default Stowry-branded, or custom via `error_document`)
 - Read-only: PUT and DELETE return `405 Method Not Allowed`
 - Always public access (auth settings are ignored)
-- Use `stowry add` or store mode to populate content
+- Put files in the storage directory and run `stowry populate`; static and spa route no writes
 
 ### Fallback Logic
 
@@ -164,7 +164,7 @@ server:
 - Enables client-side routing (React Router, Vue Router, etc.)
 - Read-only: PUT and DELETE return `405 Method Not Allowed`
 - Always public access (auth settings are ignored)
-- Use `stowry add` or store mode to populate content
+- Put files in the storage directory and run `stowry populate`; static and spa route no writes
 
 ### Fallback Logic
 
@@ -285,7 +285,7 @@ Since static and SPA modes are read-only, use one of these methods to add files:
 
 ```bash
 # Using the add command (recommended)
-stowry add -r ./dist
+stowry populate   # after copying ./dist into the storage directory
 
 # Using store mode temporarily
 stowry serve --mode store

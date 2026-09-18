@@ -42,11 +42,11 @@ import (
     "io"
     "net/http"
 
-    stowry "github.com/sagarc03/stowry-go"
+    "github.com/sagarc03/stowry/sign"
 )
 
 func main() {
-    client := stowry.NewClient(
+    client := sign.NewClient(
         "http://localhost:5708",
         "your-access-key",
         "your-secret-key",
@@ -54,7 +54,7 @@ func main() {
 
     // Upload a file
     key := "/hello.txt"
-    content := []byte("Hello from stowry-go!")
+    content := []byte("Hello from stowry sign!")
 
     uploadURL := client.PresignPut(key, 900) // 15 minutes
     req, _ := http.NewRequest("PUT", uploadURL, bytes.NewReader(content))
@@ -301,7 +301,7 @@ cd frontend && npm install && npm run dev
 
 Stowry supports two signing schemes:
 
-**Native signing** (stowry-go, stowrypy, stowryjs):
+**Native signing** (`sign`, stowrypy, stowryjs):
 ```
 http://localhost:5708/path?X-Stowry-Credential=...&X-Stowry-Signature=...
 ```

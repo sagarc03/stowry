@@ -33,13 +33,16 @@ service:
 # Database configuration
 database:
   type: sqlite            # Database type: sqlite, postgres (default: sqlite)
-  dsn: stowry.db          # Connection string or file path
+  dsn: stowry.db          # Connection string, file path, or :memory: (default: :memory:)
   tables:
     meta_data: stowry_metadata  # Metadata table name (default: stowry_metadata)
 
 # Storage configuration
 storage:
-  path: ./data           # Directory for file storage (default: ./data)
+  path: ./data           # Directory for file storage, or :memory: (default: :memory:)
+
+# Server the client commands talk to
+endpoint: http://localhost:5708
 
 # Authentication configuration
 auth:
@@ -48,11 +51,10 @@ auth:
   aws:
     region: us-east-1    # AWS region for signature verification
     service: s3          # AWS service name (default: s3)
+  access_key: AKIAIOSFODNN7EXAMPLE
+  secret_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
   keys:
-    inline:              # Inline key definitions
-      - access_key: AKIAIOSFODNN7EXAMPLE
-        secret_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-    # file: /path/to/keys.json  # Or load from JSON file
+    # file: /path/to/keys.json  # Several pairs
 
 # Logging
 log:
@@ -86,7 +88,7 @@ log:
 
 **Migration Options:**
 
-1. **CLI migration (recommended):** Run `stowry init` before starting the server
+1. **CLI migration (recommended):** Run `stowry migrate` before starting the server
 2. **Manual SQL:** Execute the schema SQL below directly in your database
 
 #### PostgreSQL Schema
@@ -174,8 +176,9 @@ The storage directory is created automatically with `0o700` permissions (owner-o
 | `write` | string | public | Write access mode (`public`, `private`) |
 | `aws.region` | string | us-east-1 | AWS region for signature verification |
 | `aws.service` | string | s3 | AWS service name |
-| `keys.inline` | list | [] | Inline list of access key pairs |
-| `keys.file` | string | - | Path to JSON file containing keys |
+| `access_key` | string | - | Access key for signed requests |
+| `secret_key` | string | - | Secret for that access key |
+| `keys.file` | string | - | Path to a JSON file of key pairs, for more than one |
 
 > **Note:** The access control matrix below applies to `store` mode only. In `static` and `spa` modes, all access is public and write operations return `405 Method Not Allowed`.
 
@@ -188,20 +191,17 @@ The storage directory is created automatically with `0o700` permissions (owner-o
 | private | private | Auth required | Auth required | Auth required |
 | private | public | Auth required | Public | Public |
 
-**Multiple Keys (inline):**
+The config carries one key pair. Either half alone is rejected at startup.
+
 ```yaml
 auth:
   read: private
   write: private
-  keys:
-    inline:
-      - access_key: KEY1
-        secret_key: SECRET1
-      - access_key: KEY2
-        secret_key: SECRET2
+  access_key: KEY1
+  secret_key: SECRET1
 ```
 
-**Keys from file:**
+**Several keys, from a file:**
 ```yaml
 auth:
   keys:
@@ -242,7 +242,15 @@ All configuration options can be set via environment variables using the `STOWRY
 | `auth.write` | `STOWRY_AUTH_WRITE` |
 | `auth.aws.region` | `STOWRY_AUTH_AWS_REGION` |
 | `auth.aws.service` | `STOWRY_AUTH_AWS_SERVICE` |
+| `auth.keys.file` | `STOWRY_AUTH_KEYS_FILE` |
+| `auth.access_key` | `STOWRY_ACCESS_KEY` |
+| `auth.secret_key` | `STOWRY_SECRET_KEY` |
+| `endpoint` | `STOWRY_ENDPOINT` |
 | `log.level` | `STOWRY_LOG_LEVEL` |
+
+The credentials are the exception to the `STOWRY_` + path rule, dropping the
+section name. Each setting answers to exactly one variable, so
+`STOWRY_AUTH_ACCESS_KEY` is not read.
 
 **Example:**
 
@@ -322,10 +330,7 @@ auth:
   aws:
     region: us-east-1
     service: s3
-  keys:
-    inline:
-      - access_key: ${STOWRY_ACCESS_KEY}
-        secret_key: ${STOWRY_SECRET_KEY}
+  # Credentials come from STOWRY_ACCESS_KEY and STOWRY_SECRET_KEY
 
 log:
   level: info

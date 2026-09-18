@@ -57,12 +57,12 @@ http://localhost:5708/bucket/key?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credenti
 
 ## Generating Presigned URLs
 
-### Using stowry-go SDK (Native Signing)
+### Using the sign package (native signing)
 
 ```go
-import stowry "github.com/sagarc03/stowry-go"
+import "github.com/sagarc03/stowry/sign"
 
-client := stowry.NewClient(
+client := sign.NewClient(
     "http://localhost:5708",
     "AKIAIOSFODNN7EXAMPLE",
     "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",

@@ -11,15 +11,18 @@ This document describes Stowry's technical architecture and design decisions.
 
 Stowry follows a clean architecture with clear separation between:
 
-- **Core domain logic** (root package)
-- **Configuration** (config package)
-- **Infrastructure adapters** (database, filesystem, keybackend, http packages)
-- **CLI application** (cmd/stowry)
+- **Core domain logic** (`internal/service`)
+- **Configuration** (`internal/config`)
+- **Infrastructure adapters** (`internal/database`, `internal/keybackend`, `internal/handler`, `internal/middleware`)
+- **Client** (`internal/client`)
+- **Signing**, shared by server and client (`sign`)
+- **Wire types**, shared by server and client (`types`)
+- **CLI**, one binary for both halves (`internal/cli`, `main.go`)
 
 ```mermaid
 flowchart TB
     subgraph Clients["🖥️ Clients"]
-        cli["stowry-cli"]
+        cli["stowry client commands"]
         sdk["SDK / HTTP"]
     end
 
@@ -27,7 +30,7 @@ flowchart TB
         direction TB
         httpLayer["HTTP Layer"]
         auth["Auth Middleware"]
-        service["StowryService"]
+        service["Service"]
         httpLayer --> auth --> service
     end
 
@@ -71,24 +74,23 @@ type FileStorage interface {
 }
 ```
 
-### StowryService
+### Service
 
 The main service orchestrates metadata and storage operations:
 
 ```go
-type StowryService struct {
+type Service struct {
     repo    MetaDataRepo
     storage FileStorage
     mode    ServerMode
 }
 
-func (s *StowryService) Create(ctx context.Context, obj CreateObject, content io.Reader) (MetaData, error)
-func (s *StowryService) Get(ctx context.Context, path string) (MetaData, io.ReadSeekCloser, error)
-func (s *StowryService) Info(ctx context.Context, path string) (MetaData, error)
-func (s *StowryService) Delete(ctx context.Context, path string) error
-func (s *StowryService) List(ctx context.Context, query ListQuery) (ListResult, error)
-func (s *StowryService) Populate(ctx context.Context) error
-func (s *StowryService) Tombstone(ctx context.Context, query ListQuery) (int, error)
+func (s *Service) Create(ctx context.Context, obj CreateObject, content io.Reader) (MetaData, error)
+func (s *Service) Get(ctx context.Context, path string) (MetaData, io.ReadSeekCloser, error)
+func (s *Service) Info(ctx context.Context, path string) (MetaData, error)
+func (s *Service) Delete(ctx context.Context, path string) error
+func (s *Service) List(ctx context.Context, query ListQuery) (ListResult, error)
+func (s *Service) Populate(ctx context.Context) ([]types.MetaData, error)
 ```
 
 ### Domain Types
@@ -143,17 +145,16 @@ if err := db.Migrate(ctx); err != nil {
     log.Fatal(err)
 }
 
-repo := db.GetRepo()
 ```
 
-### SQLite (database/sqlite/)
+### SQLite (internal/database)
 
 - Uses `modernc.org/sqlite` (pure Go implementation)
 - Single-file database, no external process
 - Code-based migrations
 - Ideal for development and small deployments
 
-### PostgreSQL (database/postgres/)
+### PostgreSQL (internal/database)
 
 - Uses `pgx/v5` with connection pooling
 - Code-based migrations
@@ -188,12 +189,13 @@ if err := db.Validate(ctx); err != nil {
     log.Fatal(err)
 }
 
-repo := db.GetRepo()
 ```
 
-The CLI handles this via the `stowry init` command which runs migrations and populates metadata from existing files.
+`stowry migrate` runs the migration; `stowry populate` records metadata for
+files already in the storage directory. `migrate` validates its own result, so
+a schema stowry did not build is reported rather than changed.
 
-## File Storage (filesystem/)
+## File Storage (internal/service, over spf13/afero)
 
 ### Atomic Writes
 
@@ -231,7 +233,7 @@ storage := filesystem.NewFileStorage(root)
 
 MIME types are detected from file extensions using Go's `mime` package.
 
-## Key Backend (keybackend/)
+## Key Backend (internal/keybackend)
 
 The `keybackend` package provides pluggable secret key storage for signature verification.
 
@@ -257,7 +259,7 @@ cfg := stowry.AuthConfig{AWS: stowry.AWSConfig{Region: "us-east-1", Service: "s3
 verifier := stowry.NewSignatureVerifier(cfg, store)
 ```
 
-## HTTP Layer (http/)
+## HTTP Layer (internal/handler, internal/middleware)
 
 ### Router
 
@@ -290,44 +292,27 @@ Supports two signing schemes:
 
 The middleware auto-detects which scheme to use based on query parameters.
 
-## Two-Phase Deletion
-
-Stowry uses soft deletion with cleanup:
-
-### Phase 1: Soft Delete
+## Deletion
 
 ```
 DELETE /file.txt
 ```
 
-1. Sets `deleted_at` timestamp
-2. File remains in storage
-3. Object excluded from listings
+`Service.Delete` soft-deletes the metadata, setting `deleted_at` so the object
+drops out of listings, and then removes the stored file.
 
-### Phase 2: Tombstone (Cleanup)
-
-```bash
-stowry cleanup
-```
-
-1. Queries objects where `deleted_at` is set but `cleaned_up_at` is not
-2. Deletes physical file from storage
-3. Sets `cleaned_up_at` timestamp
-4. Metadata retained for audit trail
-
-### Benefits
-
-- Recoverable deletes (before cleanup runs)
-- Consistent state between metadata and storage
-- Audit trail of all operations
-- Graceful handling of concurrent operations
+The schema also carries `cleaned_up_at`, and the repository exposes
+`ListPendingCleanup` and `MarkCleanedUp` for a two-phase delete where the file
+outlives the metadata entry. Nothing uses them yet: the file goes with the
+first phase, so no entry is ever left pending. The columns are there for a
+cleanup command that has not been built.
 
 ## Error Handling
 
 ### Sentinel Errors
 
 ```go
-// errors.go (root package)
+// internal/service/errors.go
 var (
     ErrNotFound     = errors.New("not found")
     ErrInvalidInput = errors.New("invalid input")
