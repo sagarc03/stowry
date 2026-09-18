@@ -6,8 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"time"
-
-	"github.com/google/uuid"
+	"uuid"
 )
 
 type MetaData struct {
@@ -76,7 +75,7 @@ func ParseServerMode(s string) (ServerMode, error) {
 // Tables holds configurable table names for metadata storage.
 // This allows multi-tenant deployments to use different table names.
 type Tables struct {
-	MetaData string `mapstructure:"meta_data"`
+	MetaData string
 }
 
 var validTableNameRegex = regexp.MustCompile(`^[a-z_][a-z0-9_]*$`)
