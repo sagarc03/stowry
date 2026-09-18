@@ -88,15 +88,13 @@ jobs:
         shell: bash
         run: |
           ext=""; if [ "$RUNNER_OS" = "Windows" ]; then ext=".exe"; fi
-          CGO_ENABLED=0 go build -o bin/stowry${ext} ./cmd/stowry
-          CGO_ENABLED=0 go build -o bin/stowry-cli${ext} ./cmd/stowry-cli
+          CGO_ENABLED=0 go build -o bin/stowry${ext} .
 
       - name: Verify binaries
         shell: bash
         run: |
           ext=""; if [ "$RUNNER_OS" = "Windows" ]; then ext=".exe"; fi
           ./bin/stowry${ext} --version
-          ./bin/stowry-cli${ext} --version
 
   docker:
     name: Docker images
@@ -125,7 +123,7 @@ jobs:
           version: "~> v2"
           args: release --snapshot --clean
 
-      # Exercises each variant end to end. `init` and `PUT` both write into
+      # Exercises each variant end to end. `migrate` and `PUT` both write into
       # /data as the image's unprivileged user, so this fails if the data
       # directory is not owned by that user.
       - name: Smoke test images
@@ -136,7 +134,7 @@ jobs:
             volume="smoke-${variant}"
 
             docker volume create "$volume" > /dev/null
-            docker run --rm -v "$volume:/data" "$image" init --db-dsn /data/stowry.db
+            docker run --rm -v "$volume:/data" "$image" migrate --db-dsn /data/stowry.db
             cid=$(docker run -d -p 5708:5708 -v "$volume:/data" "$image" serve --db-dsn /data/stowry.db)
 
             # Dump the container's own logs however this variant fails, and
