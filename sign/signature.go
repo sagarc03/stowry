@@ -1,4 +1,4 @@
-package stowry
+package sign
 
 import (
 	"crypto/hmac"
@@ -12,8 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	stowrysign "github.com/sagarc03/stowry-go"
 )
 
 const (
@@ -79,7 +77,7 @@ func NewSignatureVerifier(cfg AuthConfig, store SecretStore) *SignatureVerifier 
 func (v *SignatureVerifier) Verify(r *http.Request) error {
 	query := r.URL.Query()
 
-	if _, ok := query[stowrysign.StowrySignatureParam]; ok {
+	if _, ok := query[StowrySignatureParam]; ok {
 		return v.stowryVerifier.Verify(r)
 	}
 
@@ -110,10 +108,10 @@ func NewStowrySignatureVerifier(store SecretStore) *StowrySignatureVerifier {
 func (v *StowrySignatureVerifier) Verify(r *http.Request) error {
 	query := r.URL.Query()
 
-	credential := query.Get(stowrysign.StowryCredentialParam)
-	dateStr := query.Get(stowrysign.StowryDateParam)
-	expiresStr := query.Get(stowrysign.StowryExpiresParam)
-	signature := query.Get(stowrysign.StowrySignatureParam)
+	credential := query.Get(StowryCredentialParam)
+	dateStr := query.Get(StowryDateParam)
+	expiresStr := query.Get(StowryExpiresParam)
+	signature := query.Get(StowrySignatureParam)
 
 	if credential == "" || dateStr == "" || expiresStr == "" || signature == "" {
 		return errors.New("missing required signature parameters")
@@ -129,8 +127,8 @@ func (v *StowrySignatureVerifier) Verify(r *http.Request) error {
 		return fmt.Errorf("invalid X-Stowry-Expires: %w", err)
 	}
 
-	if expires <= 0 || expires > stowrysign.MaxExpires {
-		return fmt.Errorf("invalid expires: must be between 1 and %d", stowrysign.MaxExpires)
+	if expires <= 0 || expires > MaxExpires {
+		return fmt.Errorf("invalid expires: must be between 1 and %d", MaxExpires)
 	}
 
 	if time.Now().Unix() > timestamp+expires {
@@ -142,7 +140,7 @@ func (v *StowrySignatureVerifier) Verify(r *http.Request) error {
 		return fmt.Errorf("lookup access key: %w", err)
 	}
 
-	expectedSignature := stowrysign.Sign(secretKey, r.Method, r.URL.Path, timestamp, expires)
+	expectedSignature := Sign(secretKey, r.Method, r.URL.Path, timestamp, expires)
 
 	if !hmac.Equal([]byte(expectedSignature), []byte(signature)) {
 		return errors.New("signature mismatch")

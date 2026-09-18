@@ -1,32 +1,47 @@
-package stowry_test
+package sign_test
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"testing"
 	"time"
 
-	"github.com/sagarc03/stowry"
-	stowrysign "github.com/sagarc03/stowry-go"
-	"github.com/sagarc03/stowry/keybackend"
+	"github.com/sagarc03/stowry/sign"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestAWSSignatureVerifier_Verify(t *testing.T) {
-	store := keybackend.NewMapSecretStore(map[string]string{
-		"AKIATEST": "testsecret",
-	})
+// errKeyNotFound mirrors the error a real SecretStore returns for an unknown
+// access key.
+var errKeyNotFound = errors.New("access key not found")
 
-	verifier := stowry.NewAWSSignatureVerifier("us-east-1", "s3", store)
+// mapStore is an in-memory SecretStore used to keep these tests independent of
+// any concrete key backend.
+type mapStore map[string]string
+
+func (s mapStore) Lookup(accessKey string) (string, error) {
+	secretKey, found := s[accessKey]
+	if !found {
+		return "", errKeyNotFound
+	}
+	return secretKey, nil
+}
+
+func TestAWSSignatureVerifier_Verify(t *testing.T) {
+	store := mapStore{
+		"AKIATEST": "testsecret",
+	}
+
+	verifier := sign.NewAWSSignatureVerifier("us-east-1", "s3", store)
 
 	validTime := time.Now().UTC().Add(-30 * time.Minute)
-	validDateStamp := validTime.Format(stowry.DateFormat)
-	validAmzDate := validTime.Format(stowry.DateTimeFormat)
+	validDateStamp := validTime.Format(sign.DateFormat)
+	validAmzDate := validTime.Format(sign.DateTimeFormat)
 
 	oldTime := time.Now().Add(-2 * time.Hour)
-	oldDateStamp := oldTime.Format(stowry.DateFormat)
-	oldAmzDate := oldTime.Format(stowry.DateTimeFormat)
+	oldDateStamp := oldTime.Format(sign.DateFormat)
+	oldAmzDate := oldTime.Format(sign.DateTimeFormat)
 
 	tests := []struct {
 		name      string
@@ -220,11 +235,11 @@ func TestAWSSignatureVerifier_Verify(t *testing.T) {
 }
 
 func TestNewAWSSignatureVerifier(t *testing.T) {
-	store := keybackend.NewMapSecretStore(map[string]string{
+	store := mapStore{
 		"test": "secret",
-	})
+	}
 
-	verifier := stowry.NewAWSSignatureVerifier("us-west-1", "ec2", store)
+	verifier := sign.NewAWSSignatureVerifier("us-west-1", "ec2", store)
 
 	assert.NotNil(t, verifier)
 	assert.Equal(t, "us-west-1", verifier.Region)
@@ -232,12 +247,12 @@ func TestNewAWSSignatureVerifier(t *testing.T) {
 }
 
 func TestNewSignatureVerifier(t *testing.T) {
-	store := keybackend.NewMapSecretStore(map[string]string{
+	store := mapStore{
 		"test": "secret",
-	})
+	}
 
-	cfg := stowry.AuthConfig{AWS: stowry.AWSConfig{Region: "us-west-1", Service: "ec2"}}
-	verifier := stowry.NewSignatureVerifier(cfg, store)
+	cfg := sign.AuthConfig{AWS: sign.AWSConfig{Region: "us-west-1", Service: "ec2"}}
+	verifier := sign.NewSignatureVerifier(cfg, store)
 	assert.NotNil(t, verifier)
 }
 
@@ -247,18 +262,18 @@ func TestStowrySignatureVerifier_Verify(t *testing.T) {
 		secretKey = "testsecret123"
 	)
 
-	store := keybackend.NewMapSecretStore(map[string]string{
+	store := mapStore{
 		accessKey: secretKey,
-	})
+	}
 
-	verifier := stowry.NewStowrySignatureVerifier(store)
+	verifier := sign.NewStowrySignatureVerifier(store)
 
 	validTimestamp := time.Now().Unix()
 	validExpires := int64(900)
-	validSignature := stowrysign.Sign(secretKey, "GET", "/test.txt", validTimestamp, validExpires)
+	validSignature := sign.Sign(secretKey, "GET", "/test.txt", validTimestamp, validExpires)
 
 	expiredTimestamp := time.Now().Add(-2 * time.Hour).Unix()
-	expiredSignature := stowrysign.Sign(secretKey, "GET", "/test.txt", expiredTimestamp, validExpires)
+	expiredSignature := sign.Sign(secretKey, "GET", "/test.txt", expiredTimestamp, validExpires)
 
 	tests := []struct {
 		name      string
@@ -403,11 +418,11 @@ func TestStowrySignatureVerifier_Verify(t *testing.T) {
 }
 
 func TestNewStowrySignatureVerifier(t *testing.T) {
-	store := keybackend.NewMapSecretStore(map[string]string{
+	store := mapStore{
 		"test": "secret",
-	})
+	}
 
-	verifier := stowry.NewStowrySignatureVerifier(store)
+	verifier := sign.NewStowrySignatureVerifier(store)
 	assert.NotNil(t, verifier)
 }
 
@@ -417,22 +432,22 @@ func TestSignatureVerifier_Verify(t *testing.T) {
 		secretKey = "testsecret123"
 	)
 
-	store := keybackend.NewMapSecretStore(map[string]string{
+	store := mapStore{
 		accessKey: secretKey,
-	})
+	}
 
-	cfg := stowry.AuthConfig{AWS: stowry.AWSConfig{Region: "us-east-1", Service: "s3"}}
-	verifier := stowry.NewSignatureVerifier(cfg, store)
+	cfg := sign.AuthConfig{AWS: sign.AWSConfig{Region: "us-east-1", Service: "s3"}}
+	verifier := sign.NewSignatureVerifier(cfg, store)
 
 	// Generate valid Stowry signature
 	stowryTimestamp := time.Now().Unix()
 	stowryExpires := int64(900)
-	stowrySignature := stowrysign.Sign(secretKey, "GET", "/test.txt", stowryTimestamp, stowryExpires)
+	stowrySignature := sign.Sign(secretKey, "GET", "/test.txt", stowryTimestamp, stowryExpires)
 
 	// Generate valid AWS signature parameters (will fail signature check but tests delegation)
 	awsTime := time.Now().UTC()
-	awsDateStamp := awsTime.Format(stowry.DateFormat)
-	awsAmzDate := awsTime.Format(stowry.DateTimeFormat)
+	awsDateStamp := awsTime.Format(sign.DateFormat)
+	awsAmzDate := awsTime.Format(sign.DateTimeFormat)
 
 	t.Run("delegates to StowrySignatureVerifier when X-Stowry-Signature present", func(t *testing.T) {
 		query := url.Values{
