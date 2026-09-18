@@ -16,7 +16,7 @@ import (
 func TestConfigFilePrecedence(t *testing.T) {
 	write := func(t *testing.T, path, dsn string) string {
 		t.Helper()
-		body := "database: {type: sqlite, dsn: \"" + dsn + "\"}\nlog: {level: error}\n"
+		body := "database: {type: sqlite, dsn: \"" + yamlPath(dsn) + "\"}\nlog: {level: error}\n"
 		require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
 
 		return path

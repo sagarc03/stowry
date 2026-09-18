@@ -112,8 +112,8 @@ func TestValidate(t *testing.T) {
 		dir := t.TempDir()
 		dbPath := filepath.Join(dir, "meta.db")
 		cfg := filepath.Join(dir, "config.yaml")
-		body := "database: {type: sqlite, dsn: \"" + dbPath + "\"}\n" +
-			"storage: {path: \"" + filepath.Join(dir, "data") + "\"}\nlog: {level: error}\n"
+		body := "database: {type: sqlite, dsn: \"" + yamlPath(dbPath) + "\"}\n" +
+			"storage: {path: \"" + yamlPath(filepath.Join(dir, "data")) + "\"}\nlog: {level: error}\n"
 		require.NoError(t, os.WriteFile(cfg, []byte(body), 0o600))
 
 		raw, err := sql.Open("sqlite", dbPath)

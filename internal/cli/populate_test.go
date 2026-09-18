@@ -30,8 +30,8 @@ func newStore(t *testing.T) testStore {
 		dataDir: filepath.Join(dir, "data"),
 	}
 
-	body := "database: {type: sqlite, dsn: \"" + s.dbPath + "\"}\n" +
-		"storage: {path: \"" + s.dataDir + "\"}\n" +
+	body := "database: {type: sqlite, dsn: \"" + yamlPath(s.dbPath) + "\"}\n" +
+		"storage: {path: \"" + yamlPath(s.dataDir) + "\"}\n" +
 		"log: {level: error}\n"
 	require.NoError(t, os.WriteFile(s.config, []byte(body), 0o600))
 
@@ -88,6 +88,13 @@ func (s testStore) fill(t *testing.T, files map[string]string) {
 		require.NoError(t, os.MkdirAll(filepath.Dir(full), 0o755))
 		require.NoError(t, os.WriteFile(full, []byte(content), 0o600))
 	}
+}
+
+// yamlPath makes a path safe to embed in a double-quoted YAML scalar, where a
+// Windows backslash would be read as an escape. Go and SQLite both accept
+// forward slashes on Windows.
+func yamlPath(p string) string {
+	return filepath.ToSlash(p)
 }
 
 func runCLI(t *testing.T, args ...string) (string, error) {
@@ -223,8 +230,8 @@ func TestPopulateRejectsBadStoragePath(t *testing.T) {
 	require.NoError(t, os.WriteFile(file, []byte("x"), 0o600))
 
 	cfg := filepath.Join(dir, "config.yaml")
-	body := "database: {type: sqlite, dsn: \"" + filepath.Join(dir, "m.db") + "\"}\n" +
-		"storage: {path: \"" + file + "\"}\nlog: {level: error}\n"
+	body := "database: {type: sqlite, dsn: \"" + yamlPath(filepath.Join(dir, "m.db")) + "\"}\n" +
+		"storage: {path: \"" + yamlPath(file) + "\"}\nlog: {level: error}\n"
 	require.NoError(t, os.WriteFile(cfg, []byte(body), 0o600))
 
 	_, err := runCLI(t, "populate", "-c", cfg, "-m")

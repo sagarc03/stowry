@@ -10,6 +10,7 @@ import (
 	"mime"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -211,7 +212,9 @@ func (s *Service) Populate(ctx context.Context) ([]types.MetaData, error) {
 	}
 
 	// Walking from "." is what yields object paths: relative to the storage
-	// root, slash-separated, no leading slash.
+	// root and with no leading slash. ToSlash supplies the last part of it,
+	// since a directory-backed filesystem walks in the host's separator and
+	// IsValidPath rejects a backslash.
 	var paths []string
 
 	err := afero.Walk(s.storage, ".", func(name string, info os.FileInfo, err error) error {
@@ -220,7 +223,7 @@ func (s *Service) Populate(ctx context.Context) ([]types.MetaData, error) {
 		}
 
 		if !info.IsDir() {
-			paths = append(paths, name)
+			paths = append(paths, filepath.ToSlash(name))
 		}
 
 		return nil
