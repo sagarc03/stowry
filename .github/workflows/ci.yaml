@@ -72,7 +72,10 @@ jobs:
       # The PostgreSQL tests need a container runtime, which only GitHub's Ubuntu
       # runners have. They skip themselves elsewhere, so the same command runs
       # on every OS.
+      # bash on every OS: PowerShell splits -coverprofile=coverage.txt and go
+      # then reads ".txt" as a package pattern.
       - name: Run tests
+        shell: bash
         run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage
