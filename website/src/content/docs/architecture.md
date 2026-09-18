@@ -50,7 +50,7 @@ flowchart TB
 
 ## Core Package
 
-The root `stowry` package contains:
+`internal/service` contains:
 
 ### Interfaces
 
@@ -65,13 +65,8 @@ type MetaDataRepo interface {
     MarkCleanedUp(ctx context.Context, id uuid.UUID) error
 }
 
-// FileStorage handles file operations
-type FileStorage interface {
-    Get(ctx context.Context, path string) (io.ReadSeekCloser, error)
-    Write(ctx context.Context, path string, content io.Reader) (FileInfo, error)
-    Delete(ctx context.Context, path string) error
-    List(ctx context.Context) ([]FileInfo, error)
-}
+// Storage is spf13/afero's Fs, scoped to the storage directory with
+// afero.NewBasePathFs, so a path cannot escape it.
 ```
 
 ### Service
@@ -81,8 +76,7 @@ The main service orchestrates metadata and storage operations:
 ```go
 type Service struct {
     repo    MetaDataRepo
-    storage FileStorage
-    mode    ServerMode
+    storage afero.Fs
 }
 
 func (s *Service) Create(ctx context.Context, obj CreateObject, content io.Reader) (MetaData, error)
@@ -104,8 +98,6 @@ type MetaData struct {
     FileSizeBytes int64
     CreatedAt     time.Time
     UpdatedAt     time.Time
-    DeletedAt     *time.Time  // Soft delete timestamp
-    CleanedUpAt   *time.Time  // Tombstone timestamp
 }
 
 type ServerMode string
@@ -124,14 +116,14 @@ The `database` package provides a unified interface for connecting to metadata b
 
 ```go
 import (
-    "github.com/sagarc03/stowry"
-    "github.com/sagarc03/stowry/database"
+    "github.com/sagarc03/stowry/internal/database"
+    "github.com/sagarc03/stowry/types"
 )
 
 cfg := database.Config{
     Type:   "sqlite",  // or "postgres"
     DSN:    "stowry.db",
-    Tables: stowry.Tables{MetaData: "stowry_metadata"},
+    Tables: types.Tables{MetaData: "stowry_metadata"},
 }
 
 db, err := database.Connect(ctx, cfg)
@@ -222,12 +214,15 @@ func (s *FileStorage) Write(ctx context.Context, path string, content io.Reader)
 
 ### Path Sandboxing
 
-Uses `os.Root` to prevent path traversal attacks:
+A base path filesystem confines every operation to the storage directory:
 
 ```go
-root, err := os.OpenRoot(storagePath)
-storage := filesystem.NewFileStorage(root)
+storage := afero.NewBasePathFs(afero.NewOsFs(), storagePath)
 ```
+
+`types.IsValidPath` rejects a path before it reaches storage: anything
+absolute, containing `..`, `//`, a `.` segment, backslashes, control
+characters or whitespace.
 
 ### Content Type Detection
 
@@ -255,33 +250,34 @@ store := keybackend.NewMapSecretStore(map[string]string{
     "AKIAIOSFODNN7EXAMPLE": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
 })
 
-cfg := stowry.AuthConfig{AWS: stowry.AWSConfig{Region: "us-east-1", Service: "s3"}}
-verifier := stowry.NewSignatureVerifier(cfg, store)
+cfg := sign.AuthConfig{AWS: sign.AWSConfig{Region: "us-east-1", Service: "s3"}}
+verifier := sign.NewSignatureVerifier(cfg, store)
 ```
 
 ## HTTP Layer (internal/handler, internal/middleware)
 
 ### Router
 
-Uses Chi router with middleware:
+`net/http.ServeMux`, with the write routes registered only in store mode:
 
 ```go
-r := chi.NewRouter()
-r.Use(PathValidationMiddleware)
+if opts.Mode == types.ModeStore {
+    mux.Handle("GET /{$}", readAuth(HandleList(...)))
+    mux.Handle("PUT /", writeAuth(HandlePut(...)))
+    mux.Handle("DELETE /", writeAuth(HandleDelete(...)))
+}
 
-r.Group(func(r chi.Router) {
-    r.Use(AuthMiddleware(readConfig))
-    r.Get("/", h.handleList)
-    r.Get("/*", h.handleGet)
-    r.Head("/*", h.handleHead)
-})
-
-r.Group(func(r chi.Router) {
-    r.Use(AuthMiddleware(writeConfig))
-    r.Put("/*", h.handlePut)
-    r.Delete("/*", h.handleDelete)
-})
+mux.Handle("GET /", readAuth(byMethod(HandleGet(...), HandleHead(...))))
 ```
+
+`byMethod` splits GET from HEAD by hand. ServeMux cannot: a `GET` pattern
+matches HEAD too, so `HEAD /` would overlap `GET /{$}` with neither more
+specific, which it rejects as a conflict.
+
+The middleware wrapping the mux, rather than each route, is
+`WithRequestID` -> `WithLogging` -> `WithCORS`, so a preflight and a 404 are
+covered as well. CORS sits ahead of authentication because browsers omit
+credentials from a preflight.
 
 ### Authentication Middleware
 
@@ -318,11 +314,23 @@ var (
     ErrInvalidInput = errors.New("invalid input")
 )
 
-// http/errors.go
-var ErrUnauthorized = errors.New("unauthorized")
+// sign/errors.go
+var (
+    ErrMissingParams     = errors.New("missing required signature parameters")
+    ErrExpired           = errors.New("signature expired")
+    ErrInvalidCredential = errors.New("invalid credential")
+    ErrInvalidSignature  = errors.New("invalid signature")
+)
 
-// keybackend/errors.go
+// internal/keybackend/keybackend.go
 var ErrKeyNotFound = errors.New("access key not found")
+
+// internal/client - matched with errors.Is against an *APIError
+var (
+    ErrNotFound     = &APIError{StatusCode: http.StatusNotFound}
+    ErrUnauthorized = &APIError{StatusCode: http.StatusUnauthorized}
+    ErrForbidden    = &APIError{StatusCode: http.StatusForbidden}
+)
 ```
 
 ### Error Wrapping
@@ -349,7 +357,7 @@ Uses cursor-based pagination for consistent results:
 ### Cursor Format
 
 ```
-Base64(updatedAt|path)
+Base64(createdAt|path)
 ```
 
 ### Implementation
@@ -387,15 +395,14 @@ type ListResult struct {
 Configuration logic is handled by the `config` package, which the CLI uses:
 
 ```go
-// config/config.go - Configuration loading
+// internal/config - loading and validation
 cfg, err := config.Load(configFiles, cmd.Flags())
-// Returns typed Config struct with validation
 
 // Config is passed through context
 cmd.SetContext(config.WithContext(ctx, cfg))
 
-// Core package - no config awareness
-service, err := stowry.NewStowryService(repo, storage, mode)
+// internal/service - no config awareness
+svc := service.New(db, storage)
 ```
 
 ## Testing
@@ -403,7 +410,7 @@ service, err := stowry.NewStowryService(repo, storage, mode)
 ### Unit Tests
 
 - Mock interfaces with `testify/mock`
-- Black-box testing (`stowry_test` package)
+- Black-box testing from an external `_test` package
 - Table-driven tests
 
 ### Integration Tests
