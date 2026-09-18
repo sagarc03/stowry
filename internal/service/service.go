@@ -119,16 +119,16 @@ func (s *Service) Create(ctx context.Context, obj types.CreateObject, content io
 // Get returns the metadata for path together with a reader over its content.
 // The caller owns the reader and must close it. It returns ErrInvalidInput if
 // path fails IsValidPath, or ErrNotFound if no object is stored at path.
-func (s *Service) Get(ctx context.Context, path string) (types.MetaData, io.ReadSeekCloser, error) {
+func (s *Service) Get(ctx context.Context, objPath string) (types.MetaData, io.ReadSeekCloser, error) {
 	if err := ctx.Err(); err != nil {
 		return types.MetaData{}, nil, fmt.Errorf("context: %w", err)
 	}
 
-	if !IsValidPath(path) {
-		return types.MetaData{}, nil, fmt.Errorf("invalid path %s: %w", path, ErrInvalidInput)
+	if !IsValidPath(objPath) {
+		return types.MetaData{}, nil, fmt.Errorf("invalid path %s: %w", objPath, ErrInvalidInput)
 	}
 
-	m, err := s.repo.Get(ctx, path)
+	m, err := s.repo.Get(ctx, objPath)
 	if err != nil {
 		return types.MetaData{}, nil, fmt.Errorf("meta data: %w", err)
 	}
@@ -142,16 +142,16 @@ func (s *Service) Get(ctx context.Context, path string) (types.MetaData, io.Read
 }
 
 // Info returns the metadata for path without opening its content.
-func (s *Service) Info(ctx context.Context, path string) (types.MetaData, error) {
+func (s *Service) Info(ctx context.Context, objPath string) (types.MetaData, error) {
 	if err := ctx.Err(); err != nil {
 		return types.MetaData{}, fmt.Errorf("context: %w", err)
 	}
 
-	if !IsValidPath(path) {
-		return types.MetaData{}, fmt.Errorf("invalid path %s: %w", path, ErrInvalidInput)
+	if !IsValidPath(objPath) {
+		return types.MetaData{}, fmt.Errorf("invalid path %s: %w", objPath, ErrInvalidInput)
 	}
 
-	m, err := s.repo.Get(ctx, path)
+	m, err := s.repo.Get(ctx, objPath)
 	if err != nil {
 		return types.MetaData{}, fmt.Errorf("meta data: %w", err)
 	}
@@ -162,21 +162,21 @@ func (s *Service) Info(ctx context.Context, path string) (types.MetaData, error)
 // Delete removes the metadata for path and then its stored file. It returns
 // ErrInvalidInput for an empty path. It does not apply IsValidPath, so entries
 // stored under paths that predate the current rules can still be removed.
-func (s *Service) Delete(ctx context.Context, path string) error {
+func (s *Service) Delete(ctx context.Context, objPath string) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("context: %w", err)
 	}
 
-	if path == "" {
+	if objPath == "" {
 		return fmt.Errorf("invalid path: %w", ErrInvalidInput)
 	}
 
-	err := s.repo.Delete(ctx, path)
+	err := s.repo.Delete(ctx, objPath)
 	if err != nil {
 		return fmt.Errorf("delete object: %w", err)
 	}
 
-	err = s.storage.Remove(path)
+	err = s.storage.Remove(objPath)
 	if err != nil {
 		return fmt.Errorf("delete file: %w", err)
 	}

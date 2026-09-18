@@ -149,17 +149,17 @@ func (d *sqliteDB) Validate(ctx context.Context) error {
 			colName, colType string
 			dflt             sql.NullString
 		)
-		if err := rows.Scan(&cid, &colName, &colType, &notNull, &dflt, &pk); err != nil {
-			return fmt.Errorf("validate: scan column: %w", err)
+		if scanErr := rows.Scan(&cid, &colName, &colType, &notNull, &dflt, &pk); scanErr != nil {
+			return fmt.Errorf("validate: scan column: %w", scanErr)
 		}
 		got[colName] = column{dataType: strings.ToLower(colType), nullable: notNull == 0}
 	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("validate: rows: %w", err)
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return fmt.Errorf("validate: rows: %w", rowsErr)
 	}
 
-	if err := checkColumns(d.table, sqliteColumns, got); err != nil {
-		return fmt.Errorf("validate: %w", err)
+	if colErr := checkColumns(d.table, sqliteColumns, got); colErr != nil {
+		return fmt.Errorf("validate: %w", colErr)
 	}
 
 	unique, err := d.hasUniquePath(ctx)
@@ -272,7 +272,8 @@ func (d *sqliteDB) Upsert(ctx context.Context, entry types.ObjectEntry) (types.M
 	newID := uuid.New()
 	now := time.Now().UTC()
 
-	query := fmt.Sprintf(`
+	query := fmt.Sprintf( //nolint:gosec // G201: table name is validated in Connect
+		`
 		INSERT INTO %s (id, path, content_type, etag, file_size_bytes, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (path) DO UPDATE
@@ -364,7 +365,8 @@ func (d *sqliteDB) list(ctx context.Context, q types.ListQuery, where, op string
 	}
 	args = append(args, q.Limit+1)
 
-	query := fmt.Sprintf(`
+	query := fmt.Sprintf( //nolint:gosec // G201: table name is validated in Connect
+		`
 		SELECT %s
 		FROM %s
 		WHERE %s AND path LIKE ? || '%%' ESCAPE '\'%s

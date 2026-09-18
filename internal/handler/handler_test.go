@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 	"uuid"
@@ -36,8 +37,9 @@ type stubService struct {
 	gotCreate types.CreateObject
 	gotBody   []byte
 	deleted   []string
-	// opens counts calls to Get, the only method that opens content.
-	opens int
+	// opens counts calls to Get, the only method that opens content. Atomic
+	// because parallel subtests share one stub.
+	opens atomic.Int64
 }
 
 type stubObject struct {
@@ -46,7 +48,7 @@ type stubObject struct {
 }
 
 func (s *stubService) Get(_ context.Context, path string) (types.MetaData, io.ReadSeekCloser, error) {
-	s.opens++
+	s.opens.Add(1)
 
 	if err := s.failure(path); err != nil {
 		return types.MetaData{}, nil, err
@@ -316,7 +318,7 @@ func TestHandleHead(t *testing.T) {
 		w := serve(t, storeOpts(counted), httptest.NewRequest(http.MethodHead, "/a.txt", nil))
 
 		require.Equal(t, http.StatusOK, w.Code)
-		assert.Zero(t, counted.opens, "a HEAD is answered from metadata alone")
+		assert.Zero(t, counted.opens.Load(), "a HEAD is answered from metadata alone")
 		assert.Equal(t, "11", w.Header().Get("Content-Length"), "the size still comes back")
 	})
 

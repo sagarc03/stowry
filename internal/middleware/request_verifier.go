@@ -27,7 +27,7 @@ func AuthMiddleware(verifier RequestVerifier) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if err := verifier.Verify(r); err != nil {
 				slog.Warn("authentication failed", "error", err, "method", r.Method, "path", r.URL.Path)
-				response.Error(w, http.StatusUnauthorized, "unauthorized", err.Error())
+				_ = response.Error(w, http.StatusUnauthorized, "unauthorized", err.Error())
 				return
 			}
 

@@ -987,8 +987,8 @@ func TestStowryService_Populate(t *testing.T) {
 		return svc, repo, storage
 	}
 
-	upserted := func(repo *SpyMetaDataRepo, into *[]types.ObjectEntry) *mock.Call {
-		return repo.On("Upsert", mock.Anything, mock.Anything).
+	upserted := func(repo *SpyMetaDataRepo, into *[]types.ObjectEntry) {
+		repo.On("Upsert", mock.Anything, mock.Anything).
 			Run(func(args mock.Arguments) {
 				*into = append(*into, args.Get(1).(types.ObjectEntry))
 			}).
