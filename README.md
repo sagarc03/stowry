@@ -11,7 +11,7 @@ A lightweight, self-hosted object storage server with AWS Signature V4 authentic
 - **AWS Sig V4 authentication** - Uses AWS Signature V4 presigned URLs (not S3-compatible API)
 - **Three server modes** - Object storage API, static file server, or SPA host
 - **Minimal dependencies** - Single binary, SQLite (3.24+) or PostgreSQL for metadata
-- **Soft deletion** - Files are recoverable until cleanup runs
+- **Server and client in one binary** - Serve, or upload and download against a server
 - **Atomic writes** - No partial or corrupted files
 - **Pluggable storage** - Filesystem now, S3/GCS ready interface
 
@@ -21,11 +21,20 @@ A lightweight, self-hosted object storage server with AWS Signature V4 authentic
 # Using Docker
 docker run -p 5708:5708 -v ./data:/data ghcr.io/sagarc03/stowry:latest
 
-# Using binary
+# Using binary, keeping nothing (both stores default to memory)
 ./stowry serve
+
+# Using binary, keeping everything
+./stowry migrate --db-dsn stowry.db --storage-path ./data
+./stowry serve   --db-dsn stowry.db --storage-path ./data
 ```
 
-Server starts at `http://localhost:5708`
+Server starts at `http://localhost:5708`.
+
+With no configuration both the metadata and the objects are held in memory and
+are gone when the process exits. A database on disk is created by `migrate`:
+`serve` never migrates one, so that pointing it at the wrong path fails instead
+of silently starting an empty store.
 
 ## Client SDKs
 
@@ -43,34 +52,33 @@ See [examples](examples) for usage.
 
 ## Client CLI
 
-For command-line access without writing code:
+The same binary is the client. It signs with the key pair the server verifies:
 
 ```bash
-# Install
-go install github.com/sagarc03/stowry/cmd/stowry-cli@latest
-
-# Configure
-export STOWRY_SERVER=http://localhost:5708
+export STOWRY_ENDPOINT=http://localhost:5708
 export STOWRY_ACCESS_KEY=your-access-key
 export STOWRY_SECRET_KEY=your-secret-key
 
-# Upload (uses local path as remote path)
-stowry-cli upload ./images/photo.jpg
+# Upload (remote path defaults to the local path)
+stowry upload ./images/photo.jpg
 
-# Upload with explicit remote path
-stowry-cli upload ./file.txt custom/path.txt
+# Upload with an explicit remote path
+stowry upload ./file.txt custom/path.txt
 
-# Download
-stowry-cli download images/photo.jpg
+# Upload a directory: its contents go under the remote path
+stowry upload ./site/ assets
 
-# List (store mode only)
-stowry-cli list --prefix images/
+# Download ("-" writes to stdout)
+stowry download images/photo.jpg
+
+# List, oldest first
+stowry list images/ --all
 
 # Delete
-stowry-cli delete images/photo.jpg
+stowry delete images/photo.jpg
 ```
 
-See [Client CLI Reference](https://stowry.dev/client-cli) for full documentation.
+Upload, delete and list need the server in `store` mode.
 
 ## Installation
 
@@ -127,36 +135,47 @@ tar xzf stowry_darwin_arm64.tar.gz
 ### From Source
 
 ```bash
-go install github.com/sagarc03/stowry/cmd/stowry@latest
+go install github.com/sagarc03/stowry@latest
 ```
 
 ## CLI Commands
 
+Server:
+
 ```bash
-# Start the server
-stowry serve [--port 5708] [--mode store|static|spa]
-
-# Import files into storage
-stowry add [--dest prefix/] [--recursive] <file1> [file2] ...
-
-# Remove files from storage (soft-delete)
-stowry remove [--prefix] <path1> [path2] ...
-
-# Initialize metadata from existing files
-stowry init [--storage ./data]
-
-# Clean up soft-deleted files
-stowry cleanup [--limit 100]
+stowry serve      # start the HTTP server
+stowry migrate    # create the metadata schema
+stowry validate   # check the schema without changing it
+stowry populate   # record files already in the storage directory
 ```
+
+Client:
+
+```bash
+stowry upload <local> [remote]     # a file, or a directory whole
+stowry download <remote> [local]   # "-" writes to stdout
+stowry list [prefix]               # --limit, --cursor, --all
+stowry delete <remote>...          # every path attempted
+```
+
+`populate` is how a directory of existing files gets served without uploading
+anything: it reads the files and records where they already are.
 
 ### Global Flags
 
-| Flag        | Env Var                | Default       | Description         |
-|-------------|------------------------|---------------|---------------------|
-| `--config`  | -                      | `config.yaml` | Config file path    |
-| `--db-type` | `STOWRY_DATABASE_TYPE` | `sqlite`      | Database type       |
-| `--db-dsn`  | `STOWRY_DATABASE_DSN`  | `stowry.db`   | Database connection |
-| `--storage` | `STOWRY_STORAGE_PATH`  | `./data`      | Storage directory   |
+Every setting is reachable three ways, highest first: a flag, an environment
+variable, then the config files. `stowry <command> --help` lists each flag with
+the variable that reaches the same setting.
+
+| Flag             | Env Var                | Default          | Description           |
+|------------------|------------------------|------------------|-----------------------|
+| `--config`       | `STOWRY_CONFIG`        | `./config.yaml`  | Config files, merged left to right |
+| `--db-type`      | `STOWRY_DATABASE_TYPE` | `sqlite`         | Database type         |
+| `--db-dsn`       | `STOWRY_DATABASE_DSN`  | `:memory:`       | Database connection   |
+| `--storage-path` | `STOWRY_STORAGE_PATH`  | `:memory:`       | Storage directory     |
+| `--endpoint`     | `STOWRY_ENDPOINT`      | `http://localhost:5708` | Server the client commands talk to |
+| `--access-key`   | `STOWRY_ACCESS_KEY`    | -                | Access key for signed requests |
+| `--secret-key`   | `STOWRY_SECRET_KEY`    | -                | Secret key for signed requests |
 
 ## Configuration
 
@@ -174,12 +193,15 @@ service:
 
 database:
   type: sqlite      # sqlite | postgres
-  dsn: stowry.db    # file path or connection string
+  dsn: stowry.db    # file path, connection string, or :memory:
   tables:
     meta_data: stowry_metadata
 
 storage:
-  path: ./data
+  path: ./data      # directory, or :memory:
+
+# The server the client commands talk to.
+endpoint: http://localhost:5708
 
 auth:
   read: public   # public | private
@@ -317,13 +339,13 @@ Read-only static file server with S3+CloudFront-style path resolution (public ac
 - `/` → `index.html`
 - Missing paths return an HTML 404 page (configurable via `error_document`)
 
-Use `stowry add` or store mode to populate content.
+Put the files in the storage directory and run `stowry populate`; static and spa modes route no writes.
 
 ### SPA
 
 Read-only Single Page Application host (public access). Returns `/index.html` for all 404s, enabling client-side routing.
 
-Use `stowry add` or store mode to populate content.
+Put the files in the storage directory and run `stowry populate`; static and spa modes route no writes.
 
 ## Kubernetes
 
