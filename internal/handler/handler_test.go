@@ -15,7 +15,6 @@ import (
 	"uuid"
 
 	"github.com/sagarc03/stowry/internal/handler"
-	"github.com/sagarc03/stowry/internal/response"
 	"github.com/sagarc03/stowry/internal/service"
 	"github.com/sagarc03/stowry/types"
 	"github.com/stretchr/testify/assert"
@@ -157,10 +156,10 @@ func storeOpts(svc handler.Service) *handler.Opts {
 	return &handler.Opts{Mode: types.ModeStore, Svc: svc}
 }
 
-func decodeError(t *testing.T, w *httptest.ResponseRecorder) response.ErrorBody {
+func decodeError(t *testing.T, w *httptest.ResponseRecorder) types.ErrorBody {
 	t.Helper()
 
-	var body response.ErrorBody
+	var body types.ErrorBody
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
 
 	return body

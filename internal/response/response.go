@@ -6,14 +6,9 @@ import (
 	"encoding/json/v2"
 	"fmt"
 	"net/http"
-)
 
-// ErrorBody is the wire shape for an error response. Code is a stable,
-// machine-readable identifier; Message is prose for a human.
-type ErrorBody struct {
-	Code    string `json:"error"`
-	Message string `json:"message"`
-}
+	"github.com/sagarc03/stowry/types"
+)
 
 // JSON encodes v as JSON and writes it with the given status code.
 func JSON(w http.ResponseWriter, status int, v any) error {
@@ -29,5 +24,5 @@ func JSON(w http.ResponseWriter, status int, v any) error {
 
 // Error writes a JSON error response: {"error": code, "message": message}
 func Error(w http.ResponseWriter, status int, code, message string) error {
-	return JSON(w, status, ErrorBody{Code: code, Message: message})
+	return JSON(w, status, types.ErrorBody{Code: code, Message: message})
 }
