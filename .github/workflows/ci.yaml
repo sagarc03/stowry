@@ -14,6 +14,12 @@ on:
       - "website/**"
       - "*.md"
 
+# One run per ref: a new push cancels whatever the previous one still has in
+# flight. main is exempt, since its runs are what the release builds on.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   lint:
     name: Lint
