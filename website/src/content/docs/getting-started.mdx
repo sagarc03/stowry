@@ -17,15 +17,15 @@ This guide will have you running Stowry and storing your first file in 5 minutes
 Download the latest release for your platform:
 
 ```bash
+VERSION=0.4.0
+
 # Linux (amd64)
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-linux-amd64
-chmod +x stowry-linux-amd64
-mv stowry-linux-amd64 stowry
+curl -LO https://github.com/sagarc03/stowry/releases/download/v${VERSION}/stowry_${VERSION}_linux_amd64.tar.gz
+tar xzf stowry_${VERSION}_linux_amd64.tar.gz
 
 # macOS (arm64)
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-darwin-arm64
-chmod +x stowry-darwin-arm64
-mv stowry-darwin-arm64 stowry
+curl -LO https://github.com/sagarc03/stowry/releases/download/v${VERSION}/stowry_${VERSION}_darwin_arm64.tar.gz
+tar xzf stowry_${VERSION}_darwin_arm64.tar.gz
 ```
 
 ## Step 2: Create Configuration

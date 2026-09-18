@@ -129,13 +129,14 @@ Download from [Releases](https://github.com/sagarc03/stowry/releases):
 
 ```bash
 # Linux
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry_linux_amd64.tar.gz
-tar xzf stowry_linux_amd64.tar.gz
+VERSION=0.4.0
+curl -LO https://github.com/sagarc03/stowry/releases/download/v${VERSION}/stowry_${VERSION}_linux_amd64.tar.gz
+tar xzf stowry_${VERSION}_linux_amd64.tar.gz
 ./stowry serve
 
 # macOS
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry_darwin_arm64.tar.gz
-tar xzf stowry_darwin_arm64.tar.gz
+curl -LO https://github.com/sagarc03/stowry/releases/download/v${VERSION}/stowry_${VERSION}_darwin_arm64.tar.gz
+tar xzf stowry_${VERSION}_darwin_arm64.tar.gz
 ./stowry serve
 ```
 

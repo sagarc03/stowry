@@ -15,8 +15,8 @@ This guide covers deploying Stowry in production environments.
 docker run -d \
   --name stowry \
   -p 5708:5708 \
-  -v $(pwd)/config.yaml:/app/config.yaml:ro \
-  -v $(pwd)/data:/app/data \
+  -v $(pwd)/config.yaml:/config.yaml:ro \
+  -v $(pwd)/data:/data \
   ghcr.io/sagarc03/stowry:latest serve
 ```
 
@@ -34,15 +34,14 @@ services:
     ports:
       - "5708:5708"
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - stowry-data:/app/data
+      - ./config.yaml:/config.yaml:ro
+      - stowry-data:/data
     # serve never migrates a database on disk; --migrate asks it to.
     command: serve --migrate
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5708/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      # Only the alpine variant has a shell and wget; scratch, debian-slim
+      # and distroless do not, so check from outside the container instead.
+      disable: true
 
 volumes:
   stowry-data:
@@ -65,8 +64,8 @@ services:
       - STOWRY_DATABASE_TYPE=postgres
       - STOWRY_DATABASE_DSN=postgres://stowry:password@postgres:5432/stowry?sslmode=disable
     volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - stowry-data:/app/data
+      - ./config.yaml:/config.yaml:ro
+      - stowry-data:/data
     # serve never migrates a database it did not create; --migrate asks it to.
     command: serve --migrate
     depends_on:

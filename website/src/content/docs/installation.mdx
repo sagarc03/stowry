@@ -11,37 +11,45 @@ Stowry can be installed in several ways depending on your needs.
 
 Download pre-built binaries from the [GitHub Releases](https://github.com/sagarc03/stowry/releases) page.
 
+Releases are versioned tarballs named `stowry_<version>_<os>_<arch>.tar.gz`
+(`.zip` on Windows), so substitute the version you want from the
+[releases page](https://github.com/sagarc03/stowry/releases).
+
 ### Linux
 
 ```bash
+VERSION=0.4.0
+
 # amd64
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-linux-amd64
-chmod +x stowry-linux-amd64
-sudo mv stowry-linux-amd64 /usr/local/bin/stowry
+curl -LO https://github.com/sagarc03/stowry/releases/download/v${VERSION}/stowry_${VERSION}_linux_amd64.tar.gz
+tar xzf stowry_${VERSION}_linux_amd64.tar.gz
+sudo mv stowry /usr/local/bin/
 
 # arm64
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-linux-arm64
-chmod +x stowry-linux-arm64
-sudo mv stowry-linux-arm64 /usr/local/bin/stowry
+curl -LO https://github.com/sagarc03/stowry/releases/download/v${VERSION}/stowry_${VERSION}_linux_arm64.tar.gz
+tar xzf stowry_${VERSION}_linux_arm64.tar.gz
+sudo mv stowry /usr/local/bin/
 ```
 
 ### macOS
 
 ```bash
+VERSION=0.4.0
+
 # Apple Silicon (M1/M2/M3)
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-darwin-arm64
-chmod +x stowry-darwin-arm64
-sudo mv stowry-darwin-arm64 /usr/local/bin/stowry
+curl -LO https://github.com/sagarc03/stowry/releases/download/v${VERSION}/stowry_${VERSION}_darwin_arm64.tar.gz
+tar xzf stowry_${VERSION}_darwin_arm64.tar.gz
+sudo mv stowry /usr/local/bin/
 
 # Intel
-curl -LO https://github.com/sagarc03/stowry/releases/latest/download/stowry-darwin-amd64
-chmod +x stowry-darwin-amd64
-sudo mv stowry-darwin-amd64 /usr/local/bin/stowry
+curl -LO https://github.com/sagarc03/stowry/releases/download/v${VERSION}/stowry_${VERSION}_darwin_amd64.tar.gz
+tar xzf stowry_${VERSION}_darwin_amd64.tar.gz
+sudo mv stowry /usr/local/bin/
 ```
 
 ### Windows
 
-Download `stowry-windows-amd64.exe` from the releases page and add it to your PATH.
+Download `stowry_<version>_windows_amd64.zip` from the releases page, extract it, and add `stowry.exe` to your PATH.
 
 ## Docker
 
@@ -78,8 +86,8 @@ Run with Docker:
 docker run -d \
   --name stowry \
   -p 5708:5708 \
-  -v $(pwd)/config.yaml:/app/config.yaml \
-  -v $(pwd)/data:/app/data \
+  -v $(pwd)/config.yaml:/config.yaml \
+  -v $(pwd)/data:/data \
   ghcr.io/sagarc03/stowry:latest serve
 ```
 
@@ -93,8 +101,8 @@ services:
     ports:
       - "5708:5708"
     volumes:
-      - ./config.yaml:/app/config.yaml
-      - ./data:/app/data
+      - ./config.yaml:/config.yaml
+      - ./data:/data
     command: serve
 ```
 
