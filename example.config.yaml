@@ -14,6 +14,9 @@ database:
 storage:
   path: ./data # directory for file storage
 
+# Server the client commands talk to
+endpoint: http://localhost:5708
+
 # Authentication
 auth:
   read: public   # public | private
@@ -26,6 +29,13 @@ auth:
   secret_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
   keys:
     # file: /path/to/keys.json  # several pairs: [{"access_key": "...", "secret_key": "..."}]
+
+# Cross-origin requests. Applies as soon as allowed_origins is set; there is
+# no "enabled" key.
+# cors:
+#   allowed_origins: ["https://app.example.com"]
+#   allowed_methods: [GET, PUT, DELETE, OPTIONS]
+#   max_age: 300
 
 # Logging
 log:
