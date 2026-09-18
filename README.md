@@ -40,11 +40,18 @@ of silently starting an empty store.
 
 Generate presigned URLs to interact with Stowry:
 
-| Language   | Package                                              | Install                                 |
-|------------|------------------------------------------------------|-----------------------------------------|
-| Go         | [stowry-go](https://github.com/sagarc03/stowry-go)   | `go get github.com/sagarc03/stowry-go`  |
-| Python     | [stowrypy](https://pypi.org/project/stowrypy/)       | `pip install stowrypy`                  |
-| JavaScript | [stowryjs](https://www.npmjs.com/package/stowryjs)   | `npm install stowryjs`                  |
+| Language   | Package                                        | Install                              |
+|------------|------------------------------------------------|--------------------------------------|
+| Go         | `github.com/sagarc03/stowry/sign`              | `go get github.com/sagarc03/stowry`  |
+| Python     | [stowrypy](https://pypi.org/project/stowrypy/) | `pip install stowrypy`               |
+| JavaScript | [stowryjs](https://www.npmjs.com/package/stowryjs) | `npm install stowryjs`           |
+
+```go
+import "github.com/sagarc03/stowry/sign"
+
+c := sign.NewClient("http://localhost:5708", accessKey, secretKey)
+url := c.PresignGet("/path/to/file.txt", 900)
+```
 
 AWS SDKs (boto3, aws-sdk-go-v2, @aws-sdk/client-s3) also work for generating presigned URLs.
 

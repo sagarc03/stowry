@@ -8,7 +8,7 @@ Simple examples showing how to use Stowry SDKs for upload, download, and delete 
 
 | Example | SDK | Signing |
 |---------|-----|---------|
-| [go-native](./go-native/) | [stowry-go](https://github.com/sagarc03/stowry-go) | Native |
+| [go-native](./go-native/) | `github.com/sagarc03/stowry/sign` | Native |
 | [go-aws](./go-aws/) | [aws-sdk-go-v2](https://github.com/aws/aws-sdk-go-v2) | AWS Sig V4 |
 | [python-native](./python-native/) | [stowrypy](https://pypi.org/project/stowrypy/) | Native |
 | [python-aws](./python-aws/) | [boto3](https://boto3.amazonaws.com/) | AWS Sig V4 |

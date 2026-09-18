@@ -1,7 +1,7 @@
-// Example: Using Stowry with stowry-go native signing
+// Example: Using Stowry with its native signing scheme
 //
 // This example demonstrates using presigned URLs with Stowry's native
-// signing scheme via the stowry-go SDK.
+// signing scheme via the sign package.
 //
 // Run Stowry first:
 //
@@ -23,7 +23,7 @@ import (
 	"os"
 	"time"
 
-	stowry "github.com/sagarc03/stowry-go"
+	"github.com/sagarc03/stowry/sign"
 	"gopkg.in/yaml.v3"
 )
 
@@ -49,8 +49,8 @@ func main() {
 		log.Fatal("no auth keys found in config")
 	}
 
-	// Create stowry-go client
-	client := stowry.NewClient(
+	// Create signing client
+	client := sign.NewClient(
 		stowryEndpoint,
 		cfg.Auth.AccessKey,
 		cfg.Auth.SecretKey,
@@ -60,7 +60,7 @@ func main() {
 
 	// Upload a file
 	key := "/hello.txt"
-	content := []byte("Hello from stowry-go!")
+	content := []byte("Hello from stowry sign!")
 	contentType := "text/plain"
 
 	fmt.Println("=== Upload ===")
@@ -113,7 +113,7 @@ func loadConfig(path string) (*exampleConfig, error) {
 	return &cfg, nil
 }
 
-func uploadFile(client *stowry.Client, httpClient *http.Client, key string, content []byte, contentType string) error {
+func uploadFile(client *sign.Client, httpClient *http.Client, key string, content []byte, contentType string) error {
 	presignURL := client.PresignPut(key, 900)
 
 	req, err := http.NewRequest(http.MethodPut, presignURL, bytes.NewReader(content))
@@ -136,7 +136,7 @@ func uploadFile(client *stowry.Client, httpClient *http.Client, key string, cont
 	return nil
 }
 
-func downloadFile(client *stowry.Client, httpClient *http.Client, key string) ([]byte, error) {
+func downloadFile(client *sign.Client, httpClient *http.Client, key string) ([]byte, error) {
 	presignURL := client.PresignGet(key, 900)
 
 	req, err := http.NewRequest(http.MethodGet, presignURL, nil)
@@ -158,7 +158,7 @@ func downloadFile(client *stowry.Client, httpClient *http.Client, key string) ([
 	return io.ReadAll(resp.Body)
 }
 
-func deleteFile(client *stowry.Client, httpClient *http.Client, key string) error {
+func deleteFile(client *sign.Client, httpClient *http.Client, key string) error {
 	presignURL := client.PresignDelete(key, 900)
 
 	req, err := http.NewRequest(http.MethodDelete, presignURL, nil)

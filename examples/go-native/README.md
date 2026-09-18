@@ -1,6 +1,6 @@
 # Go Native Signing Example
 
-Demonstrates using Stowry with the [stowry-go](https://github.com/sagarc03/stowry-go) SDK and native signing.
+Demonstrates using Stowry with the `github.com/sagarc03/stowry/sign` package and native signing.
 
 ## Prerequisites
 
@@ -21,7 +21,7 @@ go run main.go
 
 ## What it demonstrates
 
-- Creating a stowry-go client
+- Creating a signing client
 - Uploading files with presigned PUT URLs
 - Downloading files with presigned GET URLs
 - Generating presigned URLs for GET, PUT, DELETE

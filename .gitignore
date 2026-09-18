@@ -11,7 +11,7 @@
 # Built binaries
 /stowry
 /examples/go-aws/stowry-example
-/examples/go-native/stowry-go-example
+/examples/go-native/stowry-sign-example
 
 # Test binary, built with `go test -c`
 *.test
