@@ -9,14 +9,17 @@ import (
 	"uuid"
 )
 
+// MetaData describes one stored object. The tags are the wire format: the
+// server marshals this type straight to the response body, and the client
+// unmarshals the same type back, so the two cannot drift.
 type MetaData struct {
-	ID            uuid.UUID
-	Path          string
-	ContentType   string
-	Etag          string
-	FileSizeBytes int64
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID            uuid.UUID `json:"id"`
+	Path          string    `json:"path"`
+	ContentType   string    `json:"content_type"`
+	Etag          string    `json:"etag"`
+	FileSizeBytes int64     `json:"file_size_bytes"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 type ObjectEntry struct {
@@ -32,9 +35,28 @@ type ListQuery struct {
 	Cursor     string
 }
 
+// ErrorBody is the wire shape for an error response. Code is a stable,
+// machine-readable identifier; Message is prose for a human. The server writes
+// it and the client reads it, so the two share the type.
+type ErrorBody struct {
+	Code    string `json:"error"`
+	Message string `json:"message"`
+}
+
+// ListResult is one page of metadata. NextCursor is empty on the last page.
 type ListResult struct {
-	Items      []MetaData
-	NextCursor string
+	Items      []MetaData `json:"items"`
+	NextCursor string     `json:"next_cursor,omitempty"`
+}
+
+// TotalSize is the size of every item in the page, in bytes.
+func (r *ListResult) TotalSize() int64 {
+	var total int64
+	for _, item := range r.Items {
+		total += item.FileSizeBytes
+	}
+
+	return total
 }
 
 type SaveResult struct {
@@ -152,33 +174,4 @@ type ListOptions struct {
 	Limit  int
 	Cursor string
 	All    bool // auto-paginate through all results
-}
-
-// ObjectListResult contains paginated list results. It is named apart from
-// ListResult, which pages the metadata the repository holds rather than the
-// objects a client sees.
-type ObjectListResult struct {
-	Items      []ObjectInfo `json:"items"`
-	NextCursor string       `json:"next_cursor,omitempty"`
-}
-
-// ObjectInfo represents metadata for a single object.
-type ObjectInfo struct {
-	ID          uuid.UUID `json:"id"`
-	Path        string    `json:"path"`
-	ContentType string    `json:"content_type"`
-	ETag        string    `json:"etag"`
-	Size        int64     `json:"size_bytes"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-}
-
-// TotalSize is the size of every item in the page, in bytes.
-func (r *ObjectListResult) TotalSize() int64 {
-	var total int64
-	for _, item := range r.Items {
-		total += item.Size
-	}
-
-	return total
 }
