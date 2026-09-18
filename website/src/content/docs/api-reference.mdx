@@ -312,22 +312,20 @@ Valid paths must:
 - `folder//file.txt` (empty segment)
 - `file?.txt` (invalid character)
 
-## Content Type Detection
+## Content Type
 
-If `Content-Type` header is not provided on upload, Stowry detects it from the file extension:
+Uploads must carry a `Content-Type` header. The server stores it verbatim and
+never guesses: a PUT without one is rejected with `400 invalid_path`.
 
-| Extension | Content Type |
-|-----------|--------------|
-| `.html` | `text/html` |
-| `.css` | `text/css` |
-| `.js` | `application/javascript` |
-| `.json` | `application/json` |
-| `.png` | `image/png` |
-| `.jpg`, `.jpeg` | `image/jpeg` |
-| `.gif` | `image/gif` |
-| `.svg` | `image/svg+xml` |
-| `.pdf` | `application/pdf` |
-| (unknown) | `application/octet-stream` |
+The extension is used only where there is no header to read:
+
+- `stowry upload` detects it from the local file's extension before sending,
+  unless `--content-type` overrides it
+- `stowry populate` detects it for files already in the storage directory
+
+Both use Go's `mime` package, so the mapping is the platform's, and modern Go
+returns `text/javascript; charset=utf-8` for `.js`. Anything unrecognised
+becomes `application/octet-stream`.
 
 ## Pagination
 
