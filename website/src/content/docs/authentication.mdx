@@ -24,15 +24,18 @@ Simpler implementation using HMAC-SHA256.
 
 **URL Format:**
 ```
-http://localhost:5708/path/to/file?X-Stowry-AccessKey=KEY&X-Stowry-Expires=1705323000&X-Stowry-Signature=abc123...
+http://localhost:5708/path/to/file?X-Stowry-Credential=KEY&X-Stowry-Date=1705323000&X-Stowry-Expires=900&X-Stowry-Signature=abc123...
 ```
 
 **Query Parameters:**
 
+All four are required; a URL missing any of them is rejected.
+
 | Parameter | Description |
 |-----------|-------------|
-| `X-Stowry-AccessKey` | Your access key ID |
-| `X-Stowry-Expires` | Unix timestamp when URL expires |
+| `X-Stowry-Credential` | Your access key ID |
+| `X-Stowry-Date` | Unix timestamp the URL was signed at |
+| `X-Stowry-Expires` | How long it stays valid, in seconds (max 604800) |
 | `X-Stowry-Signature` | HMAC-SHA256 signature |
 
 ### 2. AWS Signature V4
@@ -200,7 +203,7 @@ const putUrl = await getSignedUrl(
 
 ```bash
 # Using curl
-curl -o vacation.jpg "http://localhost:5708/photos/vacation.jpg?X-Stowry-AccessKey=..."
+curl -o vacation.jpg "http://localhost:5708/photos/vacation.jpg?X-Stowry-Credential=...&X-Stowry-Date=...&X-Stowry-Expires=900&X-Stowry-Signature=..."
 
 # Or in browser - just visit the URL
 ```
@@ -211,13 +214,13 @@ curl -o vacation.jpg "http://localhost:5708/photos/vacation.jpg?X-Stowry-AccessK
 curl -X PUT \
   -H "Content-Type: image/jpeg" \
   --data-binary @vacation.jpg \
-  "http://localhost:5708/photos/vacation.jpg?X-Stowry-AccessKey=..."
+  "http://localhost:5708/photos/vacation.jpg?X-Stowry-Credential=...&X-Stowry-Date=...&X-Stowry-Expires=900&X-Stowry-Signature=..."
 ```
 
 ### Delete (DELETE)
 
 ```bash
-curl -X DELETE "http://localhost:5708/photos/vacation.jpg?X-Stowry-AccessKey=..."
+curl -X DELETE "http://localhost:5708/photos/vacation.jpg?X-Stowry-Credential=...&X-Stowry-Date=...&X-Stowry-Expires=900&X-Stowry-Signature=..."
 ```
 
 ## Public Access Mode
