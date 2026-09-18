@@ -95,7 +95,10 @@ is compatible with the AWS SDKs for generating presigned URLs.`,
 		&cobra.Group{ID: groupServer, Title: "Server Commands:"},
 		&cobra.Group{ID: groupClient, Title: "Client Commands:"},
 	)
-	cmd.AddCommand(newServeCmd(), newMigrateCmd(), newValidateCmd(), newPopulateCmd())
+	cmd.AddCommand(
+		newServeCmd(), newMigrateCmd(), newValidateCmd(), newPopulateCmd(),
+		newUploadCmd(), newDownloadCmd(), newDeleteCmd(), newListCmd(),
+	)
 
 	return cmd
 }
