@@ -551,7 +551,9 @@ func TestHandleDelete(t *testing.T) {
 func TestRegisterRoutesByMode(t *testing.T) {
 	t.Parallel()
 
-	index := map[string]stubObject{"": object("", "<html>index</html>", "text/html", "idx")}
+	index := map[string]stubObject{
+		"index.html": object("index.html", "<html>index</html>", "text/html", "idx"),
+	}
 
 	t.Run("store mode lists at the root", func(t *testing.T) {
 		w := serve(t, storeOpts(&stubService{}), httptest.NewRequest(http.MethodGet, "/", nil))

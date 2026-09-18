@@ -75,7 +75,10 @@ func Register(opts *Opts) {
 		opts.Mux.Handle("DELETE /", wrap(writeAuth, HandleDelete(logger, opts.Svc)))
 	}
 
-	read := byMethod(HandleGet(logger, opts.Svc, notFound), HandleHead(logger, opts.Svc, notFound))
+	read := byMethod(
+		HandleGet(logger, opts.Svc, opts.Mode, notFound),
+		HandleHead(logger, opts.Svc, opts.Mode, notFound),
+	)
 	opts.Mux.Handle("GET /", wrap(readAuth, read))
 }
 
@@ -125,11 +128,9 @@ func HandleList(logger *slog.Logger, svc Service) http.HandlerFunc {
 
 // HandleGet serves an object's content. ServeContent handles Last-Modified,
 // Content-Length, ranges and the conditional headers.
-func HandleGet(logger *slog.Logger, svc Service, notFound http.HandlerFunc) http.HandlerFunc {
+func HandleGet(logger *slog.Logger, svc Service, mode types.ServerMode, notFound http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		path := requestPath(r)
-
-		obj, content, err := svc.Get(r.Context(), path)
+		obj, content, name, err := resolveGet(r.Context(), svc, mode, requestPath(r))
 		if err != nil {
 			respondReadError(logger, w, r, err, notFound)
 			return
@@ -139,18 +140,16 @@ func HandleGet(logger *slog.Logger, svc Service, notFound http.HandlerFunc) http
 		w.Header().Set("ETag", `"`+obj.Etag+`"`)
 		w.Header().Set("Content-Type", obj.ContentType)
 
-		http.ServeContent(w, r, path, obj.UpdatedAt, content)
+		http.ServeContent(w, r, name, obj.UpdatedAt, content)
 	}
 }
 
 // HandleHead answers with an object's headers and no body, reading metadata
 // only. It hands the response to ServeContent as HandleGet does, so the two
 // cannot disagree.
-func HandleHead(logger *slog.Logger, svc Service, notFound http.HandlerFunc) http.HandlerFunc {
+func HandleHead(logger *slog.Logger, svc Service, mode types.ServerMode, notFound http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		path := requestPath(r)
-
-		obj, err := svc.Info(r.Context(), path)
+		obj, name, err := resolveInfo(r.Context(), svc, mode, requestPath(r))
 		if err != nil {
 			respondReadError(logger, w, r, err, notFound)
 			return
@@ -159,7 +158,7 @@ func HandleHead(logger *slog.Logger, svc Service, notFound http.HandlerFunc) htt
 		w.Header().Set("ETag", `"`+obj.Etag+`"`)
 		w.Header().Set("Content-Type", obj.ContentType)
 
-		http.ServeContent(w, r, path, obj.UpdatedAt, &headContent{size: obj.FileSizeBytes})
+		http.ServeContent(w, r, name, obj.UpdatedAt, &headContent{size: obj.FileSizeBytes})
 	}
 }
 
