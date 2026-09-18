@@ -4,7 +4,7 @@ Demonstrates using Stowry with the `github.com/sagarc03/stowry/sign` package and
 
 ## Prerequisites
 
-- Go 1.21+
+- Go 1.27+
 - Stowry server running
 
 ## Run

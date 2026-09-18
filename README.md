@@ -32,9 +32,9 @@ docker run -p 5708:5708 -v ./data:/data ghcr.io/sagarc03/stowry:latest
 Server starts at `http://localhost:5708`.
 
 With no configuration both the metadata and the objects are held in memory and
-are gone when the process exits. A database on disk is created by `migrate`:
-`serve` never migrates one, so that pointing it at the wrong path fails instead
-of silently starting an empty store.
+are gone when the process exits. A database on disk is created by `migrate`,
+or by `serve --migrate`. Plain `serve` will not migrate one, so pointing it at
+the wrong path fails instead of silently starting an empty store.
 
 ## Client SDKs
 
@@ -110,17 +110,17 @@ data in `/data` and is published for `linux/amd64` and `linux/arm64`.
 
 | Tag | Base | Notes |
 | --- | --- | --- |
-| `latest`, `v0.3.0` | `scratch` | Default. Smallest image, nothing but the server and a CA bundle. |
-| `distroless`, `v0.3.0-distroless` | `gcr.io/distroless/static-debian13` | Debian filesystem layout, tzdata and a maintained CA bundle, still no shell. |
-| `debian`, `v0.3.0-debian` | `debian:trixie-slim` | glibc and a full Debian userland, for Debian-based tooling and scanners. |
-| `alpine`, `v0.3.0-alpine` | `alpine:3.21` | Busybox shell and `apk`, for debugging inside a running container. |
+| `latest`, `vX.Y.Z` | `scratch` | Default. Smallest image, nothing but the server and a CA bundle. |
+| `distroless`, `vX.Y.Z-distroless` | `gcr.io/distroless/static-debian13` | Debian filesystem layout, tzdata and a maintained CA bundle, still no shell. |
+| `debian`, `vX.Y.Z-debian` | `debian:trixie-slim` | glibc and a full Debian userland, for Debian-based tooling and scanners. |
+| `alpine`, `vX.Y.Z-alpine` | `alpine:3.21` | Busybox shell and `apk`, for debugging inside a running container. |
 
-Variant tags follow the same scheme as the default image, so `v0`, `v0.3` and
-`v0.3.0` each have `-alpine`, `-debian` and `-distroless` counterparts.
+Variant tags follow the same scheme as the default image, so `v0`, `v0.4` and
+`v0.4.0` each have `-alpine`, `-debian` and `-distroless` counterparts.
 
 ```bash
 docker pull ghcr.io/sagarc03/stowry:alpine
-docker pull ghcr.io/sagarc03/stowry:v0.3-distroless
+docker pull ghcr.io/sagarc03/stowry:v0-distroless
 ```
 
 ### Binary
@@ -238,8 +238,9 @@ export STOWRY_SECRET_KEY=YOUR_SECRET_KEY
 ```
 
 Each setting answers to exactly one variable, so `STOWRY_AUTH_ACCESS_KEY` is
-not read. The same pair is also available on `serve` as `-a/--access-key` and
-`-k/--secret-key`, though a flag value is visible in the process list.
+not read. The same pair is also available on every command as
+`-a/--access-key` and `-k/--secret-key`, though a flag value is visible in the
+process list.
 
 A deployment with more than one key pair sets `auth.keys.file`
 (`STOWRY_AUTH_KEYS_FILE`) instead; the two are merged, and the file wins on a
@@ -289,6 +290,7 @@ Response:
 {
   "items": [
     {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
       "path": "path/to/file.txt",
       "content_type": "text/plain",
       "etag": "abc123...",

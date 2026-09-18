@@ -284,7 +284,7 @@ const router = createRouter({
 Since static and SPA modes are read-only, use one of these methods to add files:
 
 ```bash
-# Using the add command (recommended)
+# Record files already in the storage directory
 stowry populate   # after copying ./dist into the storage directory
 
 # Using store mode temporarily
@@ -311,5 +311,8 @@ Or via configuration:
 
 ```yaml
 server:
-  mode: ${STOWRY_MODE:-store}  # Default to store, override with env var
+  mode: store
 ```
+
+The config file is not shell-expanded, so `${VAR}` in it is a literal string.
+To take the mode from the environment, set `STOWRY_SERVER_MODE` instead.

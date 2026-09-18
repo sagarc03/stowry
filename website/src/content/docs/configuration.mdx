@@ -337,7 +337,8 @@ service:
 
 database:
   type: postgres
-  dsn: postgres://stowry:${DB_PASSWORD}@db.example.com:5432/stowry?sslmode=require
+  # No shell expansion here; set STOWRY_DATABASE_DSN to keep the password out of the file
+  dsn: postgres://stowry:CHANGEME@db.example.com:5432/stowry?sslmode=require
   tables:
     meta_data: stowry_metadata
 

@@ -4,7 +4,7 @@ Demonstrates using Stowry with [aws-sdk-go-v2](https://github.com/aws/aws-sdk-go
 
 ## Prerequisites
 
-- Go 1.21+
+- Go 1.25+
 - Stowry server running
 
 ## Run

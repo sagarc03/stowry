@@ -72,12 +72,12 @@ to suit your tooling:
 | `debian` | `debian:trixie-slim` | glibc and a full Debian userland, for Debian-based tooling and scanners. |
 | `alpine` | `alpine:3.21` | Busybox shell and `apk`, for debugging inside a running container. |
 
-Variant tags follow the same scheme as the default image, so `v0`, `v0.3` and
-`v0.3.0` each have `-alpine`, `-debian` and `-distroless` counterparts.
+Variant tags follow the same scheme as the default image, so `v0`, `v0.4` and
+`v0.4.0` each have `-alpine`, `-debian` and `-distroless` counterparts.
 
 ```bash
 docker pull ghcr.io/sagarc03/stowry:alpine
-docker pull ghcr.io/sagarc03/stowry:v0.3-distroless
+docker pull ghcr.io/sagarc03/stowry:v0-distroless
 ```
 
 Run with Docker:
@@ -109,7 +109,7 @@ services:
 ## Build from Source
 
 Requirements:
-- Go 1.26 or later
+- Go 1.27 or later
 - Git
 
 ```bash
