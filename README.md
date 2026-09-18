@@ -366,7 +366,7 @@ brew install go-task
 # List available tasks
 task --list
 
-# Run tests
+# Run tests (end-to-end ones are task test:e2e)
 task test
 
 # Run linter

@@ -17,13 +17,15 @@ tasks:
       - go build -o bin/stowry .
 
   run:
-    desc: Run the stowry server
-    deps: [build]
+    desc: Run the stowry server against ./data, keeping the metadata in stowry.db
+    deps: [build, migrate]
     cmds:
-      - ./bin/stowry serve --config config.local.yaml
+      - ./bin/stowry serve --db-dsn stowry.db --storage-path ./data
 
   test:
-    desc: Run unit tests
+    desc: Run tests, minus the end-to-end ones
+    # internal/database's PostgreSQL cases use testcontainers; they skip
+    # themselves when no container runtime answers.
     cmds:
       - go test ./internal/... ./types/... ./sign/...
 
@@ -88,25 +90,26 @@ tasks:
       - go mod tidy
 
   docker:build:
-    desc: Build Docker image
+    desc: Build every image variant locally, without pushing
+    # The Dockerfiles copy per-platform binaries from GoReleaser's prepared
+    # context, so `docker build .` at the repository root cannot work.
     cmds:
-      - docker build -t stowry:test .
+      - goreleaser release --snapshot --clean --skip=publish
 
-  docker:test:
-    desc: Build and run Docker container for testing
-    deps: [docker:build]
+  docker:run:
+    desc: Run the snapshot image built by docker:build
     cmds:
-      - docker run --rm -p 5708:5708 -e STOWRY_DATABASE_TYPE=sqlite -e STOWRY_STORAGE_PATH=/data stowry:test serve --db-dsn ":memory:"
+      - docker run --rm -p 5708:5708 ghcr.io/sagarc03/stowry:latest-amd64 serve
 
   migrate:
-    desc: Create the metadata schema
+    desc: Create the metadata schema in stowry.db
     deps: [build]
     cmds:
-      - ./bin/stowry migrate --config config.local.yaml
+      - ./bin/stowry migrate --db-dsn stowry.db --storage-path ./data
 
   validate:
     desc: Check the metadata schema without changing it
     deps: [build]
     cmds:
-      - ./bin/stowry validate --config config.local.yaml
+      - ./bin/stowry validate --db-dsn stowry.db
 
