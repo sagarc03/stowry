@@ -21,7 +21,7 @@ auth:
   aws:
     region: us-east-1
     service: s3
-  # One key pair, also settable as STOWRY_AUTH_ACCESS_KEY / STOWRY_AUTH_SECRET_KEY
+  # One key pair, also settable as STOWRY_ACCESS_KEY / STOWRY_SECRET_KEY
   access_key: AKIAIOSFODNN7EXAMPLE
   secret_key: wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
   keys:
