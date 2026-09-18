@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -38,7 +39,7 @@ func populateStorage(t *testing.T, cfg ServerConfig) {
 	binary := buildBinary(t)
 
 	config := fmt.Sprintf("database:\n  type: %s\n  dsn: \"%s\"\nstorage:\n  path: \"%s\"\nlog:\n  level: error\n",
-		cfg.DBType, cfg.DBDSN, cfg.StoragePath)
+		cfg.DBType, yamlPath(cfg.DBDSN), yamlPath(cfg.StoragePath))
 
 	configPath := filepath.Join(t.TempDir(), "populate-config.yaml")
 	require.NoError(t, os.WriteFile(configPath, []byte(config), 0o600), "write populate config")
@@ -98,7 +99,14 @@ func buildBinary(t *testing.T) string {
 	t.Helper()
 
 	binaryOnce.Do(func() {
-		binaryPath = filepath.Join(sharedTempDir, "stowry")
+		// go build appends .exe on Windows, and exec will not find the binary
+		// without it.
+		name := "stowry"
+		if runtime.GOOS == "windows" {
+			name += ".exe"
+		}
+
+		binaryPath = filepath.Join(sharedTempDir, name)
 
 		cmd := exec.Command("go", "build", "-o", binaryPath, ".")
 		cmd.Dir = getProjectRoot(t)
@@ -114,6 +122,13 @@ func buildBinary(t *testing.T) string {
 	}
 
 	return binaryPath
+}
+
+// yamlPath makes a path safe to embed in a double-quoted YAML scalar, where a
+// Windows backslash would be read as an escape. Both Go and SQLite accept
+// forward slashes on Windows.
+func yamlPath(p string) string {
+	return filepath.ToSlash(p)
 }
 
 // getProjectRoot returns the root directory of the stowry project.
@@ -142,7 +157,6 @@ func migrateDatabase(t *testing.T, cfg ServerConfig) {
 
 	binary := buildBinary(t)
 
-	// Create a minimal config file for init
 	migrateConfig := fmt.Sprintf(`database:
   type: %s
   dsn: "%s"
@@ -150,7 +164,7 @@ storage:
   path: "%s"
 log:
   level: error
-`, cfg.DBType, cfg.DBDSN, cfg.StoragePath)
+`, cfg.DBType, yamlPath(cfg.DBDSN), yamlPath(cfg.StoragePath))
 
 	configPath := filepath.Join(t.TempDir(), "migrate-config.yaml")
 	err := os.WriteFile(configPath, []byte(migrateConfig), 0o600)
@@ -190,8 +204,8 @@ auth:
 		cfg.Mode,
 		cfg.ErrorDocument,
 		cfg.DBType,
-		cfg.DBDSN,
-		cfg.StoragePath,
+		yamlPath(cfg.DBDSN),
+		yamlPath(cfg.StoragePath),
 		cfg.AuthRead,
 		cfg.AuthWrite,
 	)
