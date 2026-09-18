@@ -15,7 +15,7 @@ http://localhost:5708
 
 ## Authentication
 
-Requests require presigned URL authentication unless `public_read` or `public_write` is enabled. See [Authentication](authentication) for details.
+Requests require presigned URL authentication unless `auth.read` or `auth.write` is `public`. See [Authentication](authentication) for details.
 
 ## Endpoints
 
@@ -249,7 +249,7 @@ curl -X PUT \
 
 > **Store mode only.** Returns `405 Method Not Allowed` in static and SPA modes.
 
-Soft delete an object (marks for deletion but doesn't remove immediately).
+Delete an object: the metadata entry is soft-deleted and the stored file is removed.
 
 ```
 DELETE /{path}

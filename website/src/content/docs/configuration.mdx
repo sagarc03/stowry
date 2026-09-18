@@ -374,7 +374,7 @@ storage:
 
 auth:
   read: public
-  write: public   # Auth settings are ignored in static mode (always public)
+  write: public   # ignored in static mode; auth.read: private would fail at startup
 ```
 
 ### SPA Hosting
@@ -395,5 +395,5 @@ storage:
 
 auth:
   read: public
-  write: public   # Auth settings are ignored in spa mode (always public)
+  write: public   # ignored in spa mode; auth.read: private would fail at startup
 ```

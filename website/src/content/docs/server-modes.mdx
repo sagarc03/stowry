@@ -76,7 +76,7 @@ server:
 - `GET /` - Returns `/index.html`
 - Missing paths return an HTML 404 page (default Stowry-branded, or custom via `error_document`)
 - Read-only: PUT and DELETE return `405 Method Not Allowed`
-- Always public access (auth settings are ignored)
+- Reads are public: `auth.read: private` is rejected at startup, and `auth.write` is ignored with a warning
 - Put files in the storage directory and run `stowry populate`; static and spa route no writes
 
 ### Fallback Logic
@@ -163,7 +163,7 @@ server:
 - `GET /{path}` - Returns file if exists, otherwise `/index.html`
 - Enables client-side routing (React Router, Vue Router, etc.)
 - Read-only: PUT and DELETE return `405 Method Not Allowed`
-- Always public access (auth settings are ignored)
+- Reads are public: `auth.read: private` is rejected at startup, and `auth.write` is ignored with a warning
 - Put files in the storage directory and run `stowry populate`; static and spa route no writes
 
 ### Fallback Logic

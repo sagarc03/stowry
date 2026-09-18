@@ -227,7 +227,11 @@ curl -X DELETE "http://localhost:5708/photos/vacation.jpg?X-Stowry-Credential=..
 
 For development or public content, you can disable authentication:
 
-> **Note:** In `static` and `spa` modes, all access is always public regardless of auth configuration. Auth settings only apply in `store` mode.
+> **Note:** `static` and `spa` modes serve browsers, which cannot sign a
+> request, so no verifier is wired up and reads are public. Setting
+> `auth.read: private` with either mode is a **startup error** rather than a
+> silently public site. `auth.write` is ignored there, with a warning, because
+> writes are not routed at all.
 
 ```yaml
 auth:
@@ -251,8 +255,9 @@ auth:
 
 ## Maximum Expiration
 
-- Stowry native signing: No enforced maximum
-- AWS Signature V4: Maximum 7 days (604800 seconds)
+Both schemes cap expiry at 7 days (604800 seconds). The signer clamps anything
+larger, and the verifier rejects it, so a longer-lived URL cannot be minted or
+honoured. Zero or less falls back to the 900 second default.
 
 ## Troubleshooting
 
