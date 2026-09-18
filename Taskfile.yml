@@ -12,32 +12,33 @@ tasks:
       - task --list
 
   build:
-    desc: Build all binaries
-    deps: [build:server, build:cli]
-
-  build:server:
-    desc: Build the stowry server binary
+    desc: Build the stowry binary
     cmds:
-      - go build -o bin/stowry ./cmd/stowry
-
-  build:cli:
-    desc: Build the stowry-cli binary
-    cmds:
-      - go build -o bin/stowry-cli ./cmd/stowry-cli
+      - go build -o bin/stowry .
 
   run:
     desc: Run the stowry server
-    deps: [build:server]
+    deps: [build]
     cmds:
       - ./bin/stowry serve --config config.local.yaml
 
   test:
-    desc: Run all tests
+    desc: Run unit tests
+    cmds:
+      - go test ./internal/... ./types/... ./sign/...
+
+  test:e2e:
+    desc: Run end-to-end tests (needs Docker for the Postgres cases)
+    cmds:
+      - go test ./e2e/...
+
+  test:all:
+    desc: Run every test
     cmds:
       - go test ./...
 
   test:verbose:
-    desc: Run all tests with verbose output
+    desc: Run every test with verbose output
     cmds:
       - go test -v ./...
 
@@ -51,10 +52,16 @@ tasks:
     cmds:
       - go fmt ./...
 
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
   check:
-    desc: Format, lint, and test
+    desc: Format, vet, lint, and test
     cmds:
       - task: fmt
+      - task: vet
       - task: lint
       - task: test
 
@@ -78,3 +85,16 @@ tasks:
     deps: [docker:build]
     cmds:
       - docker run --rm -p 5708:5708 -e STOWRY_DATABASE_TYPE=sqlite -e STOWRY_STORAGE_PATH=/data stowry:test serve --db-dsn ":memory:"
+
+  migrate:
+    desc: Create the metadata schema
+    deps: [build]
+    cmds:
+      - ./bin/stowry migrate --config config.local.yaml
+
+  validate:
+    desc: Check the metadata schema without changing it
+    deps: [build]
+    cmds:
+      - ./bin/stowry validate --config config.local.yaml
+
