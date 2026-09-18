@@ -16,38 +16,35 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// seedFile creates a temporary file with the given content and adds it to storage
-// using the stowry add CLI command. This works independently of server mode.
+// seedFile puts content at destPath in the storage directory and records it,
+// which is how objects get in without going through the server. Static and spa
+// modes route no writes at all, so this is the only way there.
+//
+// The schema must already exist: call migrateDatabase first.
 func seedFile(t *testing.T, cfg ServerConfig, destPath string, content []byte) {
+	t.Helper()
+
+	full := filepath.Join(cfg.StoragePath, filepath.FromSlash(destPath))
+	require.NoError(t, os.MkdirAll(filepath.Dir(full), 0o750), "create storage subdirectory")
+	require.NoError(t, os.WriteFile(full, content, 0o600), "write seed file")
+
+	populateStorage(t, cfg)
+}
+
+// populateStorage records every file already in the storage directory.
+func populateStorage(t *testing.T, cfg ServerConfig) {
 	t.Helper()
 
 	binary := buildBinary(t)
 
-	// Write content to a temp file named to match the destination basename
-	base := filepath.Base(destPath)
-	tmpDir := t.TempDir()
-	tmpFile := filepath.Join(tmpDir, base)
-	err := os.WriteFile(tmpFile, content, 0o600)
-	require.NoError(t, err, "write seed file")
-
-	// Create config for the add command
-	addConfig := fmt.Sprintf("database:\n  type: %s\n  dsn: \"%s\"\nstorage:\n  path: \"%s\"\nlog:\n  level: error\n",
+	config := fmt.Sprintf("database:\n  type: %s\n  dsn: \"%s\"\nstorage:\n  path: \"%s\"\nlog:\n  level: error\n",
 		cfg.DBType, cfg.DBDSN, cfg.StoragePath)
 
-	configPath := filepath.Join(tmpDir, "seed-config.yaml")
-	err = os.WriteFile(configPath, []byte(addConfig), 0o600)
-	require.NoError(t, err, "write seed config")
+	configPath := filepath.Join(t.TempDir(), "populate-config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte(config), 0o600), "write populate config")
 
-	dir := filepath.Dir(destPath)
-	var cmd *exec.Cmd
-	if dir == "." {
-		cmd = exec.Command(binary, "add", "--config", configPath, tmpFile)
-	} else {
-		cmd = exec.Command(binary, "add", "--config", configPath, "--dest", dir+"/", tmpFile)
-	}
-
-	output, err := cmd.CombinedOutput()
-	require.NoError(t, err, "seed file %s: %s", destPath, output)
+	output, err := exec.Command(binary, "populate", "--config", configPath).CombinedOutput()
+	require.NoError(t, err, "populate storage: %s", output)
 }
 
 var (
@@ -103,7 +100,7 @@ func buildBinary(t *testing.T) string {
 	binaryOnce.Do(func() {
 		binaryPath = filepath.Join(sharedTempDir, "stowry")
 
-		cmd := exec.Command("go", "build", "-o", binaryPath, "./cmd/stowry")
+		cmd := exec.Command("go", "build", "-o", binaryPath, ".")
 		cmd.Dir = getProjectRoot(t)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
@@ -139,14 +136,14 @@ func getProjectRoot(t *testing.T) string {
 	}
 }
 
-// initDatabase runs the init command to migrate and set up the database.
-func initDatabase(t *testing.T, cfg ServerConfig) {
+// migrateDatabase creates the schema the server expects.
+func migrateDatabase(t *testing.T, cfg ServerConfig) {
 	t.Helper()
 
 	binary := buildBinary(t)
 
 	// Create a minimal config file for init
-	initConfig := fmt.Sprintf(`database:
+	migrateConfig := fmt.Sprintf(`database:
   type: %s
   dsn: "%s"
 storage:
@@ -155,13 +152,13 @@ log:
   level: error
 `, cfg.DBType, cfg.DBDSN, cfg.StoragePath)
 
-	configPath := filepath.Join(t.TempDir(), "init-config.yaml")
-	err := os.WriteFile(configPath, []byte(initConfig), 0o600)
-	require.NoError(t, err, "write init config file")
+	configPath := filepath.Join(t.TempDir(), "migrate-config.yaml")
+	err := os.WriteFile(configPath, []byte(migrateConfig), 0o600)
+	require.NoError(t, err, "write migrate config file")
 
-	cmd := exec.Command(binary, "init", "--config", configPath)
+	cmd := exec.Command(binary, "migrate", "--config", configPath)
 	output, err := cmd.CombinedOutput()
-	require.NoError(t, err, "init database: %s", output)
+	require.NoError(t, err, "migrate database: %s", output)
 }
 
 // createConfigFile creates a temporary config file for the server.
@@ -199,12 +196,9 @@ auth:
 		cfg.AuthWrite,
 	)
 
-	// Add auth keys if provided
-	if len(cfg.AuthKeys) > 0 {
-		sb.WriteString("  keys:\n    inline:\n")
-		for _, key := range cfg.AuthKeys {
-			fmt.Fprintf(&sb, "      - access_key: %s\n        secret_key: %s\n", key.AccessKey, key.SecretKey)
-		}
+	// One pair is all the config carries; several go in a keys file.
+	for _, key := range cfg.AuthKeys {
+		fmt.Fprintf(&sb, "  access_key: %s\n  secret_key: %s\n", key.AccessKey, key.SecretKey)
 	}
 
 	sb.WriteString("\nlog:\n  level: error\n")
@@ -221,8 +215,7 @@ auth:
 func startServer(t *testing.T, cfg ServerConfig) (string, func()) {
 	t.Helper()
 
-	// Initialize the database before starting the server
-	initDatabase(t, cfg)
+	migrateDatabase(t, cfg)
 
 	binary := buildBinary(t)
 

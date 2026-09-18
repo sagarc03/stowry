@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sagarc03/stowry"
-	stowryclient "github.com/sagarc03/stowry-go"
+	"github.com/sagarc03/stowry/sign"
+	"github.com/sagarc03/stowry/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -69,7 +69,7 @@ func runBasicCRUDTests(t *testing.T, baseURL string) {
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var metadata stowry.MetaData
+		var metadata types.MetaData
 		err = json.NewDecoder(resp.Body).Decode(&metadata)
 		require.NoError(t, err)
 		assert.Equal(t, "test.txt", metadata.Path)
@@ -196,7 +196,7 @@ func runListTests(t *testing.T, baseURL string) {
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var result stowry.ListResult
+		var result types.ListResult
 		err = json.NewDecoder(resp.Body).Decode(&result)
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, len(result.Items), 3)
@@ -209,7 +209,7 @@ func runListTests(t *testing.T, baseURL string) {
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var result stowry.ListResult
+		var result types.ListResult
 		err = json.NewDecoder(resp.Body).Decode(&result)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(result.Items))
@@ -223,7 +223,7 @@ func runListTests(t *testing.T, baseURL string) {
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var result stowry.ListResult
+		var result types.ListResult
 		err = json.NewDecoder(resp.Body).Decode(&result)
 		require.NoError(t, err)
 		assert.Equal(t, 1, len(result.Items))
@@ -267,7 +267,7 @@ func runConditionalRequestsTests(t *testing.T, baseURL string) {
 
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
-		var metadata stowry.MetaData
+		var metadata types.MetaData
 		err = json.NewDecoder(resp.Body).Decode(&metadata)
 		require.NoError(t, err)
 		etag = metadata.Etag
@@ -287,7 +287,7 @@ func runConditionalRequestsTests(t *testing.T, baseURL string) {
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
 		// Update etag for next test
-		var metadata stowry.MetaData
+		var metadata types.MetaData
 		err = json.NewDecoder(resp.Body).Decode(&metadata)
 		require.NoError(t, err)
 		etag = metadata.Etag
@@ -398,7 +398,7 @@ func TestE2E_StaticMode_SQLite(t *testing.T) {
 	}
 
 	// Seed files before starting server (PUT not available in static mode)
-	initDatabase(t, cfg)
+	migrateDatabase(t, cfg)
 	indexContent := []byte("<html><body>Hello from index.html</body></html>")
 	pageContent := []byte("<html><body>About page</body></html>")
 	seedFile(t, cfg, "docs/index.html", indexContent)
@@ -511,7 +511,7 @@ func TestE2E_StaticMode_CustomErrorPage_SQLite(t *testing.T) {
 	}
 
 	// Seed files
-	initDatabase(t, cfg)
+	migrateDatabase(t, cfg)
 	errorContent := []byte("<html><body>Custom Not Found Page</body></html>")
 	seedFile(t, cfg, "index.html", []byte("<html><body>Home</body></html>"))
 	seedFile(t, cfg, "404.html", errorContent)
@@ -551,7 +551,7 @@ func TestE2E_SPAMode_SQLite(t *testing.T) {
 	}
 
 	// Seed files before starting server (PUT not available in SPA mode)
-	initDatabase(t, cfg)
+	migrateDatabase(t, cfg)
 	indexContent := []byte("<html><body>SPA Root</body></html>")
 	realContent := []byte("real file content")
 	seedFile(t, cfg, "index.html", indexContent)
@@ -680,7 +680,7 @@ func TestE2E_Auth_PrivateWrite(t *testing.T) {
 	})
 
 	t.Run("PUT with presigned URL succeeds", func(t *testing.T) {
-		client := stowryclient.NewClient(baseURL, testAccessKey, testSecretKey)
+		client := sign.NewClient(baseURL, testAccessKey, testSecretKey)
 		presignedURL := client.PresignPut("/auth-test.txt", 900)
 
 		req, err := http.NewRequest("PUT", presignedURL, bytes.NewReader([]byte("authenticated content")))
@@ -707,7 +707,7 @@ func TestE2E_Auth_PrivateWrite(t *testing.T) {
 	})
 
 	t.Run("DELETE with presigned URL succeeds", func(t *testing.T) {
-		client := stowryclient.NewClient(baseURL, testAccessKey, testSecretKey)
+		client := sign.NewClient(baseURL, testAccessKey, testSecretKey)
 		presignedURL := client.PresignDelete("/auth-test.txt", 900)
 
 		req, err := http.NewRequest("DELETE", presignedURL, nil)
@@ -741,7 +741,7 @@ func TestE2E_Auth_PrivateRead(t *testing.T) {
 	defer cleanup()
 
 	httpClient := &http.Client{}
-	client := stowryclient.NewClient(baseURL, testAccessKey, testSecretKey)
+	client := sign.NewClient(baseURL, testAccessKey, testSecretKey)
 
 	t.Run("PUT with presigned URL creates file", func(t *testing.T) {
 		presignedURL := client.PresignPut("/private-file.txt", 900)
@@ -821,7 +821,7 @@ func TestE2E_Auth_InvalidSignature(t *testing.T) {
 	httpClient := &http.Client{}
 
 	t.Run("PUT with wrong secret key returns 401", func(t *testing.T) {
-		badClient := stowryclient.NewClient(baseURL, testAccessKey, "wrong-secret-key")
+		badClient := sign.NewClient(baseURL, testAccessKey, "wrong-secret-key")
 		presignedURL := badClient.PresignPut("/test.txt", 900)
 
 		req, err := http.NewRequest("PUT", presignedURL, bytes.NewReader([]byte("content")))
@@ -836,7 +836,7 @@ func TestE2E_Auth_InvalidSignature(t *testing.T) {
 	})
 
 	t.Run("PUT with unknown access key returns 401", func(t *testing.T) {
-		badClient := stowryclient.NewClient(baseURL, "UNKNOWN_ACCESS_KEY", "some-secret")
+		badClient := sign.NewClient(baseURL, "UNKNOWN_ACCESS_KEY", "some-secret")
 		presignedURL := badClient.PresignPut("/test.txt", 900)
 
 		req, err := http.NewRequest("PUT", presignedURL, bytes.NewReader([]byte("content")))
