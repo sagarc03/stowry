@@ -654,7 +654,6 @@ func TestClient_Upload_Recursive(t *testing.T) {
 		results, err := c.Upload(context.Background(), types.UploadOptions{
 			LocalPath:  tmpDir,
 			RemotePath: "uploads",
-			Recursive:  true,
 		})
 		require.NoError(t, err)
 		assert.Len(t, results, 2)
@@ -691,7 +690,6 @@ func TestClient_Upload_Recursive(t *testing.T) {
 		results, err := c.Upload(context.Background(), types.UploadOptions{
 			LocalPath:  filePath,
 			RemotePath: "file.txt",
-			Recursive:  true,
 		})
 		require.NoError(t, err)
 		assert.Len(t, results, 1)

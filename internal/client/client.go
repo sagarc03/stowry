@@ -106,37 +106,31 @@ func New(cfg *Config, opts ...Option) (*Client, error) {
 	return c, nil
 }
 
-// Upload uploads one file, or a directory tree when opts.Recursive is set,
-// preserving relative paths.
+// Upload uploads localPath. A directory is walked and uploaded whole, with the
+// tree's relative paths preserved under opts.RemotePath.
 func (c *Client) Upload(ctx context.Context, opts types.UploadOptions) ([]types.UploadResult, error) {
 	if opts.LocalPath == "" {
 		return nil, fmt.Errorf("upload: %w", ErrEmptyPath)
 	}
-	if opts.Recursive {
-		return c.uploadRecursive(ctx, opts)
-	}
-	result, err := c.uploadSingle(ctx, opts.LocalPath, opts.RemotePath, opts.ContentType)
-	if err != nil {
-		return nil, err
-	}
-	return []types.UploadResult{result}, nil
-}
 
-// uploadRecursive walks a directory and uploads all files.
-func (c *Client) uploadRecursive(ctx context.Context, opts types.UploadOptions) ([]types.UploadResult, error) {
 	info, err := os.Stat(opts.LocalPath)
 	if err != nil {
 		return nil, fmt.Errorf("stat local path: %w", err)
 	}
 
-	if !info.IsDir() {
-		result, uploadErr := c.uploadSingle(ctx, opts.LocalPath, opts.RemotePath, opts.ContentType)
-		if uploadErr != nil {
-			return nil, uploadErr
-		}
-		return []types.UploadResult{result}, nil
+	if info.IsDir() {
+		return c.uploadRecursive(ctx, opts)
 	}
 
+	result, err := c.uploadSingle(ctx, opts.LocalPath, opts.RemotePath, opts.ContentType)
+	if err != nil {
+		return nil, err
+	}
+
+	return []types.UploadResult{result}, nil
+}
+
+func (c *Client) uploadRecursive(ctx context.Context, opts types.UploadOptions) ([]types.UploadResult, error) {
 	var results []types.UploadResult
 	baseDir := opts.LocalPath
 	remotePrefix := strings.TrimSuffix(opts.RemotePath, "/")

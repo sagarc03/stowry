@@ -125,7 +125,6 @@ type UploadOptions struct {
 	LocalPath   string
 	RemotePath  string
 	ContentType string // optional, auto-detect if empty
-	Recursive   bool
 }
 
 // UploadResult represents the result of uploading a single file.
