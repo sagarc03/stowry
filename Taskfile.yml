@@ -70,6 +70,18 @@ tasks:
     cmds:
       - rm -rf bin/
 
+  licenses:
+    desc: Regenerate THIRD_PARTY_LICENSES from the module graph
+    cmds:
+      # 0.85 because modernc.org/mathutil's BSD text scores below the 0.9 default.
+      - go-licenses save . --save_path=THIRD_PARTY_LICENSES --force --confidence_threshold=0.85
+
+  licenses:check:
+    desc: Fail if THIRD_PARTY_LICENSES is out of date
+    cmds:
+      - go-licenses save . --save_path=/tmp/stowry-licenses --force --confidence_threshold=0.85
+      - diff -r THIRD_PARTY_LICENSES /tmp/stowry-licenses
+
   tidy:
     desc: Run go mod tidy
     cmds:

@@ -31,6 +31,27 @@ jobs:
         with:
           version: "v2.13"
 
+  licenses:
+    name: Third-party licenses
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Install go-licenses
+        run: go install github.com/google/go-licenses@latest
+
+      # Apache-2.0 dependencies require their licence to ship with the binary,
+      # so a new dependency must not land without its licence.
+      - name: Check THIRD_PARTY_LICENSES is current
+        run: |
+          go-licenses save . --save_path=/tmp/licenses --force --confidence_threshold=0.85
+          diff -r THIRD_PARTY_LICENSES /tmp/licenses
+
   test:
     name: Test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}

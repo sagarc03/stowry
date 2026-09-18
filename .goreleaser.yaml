@@ -29,6 +29,11 @@ archives:
   - id: stowry
     ids:
       - stowry
+    # Apache-2.0 dependencies require their licence to travel with the binary.
+    files:
+      - LICENSE
+      - README.md
+      - THIRD_PARTY_LICENSES/**/*
     formats:
       - tar.gz
     format_overrides:
@@ -66,6 +71,8 @@ dockers_v2:
       - "v{{ .Major }}.{{ .Minor }}"
       - "latest"
     dockerfile: Dockerfile
+    extra_files:
+      - THIRD_PARTY_LICENSES
     platforms:
       - linux/amd64
       - linux/arm64
@@ -81,6 +88,8 @@ dockers_v2:
       - "v{{ .Major }}.{{ .Minor }}-alpine"
       - "alpine"
     dockerfile: Dockerfile.alpine
+    extra_files:
+      - THIRD_PARTY_LICENSES
     platforms:
       - linux/amd64
       - linux/arm64
@@ -96,6 +105,8 @@ dockers_v2:
       - "v{{ .Major }}.{{ .Minor }}-debian"
       - "debian"
     dockerfile: Dockerfile.debian
+    extra_files:
+      - THIRD_PARTY_LICENSES
     platforms:
       - linux/amd64
       - linux/arm64
@@ -111,6 +122,8 @@ dockers_v2:
       - "v{{ .Major }}.{{ .Minor }}-distroless"
       - "distroless"
     dockerfile: Dockerfile.distroless
+    extra_files:
+      - THIRD_PARTY_LICENSES
     platforms:
       - linux/amd64
       - linux/arm64

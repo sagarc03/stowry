@@ -18,6 +18,8 @@ LABEL org.opencontainers.image.base.name="gcr.io/distroless/static-debian13:nonr
 # No CA bundle is copied in: distroless ships and maintains its own.
 COPY --from=base --chown=65532:65532 /data /data
 COPY $TARGETPLATFORM/stowry /stowry
+# Apache-2.0 dependencies require their licence to ship with the binary.
+COPY THIRD_PARTY_LICENSES /THIRD_PARTY_LICENSES
 
 VOLUME /data
 ENV STOWRY_STORAGE_PATH=/data

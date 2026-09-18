@@ -437,4 +437,10 @@ Contributions are welcome! Please follow these steps:
 
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).
+
+Dependencies keep their own licences, all permissive: 20 MIT, 9 BSD-3-Clause,
+3 BSD-2-Clause and 2 Apache-2.0 (`spf13/afero` and `spf13/cobra`). Apache-2.0
+requires its licence to travel with the binary, so release archives ship
+[THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES). Regenerate it with
+`task licenses` after changing dependencies; CI fails if it is out of date.

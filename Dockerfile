@@ -25,6 +25,8 @@ COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 # /data is recreated as root and the unprivileged user below cannot write to it.
 COPY --from=base --chown=65532:65532 /data /data
 COPY $TARGETPLATFORM/stowry /stowry
+# Apache-2.0 dependencies require their licence to ship with the binary.
+COPY THIRD_PARTY_LICENSES /THIRD_PARTY_LICENSES
 
 VOLUME /data
 ENV STOWRY_STORAGE_PATH=/data

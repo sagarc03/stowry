@@ -5,3 +5,4 @@ idiomatic_version_file_enable_tools = ['go']
 
 [tools]
 task = "latest"
+"go:github.com/google/go-licenses" = "latest"
