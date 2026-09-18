@@ -52,6 +52,8 @@ type Tables struct {
 type Storage struct {
 	// Path is the object directory, or MemoryPath.
 	Path string `mapstructure:"path" validate:"required"`
+	// Populate records the files already under Path before the server starts.
+	Populate bool `mapstructure:"populate"`
 }
 
 // MemoryPath is the storage.path that keeps objects in the process rather than

@@ -38,8 +38,10 @@ func newServeCmd() *cobra.Command {
 	}
 
 	d := config.Defaults()
-	cmd.Flags().Int("port", 0, fmt.Sprintf("HTTP server port (default %d)", d.Server.Port))
-	cmd.Flags().String("mode", "", fmt.Sprintf("server mode: store, static or spa (default %s)", d.Server.Mode))
+	cmd.Flags().Int("port", 0, usage("port", "HTTP server port", d.Server.Port))
+	cmd.Flags().String("mode", "", usage("mode", "server mode: store, static or spa", d.Server.Mode))
+	cmd.Flags().BoolP("populate", "p", false,
+		usage("populate", "record the files already in the storage directory before serving", d.Storage.Populate))
 
 	return cmd
 }
@@ -71,8 +73,10 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	}
 
 	// An in-memory database is created empty by this process, so nothing could
-	// have migrated it. A database on disk is migrated deliberately, by init.
-	if cfg.Database.DSN == config.MemoryPath {
+	// have migrated it. A database on disk is migrated deliberately, by init -
+	// or by asking for storage.populate, which is the same request to set the
+	// store up.
+	if cfg.Database.DSN == config.MemoryPath || cfg.Storage.Populate {
 		if err := db.Migrate(ctx); err != nil {
 			return fmt.Errorf("migrate database: %w", err)
 		}
@@ -94,13 +98,24 @@ func runServe(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	svc := service.New(db, storage)
+
+	if cfg.Storage.Populate {
+		entries, err := svc.Populate(ctx)
+		if err != nil {
+			return fmt.Errorf("populate storage: %w", err)
+		}
+
+		slog.Info("populated storage", "files", len(entries), "path", cfg.Storage.Path)
+	}
+
 	mux := http.NewServeMux()
 	handler.Register(&handler.Opts{
 		Mode:          cfg.Server.Mode,
 		ErrorDocument: cfg.Server.ErrorDocument,
 		MaxUploadSize: cfg.Server.MaxUploadSize,
 		Mux:           mux,
-		Svc:           service.New(db, storage),
+		Svc:           svc,
 		Logger:        slog.Default(),
 		ReadVerifier:  verifierWhen(cfg.Auth.Read.Private(), verifier),
 		WriteVerifier: verifierWhen(cfg.Auth.Write.Private(), verifier),

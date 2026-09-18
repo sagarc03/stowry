@@ -23,8 +23,20 @@ var flagToKey = map[string]string{
 	"db-type":      "database.type",
 	"db-dsn":       "database.dsn",
 	"storage-path": "storage.path",
+	"populate":     "storage.populate",
 	"port":         "server.port",
 	"mode":         "server.mode",
+}
+
+// EnvVar returns the environment variable that reaches the same setting as the
+// named flag, so help text cannot drift from what Load actually honours.
+func EnvVar(flag string) string {
+	key := flag
+	if mapped, ok := flagToKey[flag]; ok {
+		key = mapped
+	}
+
+	return envPrefix + "_" + strings.ToUpper(strings.ReplaceAll(key, ".", "_"))
 }
 
 // Load reads the configuration. Later sources win: flags, then environment,

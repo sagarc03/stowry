@@ -90,6 +90,7 @@ func TestLoadEnvReachesEverySetting(t *testing.T) {
 		"STOWRY_DATABASE_DSN":              "postgres://localhost/stowry",
 		"STOWRY_DATABASE_TABLES_META_DATA": "custom_metadata",
 		"STOWRY_STORAGE_PATH":              "/data",
+		"STOWRY_STORAGE_POPULATE":          "true",
 		"STOWRY_AUTH_READ":                 "private",
 		"STOWRY_AUTH_WRITE":                "private",
 		"STOWRY_AUTH_AWS_REGION":           "eu-west-1",
@@ -115,6 +116,7 @@ func TestLoadEnvReachesEverySetting(t *testing.T) {
 	assert.Equal(t, "postgres://localhost/stowry", cfg.Database.DSN)
 	assert.Equal(t, "custom_metadata", cfg.Database.Tables.MetaData)
 	assert.Equal(t, "/data", cfg.Storage.Path)
+	assert.True(t, cfg.Storage.Populate, "a zero-default field must still be env-reachable")
 	assert.Equal(t, config.AccessPrivate, cfg.Auth.Read)
 	assert.Equal(t, config.AccessPrivate, cfg.Auth.Write)
 	assert.Equal(t, "eu-west-1", cfg.Auth.AWS.Region)
@@ -292,4 +294,43 @@ func TestConversions(t *testing.T) {
 		assert.Equal(t, []string{"*"}, got.AllowedOrigins)
 		assert.Equal(t, 600, got.MaxAge)
 	})
+}
+
+// EnvVar is what the CLI prints in its help, so each name it produces has to be
+// one Load actually reads.
+func TestEnvVar(t *testing.T) {
+	tests := []struct {
+		flag string
+		want string
+		set  func(*config.Config) any
+	}{
+		{"db-type", "STOWRY_DATABASE_TYPE", func(c *config.Config) any { return c.Database.Type }},
+		{"db-dsn", "STOWRY_DATABASE_DSN", func(c *config.Config) any { return c.Database.DSN }},
+		{"storage-path", "STOWRY_STORAGE_PATH", func(c *config.Config) any { return c.Storage.Path }},
+		{"populate", "STOWRY_STORAGE_POPULATE", func(c *config.Config) any { return c.Storage.Populate }},
+		{"port", "STOWRY_SERVER_PORT", func(c *config.Config) any { return c.Server.Port }},
+		{"mode", "STOWRY_SERVER_MODE", func(c *config.Config) any { return c.Server.Mode }},
+	}
+
+	values := map[string]struct {
+		env  string
+		want any
+	}{
+		"STOWRY_DATABASE_TYPE":    {"postgres", "postgres"},
+		"STOWRY_DATABASE_DSN":     {"postgres://localhost/s", "postgres://localhost/s"},
+		"STOWRY_STORAGE_PATH":     {"/data", "/data"},
+		"STOWRY_STORAGE_POPULATE": {"true", true},
+		"STOWRY_SERVER_PORT":      {"9090", 9090},
+		"STOWRY_SERVER_MODE":      {"spa", types.ModeSPA},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.flag, func(t *testing.T) {
+			assert.Equal(t, tt.want, config.EnvVar(tt.flag))
+
+			v := values[tt.want]
+			t.Setenv(tt.want, v.env)
+			assert.Equal(t, v.want, tt.set(load(t, nil, nil)))
+		})
+	}
 }
