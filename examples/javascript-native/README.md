@@ -11,7 +11,8 @@ Demonstrates using Stowry with [stowryjs](https://www.npmjs.com/package/stowryjs
 
 ```bash
 # Start Stowry
-stowry serve --config ../config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
+stowry migrate --config ../config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
+stowry serve   --config ../config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
 
 # Run example
 cd examples/javascript-native

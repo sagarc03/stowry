@@ -28,7 +28,8 @@ A file upload example using Flask backend with stowrypy for presigned URL genera
 
 ```bash
 # From the stowry root directory
-./stowry serve --config examples/config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
+./stowry migrate --config examples/config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
+./stowry serve   --config examples/config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
 ```
 
 ### 2. Start Flask Backend

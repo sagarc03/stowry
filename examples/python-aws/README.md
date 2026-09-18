@@ -11,7 +11,8 @@ Demonstrates using Stowry with [boto3](https://boto3.amazonaws.com/v1/documentat
 
 ```bash
 # Start Stowry
-stowry serve --config ../config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
+stowry migrate --config ../config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
+stowry serve   --config ../config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
 
 # Run example
 cd examples/python-aws

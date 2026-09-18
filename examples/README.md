@@ -30,7 +30,8 @@ Start Stowry with the example config:
 
 ```bash
 # From repository root
-stowry serve --config examples/config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
+stowry migrate --config examples/config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
+stowry serve   --config examples/config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
 ```
 
 Or with Docker:

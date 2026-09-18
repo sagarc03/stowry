@@ -2,7 +2,8 @@
  * Example: Using Stowry with presigned URLs (JavaScript)
  *
  * Run Stowry first:
- *   stowry serve --config ../config.yaml
+ *   stowry migrate --config ../config.yaml
+ *   stowry serve   --config ../config.yaml
  *
  * Then run this example:
  *   cd examples/javascript-aws

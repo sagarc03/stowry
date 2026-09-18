@@ -276,14 +276,21 @@ STOWRY_DATABASE_DSN="postgres://localhost/stowry" \
 
 ## Command-Line Flags
 
-Global flags available for all commands:
+Every setting has a flag. `stowry --help` lists them all with the environment
+variable each one mirrors; the ones reached for most often:
 
 ```bash
---config, -c string     Config file paths (can be specified multiple times, merged left-to-right)
---db-type string        Database type (sqlite, postgres)
---db-dsn string         Database connection string
---storage-path string   Storage directory path
+-c, --config strings        Config file paths, merged left to right
+    --db-type string        Database type (sqlite, postgres)
+-d, --db-dsn string         Database connection string
+-s, --storage-path string   Storage directory path
+-a, --access-key string     Access key for signed requests
+-k, --secret-key string     Secret key for signed requests
+-e, --endpoint string       Server the client commands talk to
+    --log-level string      debug, info, warn or error
 ```
+
+`serve` adds `--port`, `--mode`, `-m/--migrate` and `-p/--populate`.
 
 **Example:**
 

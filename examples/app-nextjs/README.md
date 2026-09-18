@@ -23,7 +23,8 @@ This example demonstrates how to use [Better Upload](https://better-upload.com) 
    # From the stowry root directory
    go build -o stowry .
    ./stowry migrate --config examples/config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
-   ./stowry serve --config examples/config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
+   ./stowry migrate --config examples/config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
+./stowry serve   --config examples/config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
    ```
 
 2. **Configure environment**

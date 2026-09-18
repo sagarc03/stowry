@@ -6,7 +6,8 @@ This example demonstrates using presigned URLs with Stowry's native
 signing scheme via the stowrypy SDK.
 
 Run Stowry first:
-    stowry serve --config ../config.yaml
+    stowry migrate --config ../config.yaml
+    stowry serve   --config ../config.yaml
 
 Then run this example:
     cd examples/python-native

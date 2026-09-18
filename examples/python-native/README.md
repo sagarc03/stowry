@@ -11,7 +11,8 @@ Demonstrates using Stowry with [stowrypy](https://pypi.org/project/stowrypy/) SD
 
 ```bash
 # Start Stowry
-stowry serve --config ../config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
+stowry migrate --config ../config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
+stowry serve   --config ../config.yaml --db-dsn /tmp/stowry.db --storage-path /tmp/data
 
 # Run example
 cd examples/python-native
