@@ -11,8 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// A static site is stored the way a static host expects: an index per
-// directory, and pages as .html files.
+// staticSite is laid out the way a static host expects.
 func staticSite() map[string]stubObject {
 	return map[string]stubObject{
 		"index.html":      object("index.html", "home", "text/html", "e1"),
@@ -67,8 +66,7 @@ func TestResolveByMode(t *testing.T) {
 	}
 }
 
-// The response is named after the path the object was found at, not the one
-// asked for, so ranges and any sniffing describe what is actually being sent.
+// The response describes the object found, not the path asked for.
 func TestResolveSetsContentTypeOfTheResolvedObject(t *testing.T) {
 	t.Parallel()
 
@@ -81,7 +79,6 @@ func TestResolveSetsContentTypeOfTheResolvedObject(t *testing.T) {
 	assert.Equal(t, `"e3"`, w.Header().Get("ETag"))
 }
 
-// HEAD must resolve the same way GET does.
 func TestResolveAppliesToHead(t *testing.T) {
 	t.Parallel()
 
@@ -94,7 +91,6 @@ func TestResolveAppliesToHead(t *testing.T) {
 	}
 }
 
-// A path the service rejects must stay a 400, not be retried as a candidate.
 func TestResolveStopsOnInvalidPath(t *testing.T) {
 	t.Parallel()
 

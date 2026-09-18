@@ -950,8 +950,7 @@ func TestIsValidPath(t *testing.T) {
 	}
 }
 
-// MemMapFs creates parent directories implicitly; a real one does not. This
-// runs on disk so a nested object path is exercised the way a server sees it.
+// MemMapFs creates parent directories implicitly; a real filesystem does not.
 func TestStowryService_Create_NestedPathOnDisk(t *testing.T) {
 	storage := afero.NewBasePathFs(afero.NewOsFs(), t.TempDir())
 	svc, repo := NewStowryServiceWithFs(t, storage)

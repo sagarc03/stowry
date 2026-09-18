@@ -103,10 +103,9 @@ func runServe(cmd *cobra.Command, _ []string) error {
 		Logger:        slog.Default(),
 		ReadVerifier:  verifierWhen(cfg.Auth.Read.Private(), verifier),
 		WriteVerifier: verifierWhen(cfg.Auth.Write.Private(), verifier),
-		Middleware:    serverMiddleware(cfg),
 	})
 
-	return listenAndServe(ctx, cancel, cfg.Server.Port, mux)
+	return listenAndServe(ctx, cancel, cfg.Server.Port, withServerMiddleware(cfg, mux))
 }
 
 // openStorage returns the object filesystem for path, which is a directory or
@@ -145,30 +144,28 @@ func verifierWhen(private bool, verifier *sign.SignatureVerifier) middleware.Req
 	return verifier
 }
 
-// serverMiddleware is the chain every route runs through, outermost first.
-// CORS comes before authentication because browsers omit credentials from a
-// preflight, which a signature check would then reject.
-func serverMiddleware(cfg *config.Config) []func(http.Handler) http.Handler {
-	chain := []func(http.Handler) http.Handler{
-		middleware.WithRequestID,
-		func(next http.Handler) http.Handler {
-			return middleware.WithLogging(slog.Default(), next)
-		},
-	}
+// withServerMiddleware wraps the mux rather than its routes, so a CORS
+// preflight and a 404 are covered too; the mux answers both before any route
+// runs. It also puts CORS ahead of authentication, which it must be: browsers
+// omit credentials from a preflight.
+func withServerMiddleware(cfg *config.Config, mux *http.ServeMux) http.Handler {
+	var h http.Handler = mux
 
 	if cors, enabled := cfg.CORSConfig(); enabled {
-		chain = append(chain, middleware.WithCORS(cors))
+		h = middleware.WithCORS(cors)(h)
 	}
 
-	return chain
+	h = middleware.WithLogging(slog.Default(), h)
+
+	return middleware.WithRequestID(h)
 }
 
-func listenAndServe(ctx context.Context, cancel context.CancelFunc, port int, mux *http.ServeMux) error {
+func listenAndServe(ctx context.Context, cancel context.CancelFunc, port int, h http.Handler) error {
 	addr := fmt.Sprintf(":%d", port)
 
 	server := &http.Server{
 		Addr:         addr,
-		Handler:      mux,
+		Handler:      h,
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 		IdleTimeout:  idleTimeout,

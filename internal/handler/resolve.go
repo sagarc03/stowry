@@ -12,16 +12,10 @@ import (
 
 const indexDocument = "index.html"
 
-// candidates lists the object paths a request may resolve to, in the order to
-// try them.
-//
-// Store mode serves exactly what was asked for. Static mode follows the
-// convention a static host uses: a directory URL means its index, and a bare
-// name may be a page. SPA mode falls back to the app shell so client-side
-// routing can take over.
-//
-// Neither the empty path nor a trailing slash is a path the service accepts,
-// which is why this runs before it rather than inside it.
+// candidates lists the object paths a request may resolve to, in order. Store
+// serves what was asked for, static follows a static host's conventions, and
+// spa falls back to the app shell. It runs before the service because neither
+// the empty path nor a trailing slash is one the service accepts.
 func candidates(mode types.ServerMode, path string) []string {
 	if mode == types.ModeStore {
 		return []string{path}
@@ -31,9 +25,8 @@ func candidates(mode types.ServerMode, path string) []string {
 		return []string{indexDocument}
 	}
 
-	// A trailing slash names a directory, which is never an object path, so it
-	// must not be offered as a candidate: the service rejects it outright and
-	// that would end the search rather than continue it.
+	// A trailing slash is never an object path, so offering it would end the
+	// search on ErrInvalidInput rather than continue it.
 	if strings.HasSuffix(path, "/") {
 		if mode == types.ModeSPA {
 			return []string{path + indexDocument, indexDocument}
@@ -49,9 +42,8 @@ func candidates(mode types.ServerMode, path string) []string {
 	return []string{path, path + ".html", path + "/" + indexDocument}
 }
 
-// resolveGet returns the first candidate that exists, along with the path it
-// was found at, which names the response for content type sniffing and ranges.
-// Anything other than a miss stops the search.
+// resolveGet returns the first candidate that exists and the path it was found
+// at. Anything other than a miss stops the search.
 func resolveGet(ctx context.Context, svc Service, mode types.ServerMode, path string) (types.MetaData, io.ReadSeekCloser, string, error) {
 	var err error
 

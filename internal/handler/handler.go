@@ -9,7 +9,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -47,12 +46,14 @@ type Opts struct {
 	// A nil verifier leaves those methods unauthenticated.
 	ReadVerifier  middleware.RequestVerifier
 	WriteVerifier middleware.RequestVerifier
-	// Middleware wraps every route, outermost first.
-	Middleware []func(next http.Handler) http.Handler
 }
 
 // Register installs the routes on opts.Mux. Only store mode registers the root
 // listing and the write methods; ServeMux answers the rest with 405.
+//
+// Only authentication is installed here. Anything that must also see the
+// requests no route matches has to wrap the mux instead, since ServeMux answers
+// those before any handler runs.
 func Register(opts *Opts) {
 	logger := cmp.Or(opts.Logger, slog.Default())
 
@@ -60,11 +61,7 @@ func Register(opts *Opts) {
 	writeAuth := middleware.AuthMiddleware(opts.WriteVerifier)
 
 	wrap := func(auth func(http.Handler) http.Handler, h http.HandlerFunc) http.Handler {
-		wrapped := auth(h)
-		for _, m := range slices.Backward(opts.Middleware) {
-			wrapped = m(wrapped)
-		}
-		return wrapped
+		return auth(h)
 	}
 
 	notFound := NotFoundHandler(logger, opts.Svc, opts.Mode, opts.ErrorDocument)

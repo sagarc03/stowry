@@ -584,28 +584,6 @@ func TestRegisterRoutesByMode(t *testing.T) {
 	}
 }
 
-func TestRegisterMiddleware(t *testing.T) {
-	t.Parallel()
-
-	var order []string
-
-	tag := func(name string) func(http.Handler) http.Handler {
-		return func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				order = append(order, name)
-				next.ServeHTTP(w, r)
-			})
-		}
-	}
-
-	opts := storeOpts(&stubService{})
-	opts.Middleware = []func(http.Handler) http.Handler{tag("outer"), tag("inner")}
-
-	serve(t, opts, httptest.NewRequest(http.MethodGet, "/", nil))
-
-	assert.Equal(t, []string{"outer", "inner"}, order, "Middleware[0] runs outermost")
-}
-
 func TestRegisterAuth(t *testing.T) {
 	t.Parallel()
 

@@ -77,8 +77,7 @@ func (s *Service) Create(ctx context.Context, obj types.CreateObject, content io
 		return types.MetaData{}, fmt.Errorf("invalid path %s: %w", obj.Path, ErrInvalidInput)
 	}
 
-	// Create does not make parent directories, and an object path is a whole
-	// directory chain more often than not.
+	// Create does not make parent directories.
 	if dir := path.Dir(obj.Path); dir != "." {
 		if err := s.storage.MkdirAll(dir, 0o755); err != nil {
 			return types.MetaData{}, fmt.Errorf("create directory %s: %w", dir, err)
