@@ -127,25 +127,38 @@ stowry --help
 Expected output:
 
 ```
-Stowry - A lightweight object storage server
+Stowry is a lightweight object storage server, and the client for it.
 
 Usage:
   stowry [command]
 
-Available Commands:
-  cleanup     Clean up soft-deleted files
+Server Commands:
+  migrate     Create the metadata schema
+  populate    Record the files already in the storage directory
+  serve       Start the HTTP server
+  validate    Check the metadata schema without changing it
+
+Client Commands:
+  delete      Delete files from the server
+  download    Download a file from the server
+  list        List objects on the server
+  upload      Upload a file or directory to the server
+
+Additional Commands:
   completion  Generate the autocompletion script for the specified shell
   help        Help about any command
-  init        Initialize metadata database from storage files
-  serve       Start the HTTP server
 
 Flags:
-      --config string         config file (default "config.yaml")
-      --db-dsn string         database DSN
-      --db-table string       database table name
-      --db-type string        database type (sqlite, postgres)
-  -h, --help                  help for stowry
-      --storage-path string   storage directory path
+  -a, --access-key string     access key for signed requests [STOWRY_ACCESS_KEY]
+  -c, --config strings        config file paths, merged left to right [STOWRY_CONFIG] (default ./config.yaml)
+  -d, --db-dsn string         database connection string [STOWRY_DATABASE_DSN] (default ":memory:")
+      --db-type string        database type: sqlite or postgres [STOWRY_DATABASE_TYPE] (default sqlite)
+  -e, --endpoint string       server the client commands talk to [STOWRY_ENDPOINT]
+  -k, --secret-key string     secret key for signed requests [STOWRY_SECRET_KEY]
+  -s, --storage-path string   storage directory path [STOWRY_STORAGE_PATH] (default ":memory:")
+
+(abridged: run `stowry --help` for every flag, including the auth, cors and log
+settings.)
 
 Use "stowry [command] --help" for more information about a command.
 ```
