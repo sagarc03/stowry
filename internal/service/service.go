@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -43,28 +42,19 @@ type MetaDataRepo interface {
 }
 
 // Service serves objects from storage using repo as the metadata source of
-// truth. Its mode decides how unresolved paths fall back, see resolveMetadata.
+// truth. Every method takes its path literally; callers resolve request paths
+// to object paths themselves.
 type Service struct {
 	repo    MetaDataRepo
 	storage afero.Fs
-	mode    types.ServerMode
 }
 
-// ServiceConfig holds the options for New.
-type ServiceConfig struct {
-	Mode types.ServerMode
-}
-
-// New returns a Service, failing if cfg.Mode is not a valid server mode.
-func New(repo MetaDataRepo, storage afero.Fs, cfg ServiceConfig) (*Service, error) {
-	if !cfg.Mode.IsValid() {
-		return nil, fmt.Errorf("new stowry service: invalid mode: %s", cfg.Mode)
-	}
+// New returns a Service backed by repo and storage.
+func New(repo MetaDataRepo, storage afero.Fs) *Service {
 	return &Service{
 		repo:    repo,
 		storage: storage,
-		mode:    cfg.Mode,
-	}, nil
+	}
 }
 
 // Create writes content to obj.Path and records its metadata, using the
@@ -116,51 +106,19 @@ func (s *Service) Create(ctx context.Context, obj types.CreateObject, content io
 	return metaData, nil
 }
 
-// resolveMetadata looks up path, falling back according to the server mode:
-//   - store: no fallback, and an empty path is ErrNotFound
-//   - static: "/foo/" tries {path}index.html; "/foo" tries the exact path,
-//     then {path}.html, then {path}/index.html (S3 + CloudFront behaviour)
-//   - spa: falls back to index.html
-func (s *Service) resolveMetadata(ctx context.Context, path string) (types.MetaData, error) {
-	if path == "" {
-		switch s.mode {
-		case types.ModeStore:
-			return types.MetaData{}, ErrNotFound
-		case types.ModeStatic, types.ModeSPA:
-			path = "index.html"
-		}
-	}
-
-	m, err := s.repo.Get(ctx, path)
-
-	if errors.Is(err, ErrNotFound) {
-		switch s.mode {
-		case types.ModeStore:
-		case types.ModeStatic:
-			if strings.HasSuffix(path, "/") {
-				m, err = s.repo.Get(ctx, path+"index.html")
-			} else {
-				m, err = s.repo.Get(ctx, path+".html")
-				if errors.Is(err, ErrNotFound) {
-					m, err = s.repo.Get(ctx, path+"/index.html")
-				}
-			}
-		case types.ModeSPA:
-			m, err = s.repo.Get(ctx, "index.html")
-		}
-	}
-
-	return m, err
-}
-
 // Get returns the metadata for path together with a reader over its content.
-// The caller owns the reader and must close it.
+// The caller owns the reader and must close it. It returns ErrInvalidInput if
+// path fails IsValidPath, or ErrNotFound if no object is stored at path.
 func (s *Service) Get(ctx context.Context, path string) (types.MetaData, io.ReadSeekCloser, error) {
 	if err := ctx.Err(); err != nil {
 		return types.MetaData{}, nil, fmt.Errorf("context: %w", err)
 	}
 
-	m, err := s.resolveMetadata(ctx, path)
+	if !IsValidPath(path) {
+		return types.MetaData{}, nil, fmt.Errorf("invalid path %s: %w", path, ErrInvalidInput)
+	}
+
+	m, err := s.repo.Get(ctx, path)
 	if err != nil {
 		return types.MetaData{}, nil, fmt.Errorf("meta data: %w", err)
 	}
@@ -179,7 +137,11 @@ func (s *Service) Info(ctx context.Context, path string) (types.MetaData, error)
 		return types.MetaData{}, fmt.Errorf("context: %w", err)
 	}
 
-	m, err := s.resolveMetadata(ctx, path)
+	if !IsValidPath(path) {
+		return types.MetaData{}, fmt.Errorf("invalid path %s: %w", path, ErrInvalidInput)
+	}
+
+	m, err := s.repo.Get(ctx, path)
 	if err != nil {
 		return types.MetaData{}, fmt.Errorf("meta data: %w", err)
 	}
@@ -188,8 +150,8 @@ func (s *Service) Info(ctx context.Context, path string) (types.MetaData, error)
 }
 
 // Delete removes the metadata for path and then its stored file. It returns
-// ErrInvalidInput for an empty path. Unlike Get, it takes path literally and
-// applies no mode fallback.
+// ErrInvalidInput for an empty path. It does not apply IsValidPath, so entries
+// stored under paths that predate the current rules can still be removed.
 func (s *Service) Delete(ctx context.Context, path string) error {
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("context: %w", err)

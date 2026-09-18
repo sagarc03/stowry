@@ -55,10 +55,7 @@ func (s *SpyMetaDataRepo) MarkCleanedUp(ctx context.Context, id uuid.UUID) error
 func NewStowryServiceWithFs(t *testing.T, storage afero.Fs) (*service.Service, *SpyMetaDataRepo) {
 	t.Helper()
 	spyRepo := new(SpyMetaDataRepo)
-	cfg := service.ServiceConfig{Mode: types.ModeStore}
-	s, err := service.New(spyRepo, storage, cfg)
-	assert.NoError(t, err, "new stowry service")
-	return s, spyRepo
+	return service.New(spyRepo, storage), spyRepo
 }
 
 func NewStowryService(t *testing.T) (*service.Service, *SpyMetaDataRepo, afero.Fs) {
@@ -400,16 +397,6 @@ func TestStowryService_Create(t *testing.T) {
 	})
 }
 
-func NewStowryServiceWithMode(t *testing.T, mode types.ServerMode) (*service.Service, *SpyMetaDataRepo, afero.Fs) {
-	t.Helper()
-	spyRepo := new(SpyMetaDataRepo)
-	spyStorage := afero.NewMemMapFs()
-	cfg := service.ServiceConfig{Mode: mode}
-	s, err := service.New(spyRepo, spyStorage, cfg)
-	assert.NoError(t, err, "new stowry service")
-	return s, spyRepo, spyStorage
-}
-
 // writeFile seeds storage with a file the service is expected to find.
 func writeFile(t *testing.T, storage afero.Fs, name, data string) {
 	t.Helper()
@@ -433,8 +420,8 @@ func checkContents(t *testing.T, r io.Reader, want string) {
 }
 
 func TestStowryService_Get(t *testing.T) {
-	t.Run("success - get object in store mode", func(t *testing.T) {
-		svc, repo, storage := NewStowryServiceWithMode(t, types.ModeStore)
+	t.Run("success - get object", func(t *testing.T) {
+		svc, repo, storage := NewStowryService(t)
 		ctx := context.Background()
 
 		expectedMetadata := types.MetaData{
@@ -456,57 +443,8 @@ func TestStowryService_Get(t *testing.T) {
 		repo.AssertExpectations(t)
 	})
 
-	t.Run("success - static mode fallback to index.html", func(t *testing.T) {
-		svc, repo, storage := NewStowryServiceWithMode(t, types.ModeStatic)
-		ctx := context.Background()
-
-		indexMetadata := types.MetaData{
-			Path:          "documents/index.html",
-			ContentType:   "text/html",
-			FileSizeBytes: 100,
-			Etag:          "xyz789",
-		}
-
-		writeFile(t, storage, "documents/index.html", "<html></html>")
-		repo.On("Get", ctx, "documents").Return(types.MetaData{}, service.ErrNotFound)
-		repo.On("Get", ctx, "documents.html").Return(types.MetaData{}, service.ErrNotFound)
-		repo.On("Get", ctx, "documents/index.html").Return(indexMetadata, nil)
-
-		metadata, file, err := svc.Get(ctx, "documents")
-		assert.NoError(t, err)
-		assert.Equal(t, "documents/index.html", metadata.Path)
-		defer file.Close()
-		checkContents(t, file, "<html></html>")
-
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("success - spa mode fallback to index.html", func(t *testing.T) {
-		svc, repo, storage := NewStowryServiceWithMode(t, types.ModeSPA)
-		ctx := context.Background()
-
-		indexMetadata := types.MetaData{
-			Path:          "index.html",
-			ContentType:   "text/html",
-			FileSizeBytes: 100,
-			Etag:          "xyz789",
-		}
-
-		writeFile(t, storage, "index.html", "<html></html>")
-		repo.On("Get", ctx, "non-existent-route").Return(types.MetaData{}, service.ErrNotFound)
-		repo.On("Get", ctx, "index.html").Return(indexMetadata, nil)
-
-		metadata, file, err := svc.Get(ctx, "non-existent-route")
-		assert.NoError(t, err)
-		assert.Equal(t, "index.html", metadata.Path)
-		defer file.Close()
-		checkContents(t, file, "<html></html>")
-
-		repo.AssertExpectations(t)
-	})
-
 	t.Run("error - context cancelled before operation", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeStore)
+		svc, repo, _ := NewStowryService(t)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
@@ -517,8 +455,8 @@ func TestStowryService_Get(t *testing.T) {
 		repo.AssertNotCalled(t, "Get")
 	})
 
-	t.Run("error - metadata not found in store mode", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeStore)
+	t.Run("error - metadata not found", func(t *testing.T) {
+		svc, repo, _ := NewStowryService(t)
 		ctx := context.Background()
 
 		repo.On("Get", ctx, "nonexistent.txt").Return(types.MetaData{}, service.ErrNotFound)
@@ -530,37 +468,8 @@ func TestStowryService_Get(t *testing.T) {
 		repo.AssertExpectations(t)
 	})
 
-	t.Run("error - static mode fallback also fails", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeStatic)
-		ctx := context.Background()
-
-		repo.On("Get", ctx, "documents").Return(types.MetaData{}, service.ErrNotFound)
-		repo.On("Get", ctx, "documents.html").Return(types.MetaData{}, service.ErrNotFound)
-		repo.On("Get", ctx, "documents/index.html").Return(types.MetaData{}, service.ErrNotFound)
-
-		_, _, err := svc.Get(ctx, "documents")
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, service.ErrNotFound)
-
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("error - spa mode fallback also fails", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeSPA)
-		ctx := context.Background()
-
-		repo.On("Get", ctx, "route").Return(types.MetaData{}, service.ErrNotFound)
-		repo.On("Get", ctx, "index.html").Return(types.MetaData{}, service.ErrNotFound)
-
-		_, _, err := svc.Get(ctx, "route")
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, service.ErrNotFound)
-
-		repo.AssertExpectations(t)
-	})
-
 	t.Run("error - repo returns non-NotFound error", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeStore)
+		svc, repo, _ := NewStowryService(t)
 		ctx := context.Background()
 
 		dbErr := errors.New("database error")
@@ -574,7 +483,7 @@ func TestStowryService_Get(t *testing.T) {
 	})
 
 	t.Run("error - metadata exists but file is missing from storage", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeStore)
+		svc, repo, _ := NewStowryService(t)
 		ctx := context.Background()
 
 		metadata := types.MetaData{
@@ -593,227 +502,33 @@ func TestStowryService_Get(t *testing.T) {
 		repo.AssertExpectations(t)
 	})
 
-	t.Run("static mode - first path exists, no fallback needed", func(t *testing.T) {
-		svc, repo, storage := NewStowryServiceWithMode(t, types.ModeStatic)
-		ctx := context.Background()
+	t.Run("error - path fails IsValidPath", func(t *testing.T) {
+		for _, path := range []string{"", "/", ".", "/etc/passwd", "../etc/passwd", "docs/", "a//b", "a/./b"} {
+			t.Run(path, func(t *testing.T) {
+				svc, repo, _ := NewStowryService(t)
 
-		metadata := types.MetaData{
-			Path:          "documents/file.txt",
-			ContentType:   "text/plain",
-			FileSizeBytes: 12,
-			Etag:          "abc123",
+				_, _, err := svc.Get(context.Background(), path)
+				assert.ErrorIs(t, err, service.ErrInvalidInput)
+
+				repo.AssertNotCalled(t, "Get")
+			})
 		}
-
-		writeFile(t, storage, "documents/file.txt", "content")
-		repo.On("Get", ctx, "documents/file.txt").Return(metadata, nil)
-
-		_, file, err := svc.Get(ctx, "documents/file.txt")
-		assert.NoError(t, err)
-		defer file.Close()
-		checkContents(t, file, "content")
-
-		repo.AssertExpectations(t)
-		repo.AssertNotCalled(t, "Get", mock.Anything, "documents/file.txt.html")
-		repo.AssertNotCalled(t, "Get", mock.Anything, "documents/file.txt/index.html")
 	})
 
-	t.Run("spa mode - first path exists, no fallback needed", func(t *testing.T) {
-		svc, repo, storage := NewStowryServiceWithMode(t, types.ModeSPA)
+	t.Run("miss is not retried against any fallback path", func(t *testing.T) {
+		svc, repo, _ := NewStowryService(t)
 		ctx := context.Background()
 
-		metadata := types.MetaData{
-			Path:          "api/data.json",
-			ContentType:   "application/json",
-			FileSizeBytes: 50,
-			Etag:          "abc123",
-		}
+		repo.On("Get", ctx, "documents").Return(types.MetaData{}, service.ErrNotFound)
 
-		writeFile(t, storage, "api/data.json", "{}")
-		repo.On("Get", ctx, "api/data.json").Return(metadata, nil)
-
-		_, file, err := svc.Get(ctx, "api/data.json")
-		assert.NoError(t, err)
-		defer file.Close()
-		checkContents(t, file, "{}")
+		_, _, err := svc.Get(ctx, "documents")
+		assert.ErrorIs(t, err, service.ErrNotFound)
 
 		repo.AssertExpectations(t)
+		repo.AssertNumberOfCalls(t, "Get", 1)
+		repo.AssertNotCalled(t, "Get", mock.Anything, "documents.html")
+		repo.AssertNotCalled(t, "Get", mock.Anything, "documents/index.html")
 		repo.AssertNotCalled(t, "Get", mock.Anything, "index.html")
-	})
-
-	t.Run("error - empty path returns not found in store mode", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeStore)
-		ctx := context.Background()
-
-		_, _, err := svc.Get(ctx, "")
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, service.ErrNotFound)
-
-		repo.AssertNotCalled(t, "Get")
-	})
-
-	t.Run("success - empty path serves index.html in static mode", func(t *testing.T) {
-		svc, repo, storage := NewStowryServiceWithMode(t, types.ModeStatic)
-		ctx := context.Background()
-
-		indexMetadata := types.MetaData{
-			Path:          "index.html",
-			ContentType:   "text/html",
-			FileSizeBytes: 100,
-			Etag:          "xyz789",
-		}
-
-		writeFile(t, storage, "index.html", "<html></html>")
-		repo.On("Get", ctx, "index.html").Return(indexMetadata, nil)
-
-		metadata, file, err := svc.Get(ctx, "")
-		assert.NoError(t, err)
-		assert.Equal(t, "index.html", metadata.Path)
-		defer file.Close()
-		checkContents(t, file, "<html></html>")
-
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("success - empty path serves index.html in spa mode", func(t *testing.T) {
-		svc, repo, storage := NewStowryServiceWithMode(t, types.ModeSPA)
-		ctx := context.Background()
-
-		indexMetadata := types.MetaData{
-			Path:          "index.html",
-			ContentType:   "text/html",
-			FileSizeBytes: 100,
-			Etag:          "xyz789",
-		}
-
-		writeFile(t, storage, "index.html", "<html></html>")
-		repo.On("Get", ctx, "index.html").Return(indexMetadata, nil)
-
-		metadata, file, err := svc.Get(ctx, "")
-		assert.NoError(t, err)
-		assert.Equal(t, "index.html", metadata.Path)
-		defer file.Close()
-		checkContents(t, file, "<html></html>")
-
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("error - empty path returns not found when index.html doesn't exist in static mode", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeStatic)
-		ctx := context.Background()
-
-		// First call: index.html (from empty path conversion)
-		repo.On("Get", ctx, "index.html").Return(types.MetaData{}, service.ErrNotFound).Once()
-		// Clean URL fallback: index.html.html
-		repo.On("Get", ctx, "index.html.html").Return(types.MetaData{}, service.ErrNotFound).Once()
-		// Directory index fallback: index.html/index.html
-		repo.On("Get", ctx, "index.html/index.html").Return(types.MetaData{}, service.ErrNotFound).Once()
-
-		_, _, err := svc.Get(ctx, "")
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, service.ErrNotFound)
-
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("error - empty path returns not found when index.html doesn't exist in spa mode", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeSPA)
-		ctx := context.Background()
-
-		// First call: index.html (from empty path conversion)
-		// SPA fallback also tries index.html, so expect two calls
-		repo.On("Get", ctx, "index.html").Return(types.MetaData{}, service.ErrNotFound).Twice()
-
-		_, _, err := svc.Get(ctx, "")
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, service.ErrNotFound)
-
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("success - static mode clean URL resolves foo.html", func(t *testing.T) {
-		svc, repo, storage := NewStowryServiceWithMode(t, types.ModeStatic)
-		ctx := context.Background()
-
-		htmlMetadata := types.MetaData{
-			Path:          "about.html",
-			ContentType:   "text/html",
-			FileSizeBytes: 200,
-			Etag:          "html123",
-		}
-
-		writeFile(t, storage, "about.html", "<html>About</html>")
-		repo.On("Get", ctx, "about").Return(types.MetaData{}, service.ErrNotFound)
-		repo.On("Get", ctx, "about.html").Return(htmlMetadata, nil)
-
-		metadata, file, err := svc.Get(ctx, "about")
-		assert.NoError(t, err)
-		assert.Equal(t, "about.html", metadata.Path)
-		defer file.Close()
-		checkContents(t, file, "<html>About</html>")
-
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("success - static mode trailing slash resolves to directory index", func(t *testing.T) {
-		svc, repo, storage := NewStowryServiceWithMode(t, types.ModeStatic)
-		ctx := context.Background()
-
-		indexMetadata := types.MetaData{
-			Path:          "docs/index.html",
-			ContentType:   "text/html",
-			FileSizeBytes: 100,
-			Etag:          "idx123",
-		}
-
-		writeFile(t, storage, "docs/index.html", "<html>Docs</html>")
-		repo.On("Get", ctx, "docs/").Return(types.MetaData{}, service.ErrNotFound)
-		repo.On("Get", ctx, "docs/index.html").Return(indexMetadata, nil)
-
-		metadata, file, err := svc.Get(ctx, "docs/")
-		assert.NoError(t, err)
-		assert.Equal(t, "docs/index.html", metadata.Path)
-		defer file.Close()
-		checkContents(t, file, "<html>Docs</html>")
-
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("error - static mode trailing slash with no index returns not found", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeStatic)
-		ctx := context.Background()
-
-		repo.On("Get", ctx, "docs/").Return(types.MetaData{}, service.ErrNotFound)
-		repo.On("Get", ctx, "docs/index.html").Return(types.MetaData{}, service.ErrNotFound)
-
-		_, _, err := svc.Get(ctx, "docs/")
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, service.ErrNotFound)
-
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("success - static mode exact match takes priority over html fallback", func(t *testing.T) {
-		svc, repo, storage := NewStowryServiceWithMode(t, types.ModeStatic)
-		ctx := context.Background()
-
-		exactMetadata := types.MetaData{
-			Path:          "about",
-			ContentType:   "application/octet-stream",
-			FileSizeBytes: 50,
-			Etag:          "exact123",
-		}
-
-		writeFile(t, storage, "about", "exact content")
-		repo.On("Get", ctx, "about").Return(exactMetadata, nil)
-
-		metadata, file, err := svc.Get(ctx, "about")
-		assert.NoError(t, err)
-		assert.Equal(t, "about", metadata.Path)
-		defer file.Close()
-		checkContents(t, file, "exact content")
-
-		repo.AssertExpectations(t)
-		repo.AssertNotCalled(t, "Get", mock.Anything, "about.html")
 	})
 }
 
@@ -1048,8 +763,8 @@ func TestStowryService_List(t *testing.T) {
 }
 
 func TestStowryService_Info(t *testing.T) {
-	t.Run("success - get metadata in store mode", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeStore)
+	t.Run("success - get metadata", func(t *testing.T) {
+		svc, repo, _ := NewStowryService(t)
 		ctx := context.Background()
 
 		expectedMetadata := types.MetaData{
@@ -1071,51 +786,8 @@ func TestStowryService_Info(t *testing.T) {
 		repo.AssertExpectations(t)
 	})
 
-	t.Run("success - static mode fallback to index.html", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeStatic)
-		ctx := context.Background()
-
-		indexMetadata := types.MetaData{
-			Path:          "documents/index.html",
-			ContentType:   "text/html",
-			FileSizeBytes: 100,
-			Etag:          "xyz789",
-		}
-
-		repo.On("Get", ctx, "documents").Return(types.MetaData{}, service.ErrNotFound)
-		repo.On("Get", ctx, "documents.html").Return(types.MetaData{}, service.ErrNotFound)
-		repo.On("Get", ctx, "documents/index.html").Return(indexMetadata, nil)
-
-		metadata, err := svc.Info(ctx, "documents")
-		assert.NoError(t, err)
-		assert.Equal(t, "documents/index.html", metadata.Path)
-
-		repo.AssertExpectations(t)
-	})
-
-	t.Run("success - spa mode fallback to index.html", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeSPA)
-		ctx := context.Background()
-
-		indexMetadata := types.MetaData{
-			Path:          "index.html",
-			ContentType:   "text/html",
-			FileSizeBytes: 100,
-			Etag:          "xyz789",
-		}
-
-		repo.On("Get", ctx, "non-existent-route").Return(types.MetaData{}, service.ErrNotFound)
-		repo.On("Get", ctx, "index.html").Return(indexMetadata, nil)
-
-		metadata, err := svc.Info(ctx, "non-existent-route")
-		assert.NoError(t, err)
-		assert.Equal(t, "index.html", metadata.Path)
-
-		repo.AssertExpectations(t)
-	})
-
 	t.Run("error - context cancelled before operation", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeStore)
+		svc, repo, _ := NewStowryService(t)
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
@@ -1126,8 +798,8 @@ func TestStowryService_Info(t *testing.T) {
 		repo.AssertNotCalled(t, "Get")
 	})
 
-	t.Run("error - metadata not found in store mode", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeStore)
+	t.Run("error - metadata not found", func(t *testing.T) {
+		svc, repo, _ := NewStowryService(t)
 		ctx := context.Background()
 
 		repo.On("Get", ctx, "nonexistent.txt").Return(types.MetaData{}, service.ErrNotFound)
@@ -1139,59 +811,34 @@ func TestStowryService_Info(t *testing.T) {
 		repo.AssertExpectations(t)
 	})
 
-	t.Run("error - empty path returns not found in store mode", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeStore)
+	t.Run("error - path fails IsValidPath", func(t *testing.T) {
+		for _, path := range []string{"", "/", ".", "/etc/passwd", "../etc/passwd", "docs/", "a//b", "a/./b"} {
+			t.Run(path, func(t *testing.T) {
+				svc, repo, _ := NewStowryService(t)
+
+				_, err := svc.Info(context.Background(), path)
+				assert.ErrorIs(t, err, service.ErrInvalidInput)
+
+				repo.AssertNotCalled(t, "Get")
+			})
+		}
+	})
+
+	t.Run("miss is not retried against any fallback path", func(t *testing.T) {
+		svc, repo, _ := NewStowryService(t)
 		ctx := context.Background()
 
-		_, err := svc.Info(ctx, "")
-		assert.Error(t, err)
+		repo.On("Get", ctx, "documents").Return(types.MetaData{}, service.ErrNotFound)
+
+		_, err := svc.Info(ctx, "documents")
 		assert.ErrorIs(t, err, service.ErrNotFound)
 
-		repo.AssertNotCalled(t, "Get")
-	})
-
-	t.Run("success - empty path serves index.html in static mode", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeStatic)
-		ctx := context.Background()
-
-		indexMetadata := types.MetaData{
-			Path:          "index.html",
-			ContentType:   "text/html",
-			FileSizeBytes: 100,
-			Etag:          "xyz789",
-		}
-
-		repo.On("Get", ctx, "index.html").Return(indexMetadata, nil)
-
-		metadata, err := svc.Info(ctx, "")
-		assert.NoError(t, err)
-		assert.Equal(t, "index.html", metadata.Path)
-
 		repo.AssertExpectations(t)
-	})
-
-	t.Run("success - empty path serves index.html in spa mode", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeSPA)
-		ctx := context.Background()
-
-		indexMetadata := types.MetaData{
-			Path:          "index.html",
-			ContentType:   "text/html",
-			FileSizeBytes: 100,
-			Etag:          "xyz789",
-		}
-
-		repo.On("Get", ctx, "index.html").Return(indexMetadata, nil)
-
-		metadata, err := svc.Info(ctx, "")
-		assert.NoError(t, err)
-		assert.Equal(t, "index.html", metadata.Path)
-
-		repo.AssertExpectations(t)
+		repo.AssertNumberOfCalls(t, "Get", 1)
 	})
 
 	t.Run("error - repo returns non-NotFound error", func(t *testing.T) {
-		svc, repo, _ := NewStowryServiceWithMode(t, types.ModeStore)
+		svc, repo, _ := NewStowryService(t)
 		ctx := context.Background()
 
 		dbErr := errors.New("database error")
@@ -1205,7 +852,7 @@ func TestStowryService_Info(t *testing.T) {
 	})
 
 	t.Run("no file storage access", func(t *testing.T) {
-		svc, repo, storage := NewStowryServiceWithMode(t, types.ModeStore)
+		svc, repo, storage := NewStowryService(t)
 		ctx := context.Background()
 
 		expectedMetadata := types.MetaData{
