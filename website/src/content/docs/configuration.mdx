@@ -83,7 +83,8 @@ log:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `type` | string | sqlite | Database type (`sqlite` requires 3.24+, `postgres`) |
-| `dsn` | string | stowry.db | Connection string |
+| `dsn` | string | `:memory:` | Connection string, file path, or `:memory:` |
+| `migrate` | bool | false | Create the schema before the command does its own work |
 | `tables.meta_data` | string | stowry_metadata | Metadata table name (lowercase, alphanumeric with underscores, max 63 chars) |
 
 **Migration Options:**
@@ -164,9 +165,13 @@ dsn: host=localhost port=5432 user=stowry password=secret dbname=stowry
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `path` | string | ./data | Directory for file storage |
+| `path` | string | `:memory:` | Directory for file storage, or `:memory:` |
+| `populate` | bool | false | Record the files already under `path` before the server starts |
 
-The storage directory is created automatically with `0o700` permissions (owner-only access). For Kubernetes deployments with shared access needs, pre-create the directory with `0o750` and use `fsGroup` in securityContext. Files are organized by their path, maintaining the original directory structure.
+The storage directory is created automatically with `0o700` permissions
+(owner-only). Files are organized by their path, keeping the original directory
+structure. A deployment where another container needs read access should
+pre-create the directory with `0o750`.
 
 ### Auth
 
@@ -234,6 +239,14 @@ All configuration options can be set via environment variables using the `STOWRY
 | `server.mode` | `STOWRY_SERVER_MODE` |
 | `server.max_upload_size` | `STOWRY_SERVER_MAX_UPLOAD_SIZE` |
 | `service.cleanup_timeout` | `STOWRY_SERVICE_CLEANUP_TIMEOUT` |
+| `database.migrate` | `STOWRY_DATABASE_MIGRATE` |
+| `storage.populate` | `STOWRY_STORAGE_POPULATE` |
+| `cors.allowed_origins` | `STOWRY_CORS_ALLOWED_ORIGINS` |
+| `cors.allowed_methods` | `STOWRY_CORS_ALLOWED_METHODS` |
+| `cors.allowed_headers` | `STOWRY_CORS_ALLOWED_HEADERS` |
+| `cors.exposed_headers` | `STOWRY_CORS_EXPOSED_HEADERS` |
+| `cors.allow_credentials` | `STOWRY_CORS_ALLOW_CREDENTIALS` |
+| `cors.max_age` | `STOWRY_CORS_MAX_AGE` |
 | `database.type` | `STOWRY_DATABASE_TYPE` |
 | `database.dsn` | `STOWRY_DATABASE_DSN` |
 | `database.tables.meta_data` | `STOWRY_DATABASE_TABLES_META_DATA` |
