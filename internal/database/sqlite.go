@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"text/template"
 	"time"
 	"uuid"
@@ -26,14 +27,35 @@ type sqliteDB struct {
 
 var _ Database = (*sqliteDB)(nil)
 
-// openSQLite opens dsn, a file path or ":memory:". The connection is lazy.
+// openSQLite opens dsn, a file path or an in-memory database. The connection is
+// lazy.
 func openSQLite(dsn string, tables types.Tables) (*sqliteDB, error) {
-	db, err := sql.Open("sqlite", dsn)
+	db, err := sql.Open("sqlite", resolveDSN(dsn))
 	if err != nil {
 		return nil, fmt.Errorf("connect sqlite: %w", err)
 	}
 
 	return &sqliteDB{db: db, table: tables.MetaData}, nil
+}
+
+// memoryDBs numbers the in-memory databases this process has opened.
+var memoryDBs atomic.Uint64
+
+// resolveDSN rewrites the plain ":memory:" form into the URI that lets a pool
+// share one in-memory database.
+//
+// SQLite gives every plain ":memory:" connection a database of its own, so a
+// second pooled connection would open a fresh, empty one and every query on it
+// would fail. Shared cache fixes that, but it is keyed by name, and an unnamed
+// one would be shared by the whole process; numbering keeps separate calls as
+// independent as ":memory:" implies. Any other DSN, including a URI the
+// operator wrote themselves, is passed through untouched.
+func resolveDSN(dsn string) string {
+	if dsn != ":memory:" {
+		return dsn
+	}
+
+	return fmt.Sprintf("file:stowry%d?mode=memory&cache=shared", memoryDBs.Add(1))
 }
 
 func (d *sqliteDB) Ping(ctx context.Context) error {

@@ -1,6 +1,7 @@
 package database_test
 
 import (
+	"fmt"
 	"testing"
 	"uuid"
 
@@ -54,6 +55,67 @@ func TestConnect(t *testing.T) {
 			assert.Nil(t, db)
 		})
 	}
+}
+
+// openMemory is a migrated SQLite database held in this process.
+func openMemory(t *testing.T) database.Database {
+	t.Helper()
+
+	db, err := database.Connect(t.Context(), database.Config{
+		Type:   "sqlite",
+		DSN:    ":memory:",
+		Tables: types.Tables{MetaData: "metadata"},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	require.NoError(t, db.Migrate(t.Context()))
+
+	return db
+}
+
+// A plain ":memory:" database belongs to the connection that opened it, so
+// every pooled connection would otherwise see an empty one.
+func TestSQLiteMemoryIsSharedAcrossConnections(t *testing.T) {
+	t.Parallel()
+
+	db := openMemory(t)
+
+	_, _, err := db.Upsert(t.Context(), types.ObjectEntry{
+		Path: "a.txt", Size: 1, ETag: "e", ContentType: "text/plain",
+	})
+	require.NoError(t, err)
+
+	errs := make(chan error, 16)
+	for range 16 {
+		go func() {
+			result, err := db.List(t.Context(), types.ListQuery{Limit: 10})
+			if err == nil && len(result.Items) != 1 {
+				err = fmt.Errorf("got %d items, want 1", len(result.Items))
+			}
+			errs <- err
+		}()
+	}
+
+	for range 16 {
+		assert.NoError(t, <-errs)
+	}
+}
+
+// Sharing is per database, not per process: two in-memory databases must not
+// see each other's rows.
+func TestSQLiteMemoryDatabasesAreIsolated(t *testing.T) {
+	t.Parallel()
+
+	first, second := openMemory(t), openMemory(t)
+
+	_, _, err := first.Upsert(t.Context(), types.ObjectEntry{
+		Path: "a.txt", Size: 1, ETag: "e", ContentType: "text/plain",
+	})
+	require.NoError(t, err)
+
+	result, err := second.List(t.Context(), types.ListQuery{Limit: 10})
+	require.NoError(t, err)
+	assert.Empty(t, result.Items)
 }
 
 func TestDatabase(t *testing.T) {
