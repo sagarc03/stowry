@@ -110,7 +110,7 @@ src/
 
 ## Stowry CORS Configuration
 
-Ensure your Stowry config has CORS enabled:
+Ensure your Stowry config sets CORS origins, which is what turns CORS on:
 
 ```yaml
 cors:
