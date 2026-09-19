@@ -213,13 +213,13 @@ func TestPopulateStopsAtUnservablePath(t *testing.T) {
 	s := newStore(t)
 	s.fill(t, map[string]string{
 		"fine.txt":   "ok",
-		"we?ird.txt": "rejected by the path rules",
+		"we#ird.txt": "rejected by the path rules",
 	})
 
 	out, err := runCLI(t, "populate", "-c", s.config, "-m")
 
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "we?ird.txt")
+	assert.ErrorContains(t, err, "we#ird.txt")
 	assert.Contains(t, out, "recorded 1 files")
 	assert.Equal(t, []string{"fine.txt"}, s.paths(t), "the good file is still recorded")
 }
