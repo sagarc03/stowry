@@ -49,8 +49,11 @@ func request(method, origin string) *http.Request {
 	return req
 }
 
-func preflight(origin, method, headers string) *http.Request {
-	req := request(http.MethodOptions, origin)
+// allowedOrigin is the origin corsOK permits; every preflight uses it.
+const allowedOrigin = "https://example.com"
+
+func preflight(method, headers string) *http.Request {
+	req := request(http.MethodOptions, allowedOrigin)
 	req.Header.Set(headerACRequestMethod, method)
 	if headers != "" {
 		req.Header.Set(headerACRequestHeaders, headers)
@@ -131,7 +134,7 @@ func TestWithCORSPreflightShortCircuits(t *testing.T) {
 	cfg := corsOK()
 	cfg.MaxAge = 600
 
-	rec, called := serveCORS(cfg, preflight("https://example.com", http.MethodPut, "content-type"))
+	rec, called := serveCORS(cfg, preflight(http.MethodPut, "content-type"))
 	if called {
 		t.Fatal("preflight must not reach the handler")
 	}
@@ -163,7 +166,7 @@ func TestWithCORSPreflightIsNotAuthenticated(t *testing.T) {
 		})))
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, preflight("https://example.com", http.MethodPut, "authorization"))
+	h.ServeHTTP(rec, preflight(http.MethodPut, "authorization"))
 
 	if rec.Code != http.StatusNoContent {
 		t.Fatalf("code = %d, want 204: CORS must answer before AuthMiddleware", rec.Code)
@@ -177,7 +180,7 @@ func TestWithCORSPreflightIsNotAuthenticated(t *testing.T) {
 func TestWithCORSDefaultMethodsCoverWrites(t *testing.T) {
 	for _, method := range []string{http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete} {
 		t.Run(method, func(t *testing.T) {
-			rec, _ := serveCORS(corsOK(), preflight("https://example.com", method, ""))
+			rec, _ := serveCORS(corsOK(), preflight(method, ""))
 			if got := rec.Header().Get(headerACAllowMethods); got != method {
 				t.Errorf("allow-methods = %q, want %q", got, method)
 			}
@@ -192,7 +195,7 @@ func TestWithCORSDefaultHeadersCoverSigV4(t *testing.T) {
 	// standard guarantees browsers send, and rejects any other.
 	const signing = "authorization, x-amz-content-sha256, x-amz-date"
 
-	rec, _ := serveCORS(corsOK(), preflight("https://example.com", http.MethodPut, signing))
+	rec, _ := serveCORS(corsOK(), preflight(http.MethodPut, signing))
 	if got := rec.Header().Get(headerACAllowHeaders); got != signing {
 		t.Errorf("allow-headers = %q, want the signing headers echoed back", got)
 	}
@@ -203,12 +206,12 @@ func TestWithCORSExplicitListsOverrideDefaults(t *testing.T) {
 	cfg.AllowedMethods = []string{http.MethodGet}
 	cfg.AllowedHeaders = []string{"Content-Type"}
 
-	rec, _ := serveCORS(cfg, preflight("https://example.com", http.MethodDelete, ""))
+	rec, _ := serveCORS(cfg, preflight(http.MethodDelete, ""))
 	if got := rec.Header().Get(headerACAllowOrigin); got != "" {
 		t.Errorf("allow-origin = %q, want none: DELETE is not in the configured methods", got)
 	}
 
-	rec, _ = serveCORS(cfg, preflight("https://example.com", http.MethodGet, "authorization"))
+	rec, _ = serveCORS(cfg, preflight(http.MethodGet, "authorization"))
 	if got := rec.Header().Get(headerACAllowHeaders); got != "" {
 		t.Errorf("allow-headers = %q, want none: authorization is not in the configured headers", got)
 	}

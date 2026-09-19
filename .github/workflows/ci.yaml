@@ -14,6 +14,12 @@ on:
       - "website/**"
       - "*.md"
 
+# One run per ref: a new push cancels whatever the previous one still has in
+# flight. main is exempt, since its runs are what the release builds on.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
 jobs:
   lint:
     name: Lint
@@ -72,7 +78,10 @@ jobs:
       # The PostgreSQL tests need a container runtime, which only GitHub's Ubuntu
       # runners have. They skip themselves elsewhere, so the same command runs
       # on every OS.
+      # bash on every OS: PowerShell splits -coverprofile=coverage.txt and go
+      # then reads ".txt" as a package pattern.
       - name: Run tests
+        shell: bash
         run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
 
       - name: Upload coverage

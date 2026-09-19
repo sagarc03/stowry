@@ -22,11 +22,7 @@ var (
 func getSharedPostgresDatabase(t *testing.T) (dsn string) {
 	t.Helper()
 
-	// The container needs a container runtime, which the macOS and Windows CI
-	// runners do not have, so its absence skips rather than fails.
-	if _, err := testcontainers.NewDockerClientWithOpts(context.Background()); err != nil {
-		t.Skipf("no container runtime: %v", err)
-	}
+	requireLinuxContainers(t)
 
 	testPoolOnce.Do(func() {
 		ctx := context.Background()

@@ -40,7 +40,7 @@ func runValidate(cmd *cobra.Command, _ []string) error {
 	}
 	defer func() { _ = db.Close() }()
 
-	fmt.Fprintf(cmd.OutOrStdout(), "schema is valid: %s %s\n", cfg.Database.Type, cfg.Database.DSN)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "schema is valid: %s %s\n", cfg.Database.Type, cfg.Database.DSN)
 
 	return nil
 }

@@ -135,17 +135,17 @@ func (d *postgresDB) Validate(ctx context.Context) error {
 	got := make(map[string]column)
 	for rows.Next() {
 		var name, dataType, nullable string
-		if err := rows.Scan(&name, &dataType, &nullable); err != nil {
-			return fmt.Errorf("validate: scan column: %w", err)
+		if scanErr := rows.Scan(&name, &dataType, &nullable); scanErr != nil {
+			return fmt.Errorf("validate: scan column: %w", scanErr)
 		}
 		got[name] = column{dataType: strings.ToLower(dataType), nullable: nullable == "YES"}
 	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("validate: rows: %w", err)
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return fmt.Errorf("validate: rows: %w", rowsErr)
 	}
 
-	if err := checkColumns(d.table, postgresColumns, got); err != nil {
-		return fmt.Errorf("validate: %w", err)
+	if colErr := checkColumns(d.table, postgresColumns, got); colErr != nil {
+		return fmt.Errorf("validate: %w", colErr)
 	}
 
 	unique, err := d.hasUniquePath(ctx)

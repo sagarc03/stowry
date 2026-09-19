@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 
@@ -194,6 +195,25 @@ func postgresBackend() backend {
 	}
 }
 
+// requireLinuxContainers skips unless this host can run the Linux image the
+// PostgreSQL tests need.
+//
+// Only the Linux runners can. GitHub's macOS runners ship no Docker at all, and
+// its Windows runners are already nested one level deep, so the hypervisor
+// cannot give Docker the nested virtualization a Linux container would need -
+// their daemon answers, but only for Windows containers.
+func requireLinuxContainers(t *testing.T) {
+	t.Helper()
+
+	if runtime.GOOS != "linux" {
+		t.Skipf("no Linux containers on %s", runtime.GOOS)
+	}
+
+	if _, err := testcontainers.NewDockerClientWithOpts(context.Background()); err != nil {
+		t.Skipf("no container runtime: %v", err)
+	}
+}
+
 var (
 	postgresOnce      sync.Once
 	postgresPool      *pgxpool.Pool
@@ -203,11 +223,9 @@ var (
 
 // sharedPostgres returns a pool for the package's PostgreSQL container,
 // starting it on first use. TestMain tears it down.
-//
-// The container needs a container runtime, which the macOS and Windows CI
-// runners do not have, so its absence skips rather than fails.
 func sharedPostgres(t *testing.T) *pgxpool.Pool {
 	t.Helper()
+	requireLinuxContainers(t)
 
 	postgresOnce.Do(func() {
 		ctx := context.Background()
@@ -239,13 +257,7 @@ func sharedPostgres(t *testing.T) *pgxpool.Pool {
 		postgresPool = pool
 	})
 
-	if postgresErr != nil {
-		if _, lookErr := testcontainers.NewDockerClientWithOpts(context.Background()); lookErr != nil {
-			t.Skipf("no container runtime: %v", lookErr)
-		}
-
-		require.NoError(t, postgresErr)
-	}
+	require.NoError(t, postgresErr)
 
 	return postgresPool
 }

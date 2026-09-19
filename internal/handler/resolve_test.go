@@ -100,5 +100,5 @@ func TestResolveStopsOnInvalidPath(t *testing.T) {
 	w := serve(t, opts, httptest.NewRequest(http.MethodGet, "/bad", nil))
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Equal(t, 1, svc.opens, "a rejected path must not be retried as another candidate")
+	assert.Equal(t, int64(1), svc.opens.Load(), "a rejected path must not be retried as another candidate")
 }

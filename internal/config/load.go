@@ -19,7 +19,7 @@ const envPrefix = "STOWRY"
 
 // flagToKey maps a CLI flag to the key it overrides; unlisted flags override
 // the key of the same name.
-var flagToKey = map[string]string{
+var flagToKey = map[string]string{ //nolint:gosec // G101: these are flag and key names, not credentials
 	"port":             "server.port",
 	"mode":             "server.mode",
 	"max-upload-size":  "server.max_upload_size",

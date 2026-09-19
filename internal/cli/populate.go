@@ -68,7 +68,7 @@ func populateInto(ctx context.Context, cmd *cobra.Command, cfg *config.Config, d
 
 	// Populate returns what it wrote before a failure, so the count is
 	// reported either way.
-	fmt.Fprintf(cmd.OutOrStdout(), "recorded %d files from %s\n", len(entries), cfg.Storage.Path)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "recorded %d files from %s\n", len(entries), cfg.Storage.Path)
 
 	return err
 }

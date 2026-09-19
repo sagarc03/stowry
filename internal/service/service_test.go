@@ -987,8 +987,8 @@ func TestStowryService_Populate(t *testing.T) {
 		return svc, repo, storage
 	}
 
-	upserted := func(repo *SpyMetaDataRepo, into *[]types.ObjectEntry) *mock.Call {
-		return repo.On("Upsert", mock.Anything, mock.Anything).
+	upserted := func(repo *SpyMetaDataRepo, into *[]types.ObjectEntry) {
+		repo.On("Upsert", mock.Anything, mock.Anything).
 			Run(func(args mock.Arguments) {
 				*into = append(*into, args.Get(1).(types.ObjectEntry))
 			}).
@@ -1075,10 +1075,11 @@ func TestStowryService_Populate(t *testing.T) {
 	})
 
 	t.Run("a file that cannot be served stops the run", func(t *testing.T) {
-		// The walk is lexical, so fine.txt is recorded before we?ird.txt fails.
+		// The walk is lexical, so fine.txt is recorded before we#ird.txt fails.
+		// '#' rather than '?' because Windows will not create a file named '?'.
 		svc, repo, _ := newPopulated(t, map[string]string{
 			"fine.txt":   "ok",
-			"we?ird.txt": "rejected by the path rules",
+			"we#ird.txt": "rejected by the path rules",
 		})
 
 		repo.On("Upsert", mock.Anything, mock.Anything).Once().Return(types.MetaData{}, true, nil)
@@ -1086,7 +1087,7 @@ func TestStowryService_Populate(t *testing.T) {
 		entries, err := svc.Populate(t.Context())
 
 		require.ErrorIs(t, err, service.ErrInvalidInput)
-		assert.ErrorContains(t, err, "we?ird.txt")
+		assert.ErrorContains(t, err, "we#ird.txt")
 		assert.Len(t, entries, 1)
 
 		repo.AssertExpectations(t)

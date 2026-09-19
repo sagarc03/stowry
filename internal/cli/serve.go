@@ -67,8 +67,8 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	// Checked here rather than in config.Load so the offline commands stay
 	// usable on a config the server rejects, and so the warning it can emit
 	// goes through the configured logger.
-	if err := cfg.ValidateForServe(); err != nil {
-		return err
+	if vErr := cfg.ValidateForServe(); vErr != nil {
+		return vErr
 	}
 
 	ctx, cancel := context.WithCancel(cmd.Context())
@@ -84,8 +84,8 @@ func runServe(cmd *cobra.Command, _ []string) error {
 	}
 	defer func() { _ = db.Close() }()
 
-	if err := db.Ping(ctx); err != nil {
-		return fmt.Errorf("ping database: %w", err)
+	if pingErr := db.Ping(ctx); pingErr != nil {
+		return fmt.Errorf("ping database: %w", pingErr)
 	}
 
 	slog.Info("connected to database", "type", cfg.Database.Type)
@@ -172,7 +172,10 @@ func listenAndServe(ctx context.Context, cancel context.CancelFunc, port int, h 
 		IdleTimeout:  idleTimeout,
 	}
 
-	go func() {
+	// The shutdown context below is detached on purpose: ctx is what just
+	// fired, so shutdown would get no time to drain if it inherited the
+	// cancellation.
+	go func() { //nolint:gosec // G118: see above
 		sigCh := make(chan os.Signal, 1)
 		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 

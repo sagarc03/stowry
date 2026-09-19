@@ -36,7 +36,7 @@ type CORSConfig struct {
 // WithCORS answers preflights and sets CORS headers on cross-origin responses.
 // It must run before AuthMiddleware: browsers omit credentials from a
 // preflight, so a signature check would reject every OPTIONS request.
-func WithCORS(cfg CORSConfig) func(http.Handler) http.Handler {
+func WithCORS(cfg CORSConfig) func(http.Handler) http.Handler { //nolint:gocritic // hugeParam: called once at startup, and a value keeps the caller from mutating it later
 	return cors.New(cors.Options{
 		AllowedOrigins:   cfg.AllowedOrigins, // rs/cors defaults this to ["*"]
 		AllowedMethods:   orDefault(cfg.AllowedMethods, defaultAllowedMethods),

@@ -16,7 +16,7 @@ import (
 
 // Database is not declared in terms of service.MetaDataRepo, so this assertion
 // is what catches the two drifting apart.
-var _ service.MetaDataRepo = (database.Database)(nil)
+var _ service.MetaDataRepo = database.Database(nil)
 
 func TestConnect(t *testing.T) {
 	t.Parallel()

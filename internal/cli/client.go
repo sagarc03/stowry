@@ -83,13 +83,14 @@ func runUpload(cmd *cobra.Command, args []string) error {
 	})
 
 	out := cmd.OutOrStdout()
-	for _, r := range results {
+	for i := range results {
+		r := &results[i]
 		if r.Err != nil {
-			fmt.Fprintf(out, "failed  %s: %s\n", r.LocalPath, r.Err)
+			_, _ = fmt.Fprintf(out, "failed  %s: %s\n", r.LocalPath, r.Err)
 			continue
 		}
 
-		fmt.Fprintf(out, "%s -> %s/%s (%d bytes, %s)\n",
+		_, _ = fmt.Fprintf(out, "%s -> %s/%s (%d bytes, %s)\n",
 			r.LocalPath, cfg.Endpoint, r.RemotePath, r.Size, r.ContentType)
 	}
 
@@ -143,7 +144,7 @@ func runDownload(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "%s -> %s (%d bytes, %s)\n",
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "%s -> %s (%d bytes, %s)\n",
 		result.RemotePath, result.LocalPath, result.Size, result.ContentType)
 
 	return nil
@@ -176,11 +177,11 @@ func runDelete(cmd *cobra.Command, args []string) error {
 	out := cmd.OutOrStdout()
 	for _, r := range results {
 		if r.Deleted {
-			fmt.Fprintf(out, "deleted %s\n", r.Path)
+			_, _ = fmt.Fprintf(out, "deleted %s\n", r.Path)
 			continue
 		}
 
-		fmt.Fprintf(out, "failed  %s: %s\n", r.Path, r.Err)
+		_, _ = fmt.Fprintf(out, "failed  %s: %s\n", r.Path, r.Err)
 	}
 
 	return err
@@ -251,23 +252,23 @@ func runList(cmd *cobra.Command, args []string) error {
 
 func printObjects(out io.Writer, result *types.ListResult) {
 	if len(result.Items) == 0 {
-		fmt.Fprintln(out, "no objects")
+		_, _ = fmt.Fprintln(out, "no objects")
 		return
 	}
 
 	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "PATH\tSIZE\tCONTENT TYPE\tUPDATED")
+	_, _ = fmt.Fprintln(w, "PATH\tSIZE\tCONTENT TYPE\tUPDATED")
 
 	for _, item := range result.Items {
-		fmt.Fprintf(w, "%s\t%d\t%s\t%s\n",
+		_, _ = fmt.Fprintf(w, "%s\t%d\t%s\t%s\n",
 			item.Path, item.FileSizeBytes, item.ContentType, item.UpdatedAt.Format(time.RFC3339))
 	}
 
 	_ = w.Flush()
 
-	fmt.Fprintf(out, "\n%d objects, %d bytes\n", len(result.Items), result.TotalSize())
+	_, _ = fmt.Fprintf(out, "\n%d objects, %d bytes\n", len(result.Items), result.TotalSize())
 
 	if result.NextCursor != "" {
-		fmt.Fprintf(out, "more: --cursor %s\n", result.NextCursor)
+		_, _ = fmt.Fprintf(out, "more: --cursor %s\n", result.NextCursor)
 	}
 }
