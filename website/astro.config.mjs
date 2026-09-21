@@ -15,6 +15,9 @@ export default defineConfig({
       title: 'Stowry',
       description: 'Documentation for Stowry - Self-hosted object storage, simplified',
       customCss: ['./src/styles/global.css'],
+      components: {
+        Head: './src/components/Head.astro',
+      },
       sidebar: [
         {
           label: 'Getting Started',
