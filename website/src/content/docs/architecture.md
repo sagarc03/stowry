@@ -1,6 +1,6 @@
 ---
-title: Architecture
-description: Technical architecture and design decisions in Stowry.
+title: 'Architecture: Packages, Backends & Data Flow'
+description: 'How Stowry is built: the core package, SQLite and PostgreSQL metadata backends, afero-based file storage, the key backend, HTTP layer, and error handling.'
 ---
 
 # Architecture

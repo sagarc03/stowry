@@ -15,11 +15,14 @@ export default defineConfig({
       title: 'Stowry',
       description: 'Documentation for Stowry - Self-hosted object storage, simplified',
       customCss: ['./src/styles/global.css'],
+      components: {
+        Head: './src/components/Head.astro',
+      },
       sidebar: [
         {
           label: 'Getting Started',
           items: [
-            { label: 'Overview', slug: 'index' },
+            { label: 'Overview', slug: 'docs' },
             { label: 'Quick Start', slug: 'getting-started' },
             { label: 'Installation', slug: 'installation' },
             { label: 'Configuration', slug: 'configuration' },

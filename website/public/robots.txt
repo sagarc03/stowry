@@ -1,0 +1,18 @@
+User-agent: *
+Allow: /
+
+# AI crawlers are allowed: being cited by answer engines is how a
+# self-hosted storage project gets found. Revisit if that changes.
+User-agent: GPTBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
+Sitemap: https://stowry.dev/sitemap-index.xml

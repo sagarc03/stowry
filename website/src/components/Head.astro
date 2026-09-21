@@ -1,0 +1,55 @@
+---
+import Default from '@astrojs/starlight/components/Head.astro';
+
+const { entry } = Astro.locals.starlightRoute;
+const { title, description } = entry.data;
+
+const canonical = new URL(Astro.url.pathname, Astro.site).href;
+const ogImage = new URL('/og.png', Astro.site).href;
+
+const isDocsRoot = entry.id === 'docs';
+
+const schema = {
+  '@context': 'https://schema.org',
+  '@type': 'TechArticle',
+  headline: title,
+  description,
+  url: canonical,
+  inLanguage: 'en',
+  isPartOf: {
+    '@type': 'WebSite',
+    name: 'Stowry',
+    url: new URL('/', Astro.site).href,
+  },
+  about: {
+    '@type': 'SoftwareApplication',
+    name: 'Stowry',
+    applicationCategory: 'DeveloperApplication',
+  },
+  author: { '@type': 'Person', name: 'Sagar Chavan', url: 'https://github.com/sagarc03' },
+  publisher: { '@type': 'Organization', name: 'Stowry', url: new URL('/', Astro.site).href },
+};
+
+const breadcrumbs = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    { '@type': 'ListItem', position: 1, name: 'Stowry', item: new URL('/', Astro.site).href },
+    { '@type': 'ListItem', position: 2, name: 'Documentation', item: new URL('/docs/', Astro.site).href },
+    ...(isDocsRoot
+      ? []
+      : [{ '@type': 'ListItem', position: 3, name: title, item: canonical }]),
+  ],
+};
+---
+
+<Default><slot /></Default>
+
+<meta property="og:image" content={ogImage} />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Stowry - self-hosted object storage, simplified" />
+<meta name="twitter:image" content={ogImage} />
+
+<script type="application/ld+json" set:html={JSON.stringify(schema)} is:inline />
+<script type="application/ld+json" set:html={JSON.stringify(breadcrumbs)} is:inline />

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Stowry">
+  <rect width="64" height="64" rx="14" fill="#ea580c"/>
+  <path d="M32 12 51 21.5v21L32 52 13 42.5v-21L32 12Z" fill="none" stroke="#fff" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M13 21.5 32 31l19-9.5M32 31v21" fill="none" stroke="#fff" stroke-width="4" stroke-linejoin="round" stroke-opacity=".85"/>
+</svg>
